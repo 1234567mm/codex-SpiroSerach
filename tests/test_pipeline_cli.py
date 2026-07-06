@@ -56,6 +56,10 @@ class PipelineCliTests(unittest.TestCase):
             report = run_screening(candidates)
 
         self.assertEqual(report["summary"]["candidate_count"], 1)
+        self.assertEqual(report["local_paper_trace"]["path"], "data/local_paper_trace_excerpt.txt")
+        self.assertEqual(report["local_paper_trace"]["requested_path"], "pdf/extracted_text.txt")
+        self.assertTrue(report["local_paper_trace"]["fallback_used"])
+        self.assertEqual(report["local_paper_trace"]["trust_level"], "L1_local_file_present")
         self.assertEqual(report["results"][0]["evidence"][0]["source"], "literature:CuSCN PSC stability")
         self.assertGreater(report["results"][0]["score"]["total"], 0)
 

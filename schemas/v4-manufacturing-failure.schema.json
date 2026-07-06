@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v4-manufacturing-failure.schema.json",
+  "title": "SpiroSearch V4 Manufacturing and Failure Contracts",
+  "type": "object",
+  "required": ["route_plan", "procurement", "patent_risk", "ehs", "manufacturing_assessment", "experiment_result", "failure_analysis"],
+  "additionalProperties": false,
+  "properties": {
+    "route_plan": {
+      "type": "object",
+      "required": ["reaction_class", "reaction_smarts", "longest_linear_sequence", "overall_yield_est", "step_yields", "catalysts", "solvents", "purification", "chromatography_required", "route_confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "reaction_class": {"type": "string"},
+        "reaction_smarts": {"type": "string"},
+        "longest_linear_sequence": {"type": "integer"},
+        "overall_yield_est": {"type": "number"},
+        "step_yields": {"type": "array", "items": {"type": "number"}},
+        "catalysts": {"type": "array", "items": {"type": "string"}},
+        "solvents": {"type": "array", "items": {"type": "string"}},
+        "purification": {"type": "array", "items": {"type": "string"}},
+        "chromatography_required": {"type": "boolean"},
+        "route_confidence": {"type": "number"}
+      }
+    },
+    "procurement": {
+      "type": "object",
+      "required": ["precursor_available", "supplier", "price", "lead_time_days", "moq", "purity", "quote_timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "precursor_available": {"type": "boolean"},
+        "supplier": {"type": "string"},
+        "price": {"type": "number"},
+        "lead_time_days": {"type": "integer"},
+        "moq": {"type": "number"},
+        "purity": {"type": "number"},
+        "quote_timestamp": {"type": "string"}
+      }
+    },
+    "patent_risk": {
+      "type": "object",
+      "required": ["patent_hits", "claim_overlap_score", "fto_status", "jurisdiction", "expiry_estimate"],
+      "additionalProperties": false,
+      "properties": {
+        "patent_hits": {"type": "array", "items": {"type": "string"}},
+        "claim_overlap_score": {"type": "number"},
+        "fto_status": {"type": "string"},
+        "jurisdiction": {"type": "string"},
+        "expiry_estimate": {"type": "string"}
+      }
+    },
+    "ehs": {
+      "type": "object",
+      "required": ["hazards", "restricted_solvent", "pmi", "e_factor", "heavy_metal_catalyst"],
+      "additionalProperties": false,
+      "properties": {
+        "hazards": {"type": "array", "items": {"type": "string"}},
+        "restricted_solvent": {"type": "boolean"},
+        "pmi": {"type": "number"},
+        "e_factor": {"type": "number"},
+        "heavy_metal_catalyst": {"type": "boolean"}
+      }
+    },
+    "manufacturing_assessment": {
+      "type": "object",
+      "required": ["action", "risk_codes", "route_confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "action": {"enum": ["reject", "curate_evidence", "source_or_synthesize", "film_screen"]},
+        "risk_codes": {"type": "array", "items": {"type": "string"}},
+        "route_confidence": {"type": "number"}
+      }
+    },
+    "experiment_result": {
+      "type": "object",
+      "required": ["experiment_id", "iteration_id", "operator", "lab", "timestamp", "material_entity_id", "use_instance_id", "candidate_version", "decision_digest", "device_stack", "htl_process", "controls", "outcome", "failure_stage", "symptoms", "quality_flags", "raw_data_uri", "model_feedback"],
+      "additionalProperties": true,
+      "properties": {
+        "experiment_id": {"type": "string"},
+        "iteration_id": {"type": "string"},
+        "operator": {"type": "string"},
+        "lab": {"type": "string"},
+        "timestamp": {"type": "string"},
+        "material_entity_id": {"type": "string"},
+        "use_instance_id": {"type": "string"},
+        "candidate_version": {"type": "string"},
+        "decision_digest": {"type": "string"},
+        "device_stack": {"type": "object", "required": ["architecture"], "properties": {"architecture": {"const": "n-i-p"}}},
+        "htl_process": {"type": "object"},
+        "controls": {"type": "object"},
+        "outcome": {"enum": ["success", "partial", "failed", "censored"]},
+        "failure_stage": {"type": "string"},
+        "symptoms": {"type": "array", "items": {"type": "string"}},
+        "quality_flags": {"type": "array", "items": {"type": "string"}},
+        "raw_data_uri": {"type": "string"},
+        "model_feedback": {"type": "object"}
+      }
+    },
+    "failure_analysis": {
+      "type": "object",
+      "required": ["root_cause", "confidence", "quarantine", "corrective_actions", "router_updates"],
+      "additionalProperties": false,
+      "properties": {
+        "root_cause": {
+          "enum": ["material_identity", "synthesis_supply", "solution_process", "film_morphology", "interface_energetics", "interface_chemistry", "dopant_migration", "device_fabrication", "measurement_artifact", "stability_degradation", "model_data_gap"]
+        },
+        "confidence": {"type": "number"},
+        "quarantine": {"type": "boolean"},
+        "corrective_actions": {"type": "array", "items": {"type": "string"}},
+        "router_updates": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

@@ -103,6 +103,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- Formula: {summary['formula_version']}",
         f"- Hard filters: {summary['hard_filter_version']}",
         f"- Local paper trace: {report['local_paper_trace']['path']}",
+        f"- Requested local paper trace: {report['local_paper_trace'].get('requested_path', report['local_paper_trace']['path'])}",
         "",
         "## Pareto Frontier",
         "",

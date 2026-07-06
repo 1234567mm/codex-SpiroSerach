@@ -80,9 +80,16 @@ class TraceAnchorResult:
 
 
 def validate_local_paper_trace(path: str | Path = "pdf/extracted_text.txt") -> dict[str, Any]:
-    paper_path = Path(path)
+    requested_path = Path(path)
+    paper_path = requested_path
+    fallback_used = False
     if not paper_path.exists():
-        raise LocalPaperTraceError(f"local paper trace failed: missing {paper_path}")
+        fallback_path = Path("data/local_paper_trace_excerpt.txt")
+        if requested_path.as_posix() == "pdf/extracted_text.txt" and fallback_path.exists():
+            paper_path = fallback_path
+            fallback_used = True
+        else:
+            raise LocalPaperTraceError(f"local paper trace failed: missing {paper_path}")
     text = paper_path.read_text(encoding="utf-8", errors="replace")
     text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
     lines = text.splitlines()
@@ -91,8 +98,11 @@ def validate_local_paper_trace(path: str | Path = "pdf/extracted_text.txt") -> d
     if missing:
         raise LocalPaperTraceError(f"local paper trace failed: missing anchors {', '.join(missing)}")
     return {
-        "path": "pdf/extracted_text.txt" if paper_path.name == "extracted_text.txt" else paper_path.name,
-        "trust_level": "L3_anchor_verified",
+        "path": paper_path.as_posix(),
+        "requested_path": requested_path.as_posix(),
+        "fallback_used": fallback_used,
+        "source_kind": "curated_excerpt" if fallback_used else "local_extracted_text",
+        "trust_level": "L1_local_file_present" if fallback_used else "L3_anchor_verified",
         "trust_levels": list(LOCAL_PAPER_TRUST_LEVELS),
         "text_sha256": text_hash,
         "anchors": [anchor.to_dict() for anchor in anchors],

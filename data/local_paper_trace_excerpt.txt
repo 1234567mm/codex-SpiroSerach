@@ -1,0 +1,5 @@
+AI-guided design of efficient perovskite solar cells operationally stable at 100 degrees C.
+The multiagent framework uses a data agent, composition agent, interface agent, and central agent.
+The reference composition includes FA0.92Cs0.08PbI3 and is also described as Cs8.
+The interface stack includes NiOx, MeO-DPPACz, and Al2O3.
+Operational stability evidence includes 1000 hours with 97% retained performance.

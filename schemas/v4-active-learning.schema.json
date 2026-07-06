@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v4-active-learning.schema.json",
+  "title": "SpiroSearch V4 Active Learning Contracts",
+  "type": "object",
+  "required": ["candidate", "experiment_request", "experiment_observation"],
+  "properties": {
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "experiment_request": {"$ref": "#/$defs/experiment_request"},
+    "experiment_observation": {"$ref": "#/$defs/experiment_observation"}
+  },
+  "$defs": {
+    "objective_vector": {
+      "type": "object",
+      "required": ["pce", "stability_t80", "cost", "synthesis_risk", "failure_risk"],
+      "properties": {
+        "pce": {"type": "number"},
+        "stability_t80": {"type": "number"},
+        "cost": {"type": "number"},
+        "synthesis_risk": {"type": "number"},
+        "failure_risk": {"type": "number"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["candidate_id", "material_entity_id", "use_instance_id", "version", "features", "predicted_objectives", "uncertainty"],
+      "properties": {
+        "candidate_id": {"type": "string"},
+        "material_entity_id": {"type": "string"},
+        "use_instance_id": {"type": "string"},
+        "version": {"type": "string"},
+        "features": {"type": "object"},
+        "predicted_objectives": {"$ref": "#/$defs/objective_vector"},
+        "uncertainty": {"type": "number"}
+      }
+    },
+    "experiment_request": {
+      "type": "object",
+      "required": ["request_id", "candidate_id", "dataset_snapshot_id", "candidate_pool_hash", "model_version", "acquisition_config", "decision_digest"],
+      "properties": {
+        "request_id": {"type": "string"},
+        "candidate_id": {"type": "string"},
+        "dataset_snapshot_id": {"type": "string"},
+        "candidate_pool_hash": {"type": "string"},
+        "model_version": {"type": "string"},
+        "acquisition_config": {"type": "object"},
+        "decision_digest": {"type": "string"}
+      }
+    },
+    "experiment_observation": {
+      "type": "object",
+      "required": ["experiment_id", "request_id", "candidate_id", "features", "objectives", "noise", "cost", "failure_labels", "outcome"],
+      "properties": {
+        "experiment_id": {"type": "string"},
+        "request_id": {"type": "string"},
+        "candidate_id": {"type": "string"},
+        "features": {"type": "object"},
+        "objectives": {"$ref": "#/$defs/objective_vector"},
+        "noise": {"type": "object"},
+        "cost": {"type": "number"},
+        "failure_labels": {"type": "array", "items": {"type": "string"}},
+        "outcome": {"enum": ["success", "partial", "failed", "censored"]}
+      }
+    }
+  }
+}

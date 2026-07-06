@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v4-evidence-factory.schema.json",
+  "title": "SpiroSearch V4 Evidence Factory Contracts",
+  "type": "object",
+  "required": ["source_artifact", "document_chunk", "extracted_claim", "human_review_event"],
+  "additionalProperties": false,
+  "properties": {
+    "source_artifact": {"$ref": "#/$defs/source_artifact"},
+    "document_chunk": {"$ref": "#/$defs/document_chunk"},
+    "extracted_claim": {"$ref": "#/$defs/extracted_claim"},
+    "human_review_event": {"$ref": "#/$defs/human_review_event"}
+  },
+  "$defs": {
+    "source_artifact": {
+      "type": "object",
+      "required": ["artifact_id", "doi", "sha256", "uri", "artifact_type"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string"},
+        "doi": {"type": "string"},
+        "sha256": {"type": "string"},
+        "uri": {"type": "string"},
+        "artifact_type": {"enum": ["pdf", "supplementary_information", "html", "table"]}
+      }
+    },
+    "document_chunk": {
+      "type": "object",
+      "required": ["chunk_id", "artifact_id", "span", "text_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {"type": "string"},
+        "artifact_id": {"type": "string"},
+        "page": {"type": ["integer", "null"]},
+        "table": {"type": ["string", "null"]},
+        "span": {"type": "string"},
+        "text_sha256": {"type": "string"}
+      }
+    },
+    "extracted_claim": {
+      "type": "object",
+      "required": ["claim_id", "artifact", "chunk", "property_name", "value", "unit", "method", "conditions", "extractor_version", "confidence", "review_status"],
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {"type": "string"},
+        "artifact": {"$ref": "#/$defs/source_artifact"},
+        "chunk": {"$ref": "#/$defs/document_chunk"},
+        "property_name": {"type": "string"},
+        "value": {},
+        "unit": {"type": "string"},
+        "method": {"type": "string"},
+        "conditions": {"type": "object"},
+        "extractor_version": {"type": "string"},
+        "confidence": {"type": "number"},
+        "review_status": {"enum": ["machine", "curated", "rejected", "needs_review"]}
+      }
+    },
+    "human_review_event": {
+      "type": "object",
+      "required": ["event_id", "target_type", "target_id", "reviewer", "old_value", "new_value", "reason", "decision"],
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {"type": "string"},
+        "target_type": {"type": "string"},
+        "target_id": {"type": "string"},
+        "reviewer": {"type": "string"},
+        "old_value": {},
+        "new_value": {},
+        "reason": {"type": "string"},
+        "decision": {"type": "string"}
+      }
+    }
+  }
+}
