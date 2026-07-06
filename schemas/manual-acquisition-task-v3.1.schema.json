@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/manual-acquisition-task-v3.1.schema.json",
+  "title": "ManualAcquisitionTaskV3_1",
+  "type": "object",
+  "required": ["task_id", "title", "missing_assets", "deposit_path", "reason"],
+  "properties": {
+    "task_id": { "type": "string" },
+    "doi": { "type": ["string", "null"] },
+    "url": { "type": ["string", "null"] },
+    "missing_assets": {
+      "type": "array",
+      "items": { "enum": ["pdf", "supplementary_information", "html_snapshot", "table_file", "figure_file"] }
+    },
+    "deposit_path": { "type": "string" },
+    "reason": { "type": "string" }
+  }
+}

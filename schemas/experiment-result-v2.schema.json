@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/experiment-result-v2.schema.json",
+  "title": "ExperimentResultV2",
+  "type": "object",
+  "required": ["batch_id", "protocol_id", "candidate_id", "sample_kind", "replicate_count", "raw_data_uri", "qc_status", "negative_result", "failure_modes"],
+  "properties": {
+    "sample_kind": { "enum": ["film", "hole_only", "device", "coupon", "solution"] },
+    "negative_result": { "type": "boolean" },
+    "failure_modes": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "poor_solubility",
+          "bad_wetting",
+          "pinholes",
+          "delamination",
+          "energy_mismatch",
+          "low_conductivity",
+          "interface_recombination",
+          "hysteresis_high",
+          "rapid_burn_in",
+          "mppt_instability",
+          "ion_migration_signature",
+          "metal_diffusion",
+          "batch_variation"
+        ]
+      }
+    }
+  }
+}

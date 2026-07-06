@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/evidence-claim-v2.schema.json",
+  "title": "EvidenceClaimV2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "claim_id",
+    "candidate_id",
+    "source_type",
+    "source_id",
+    "producer_type",
+    "claim_type",
+    "evidence_label",
+    "property_name",
+    "component",
+    "polarity",
+    "raw_value",
+    "normalized_value",
+    "unit",
+    "uncertainty",
+    "conditions",
+    "raw_span",
+    "locator",
+    "artifact_uri",
+    "artifact_hash",
+    "confidence",
+    "quality_score",
+    "curation_status",
+    "transformation_version",
+    "transformation_note"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.1" },
+    "source_type": {
+      "enum": [
+        "local_pdf",
+        "paper",
+        "preprint",
+        "patent",
+        "external_database",
+        "supplier",
+        "calculation",
+        "experiment",
+        "curation",
+        "active_learning"
+      ]
+    },
+    "producer_type": {
+      "enum": ["human_curator", "llm_extractor", "parser", "calculation_workflow", "instrument", "database_api"]
+    },
+    "claim_type": {
+      "enum": ["property", "performance", "stability", "synthesis", "failure", "comparison", "mechanism", "safety", "cost", "availability"]
+    },
+    "evidence_label": {
+      "enum": ["direct_nip_demo", "nip_hybrid_demo", "pin_transfer_candidate", "device_adjacent_evidence", "class_prior"]
+    },
+    "polarity": { "enum": ["supports", "refutes", "neutral", "mixed"] },
+    "curation_status": { "enum": ["machine", "reviewed", "rejected", "superseded"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "quality_score": { "type": "number", "minimum": 0, "maximum": 1 }
+  }
+}

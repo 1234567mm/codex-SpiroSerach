@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/report-v2.schema.json",
+  "title": "ReportV2",
+  "type": "object",
+  "required": [
+    "summary",
+    "local_paper_trace",
+    "results",
+    "ranked_candidates",
+    "baseline_comparators",
+    "architecture_opportunities",
+    "evidence_chain",
+    "manifest"
+  ],
+  "$defs": {
+    "validation_error": {
+      "type": "object",
+      "required": ["error_code", "json_pointer", "candidate_id", "claim_id", "message", "severity", "suggested_fix"]
+    },
+    "decision_digest": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "report_contract_version",
+        "formula_version",
+        "hard_filter_version",
+        "normalization_version",
+        "role_gate_version",
+        "normalized_candidate_records",
+        "normalized_claim_records",
+        "local_paper_trace_anchor_hashes",
+        "decision_digest_sha256"
+      ]
+    }
+  }
+}

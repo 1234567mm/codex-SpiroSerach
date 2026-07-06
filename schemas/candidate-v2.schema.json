@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/candidate-v2.schema.json",
+  "title": "CandidateV2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "replacement_mode",
+    "material_class",
+    "architecture_context",
+    "availability",
+    "synthesis_route_status",
+    "supplier_status",
+    "process_temperature_c",
+    "solvent_system",
+    "halogenated_solvent_required",
+    "commercial_or_synthesis_readiness",
+    "direct_ranking_eligible"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.1" },
+    "record_type": {
+      "enum": ["candidate", "comparator", "control", "interface_component", "barrier_component", "architecture_pair"]
+    },
+    "replacement_mode": {
+      "enum": ["direct_htl", "bilayer_htl", "interface_enabler", "barrier_enhancer", "baseline_only"]
+    },
+    "material_class": {
+      "enum": [
+        "polymer_htm",
+        "dopant_free_small_molecule",
+        "inorganic_hybrid_htm",
+        "sam_derived_interface",
+        "two_dimensional_barrier",
+        "baseline_comparator"
+      ]
+    },
+    "architecture_context": {
+      "type": "object",
+      "required": [
+        "device_polarity",
+        "contact_side",
+        "perovskite_family",
+        "bandgap_class",
+        "adjacent_layers",
+        "deposition_after_perovskite",
+        "transfer_rationale",
+        "transfer_penalty"
+      ],
+      "properties": {
+        "device_polarity": { "enum": ["n-i-p", "p-i-n", "tandem_subcell", "unknown"] },
+        "contact_side": { "enum": ["top", "bottom", "buried", "interlayer", "unknown"] },
+        "perovskite_family": {
+          "enum": ["fa_cs_pb_iodide", "mixed_halide_wide_bandgap", "pb_sn_low_bandgap", "other"]
+        },
+        "bandgap_class": { "enum": ["conventional", "wide", "low", "unknown"] },
+        "adjacent_layers": { "type": "array", "items": { "type": "string" } },
+        "deposition_after_perovskite": { "type": "boolean" },
+        "transfer_rationale": { "type": "string" },
+        "transfer_penalty": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "solvent_system": { "type": "array", "items": { "type": "string" } },
+    "halogenated_solvent_required": { "type": "boolean" },
+    "direct_ranking_eligible": { "type": "boolean" },
+    "commercial_or_synthesis_readiness": { "type": "number", "minimum": 0, "maximum": 1 }
+  }
+}

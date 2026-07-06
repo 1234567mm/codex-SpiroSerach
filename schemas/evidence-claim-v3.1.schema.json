@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/evidence-claim-v3.1.schema.json",
+  "title": "EvidenceClaimV3_1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "claim_id",
+    "source_id",
+    "candidate_id",
+    "claim_type",
+    "device_polarity",
+    "contact_side",
+    "replacement_mode",
+    "evidence_label",
+    "transfer_penalty",
+    "raw_span",
+    "locator",
+    "conditions",
+    "artifact_hash",
+    "curation_status"
+  ],
+  "properties": {
+    "schema_version": { "const": "3.1" },
+    "device_polarity": { "enum": ["n-i-p", "p-i-n", "tandem", "unknown"] },
+    "contact_side": { "enum": ["top", "bottom", "buried", "interlayer", "unknown"] },
+    "replacement_mode": {
+      "enum": ["direct_htl", "bilayer_htl", "interface_enabler", "barrier_enhancer", "baseline_only"]
+    },
+    "evidence_label": {
+      "enum": [
+        "direct_nip_demo",
+        "nip_hybrid_demo",
+        "pin_transfer_candidate",
+        "interface_only",
+        "barrier_only",
+        "device_adjacent",
+        "class_prior",
+        "negative_or_refuting"
+      ]
+    },
+    "transfer_penalty": { "type": "number", "minimum": 0, "maximum": 1 },
+    "curation_status": { "enum": ["machine", "reviewed", "rejected", "superseded"] }
+  }
+}

@@ -1,0 +1,13 @@
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+outputs/
+pdf/
+manual_inbox/
+literature_assets/
+object_store/
+fulltext_chunks/

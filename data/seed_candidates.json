@@ -1,0 +1,282 @@
+[
+  {
+    "material_id": "p3ht",
+    "name": "P3HT",
+    "category": "polymer_htl",
+    "intended_role": "spiro_replacement_htl",
+    "homo_ev": -5.2,
+    "lumo_ev": -2.1,
+    "thermal_stability_c": 120,
+    "uv_stability": 0.72,
+    "hydrophobicity": 0.82,
+    "dopant_free": true,
+    "orthogonal_solvent": true,
+    "commercially_available": true,
+    "toxicity_flag": "low",
+    "scores": {
+      "efficiency": 0.80,
+      "operational_stability": 0.91,
+      "interface_compatibility": 0.76,
+      "scalability": 0.93,
+      "cost": 0.88,
+      "evidence_quality": 0.78
+    },
+    "evidence": [
+      {
+        "source": "nature:10.1038/s41586-019-1036-3",
+        "level": "peer_reviewed",
+        "claim": "P3HT has been demonstrated as a scalable Spiro replacement route in n-i-p PSCs.",
+        "anchor": "Nature 2019 P3HT HTL perovskite paper",
+        "metrics": {"class": "polymer_htl"},
+        "transformation_note": "High stability and scale-up evidence supports operational_stability and scalability components."
+      }
+    ],
+    "red_flags": ["batch molecular weight distribution affects reproducibility"],
+    "notes": "Strong first-round polymer comparator."
+  },
+  {
+    "material_id": "ptaa",
+    "name": "PTAA",
+    "category": "polymer_htl",
+    "intended_role": "spiro_replacement_htl",
+    "homo_ev": -5.2,
+    "lumo_ev": -2.2,
+    "thermal_stability_c": 110,
+    "uv_stability": 0.68,
+    "hydrophobicity": 0.85,
+    "dopant_free": true,
+    "orthogonal_solvent": true,
+    "commercially_available": true,
+    "toxicity_flag": "low",
+    "scores": {
+      "efficiency": 0.86,
+      "operational_stability": 0.83,
+      "interface_compatibility": 0.82,
+      "scalability": 0.72,
+      "cost": 0.45,
+      "evidence_quality": 0.82
+    },
+    "evidence": [
+      {
+        "source": "literature:PTAA high efficiency perovskite HTL",
+        "level": "peer_reviewed",
+        "claim": "PTAA is a high-performance polymeric HTL and useful industrial benchmark.",
+        "anchor": "HTL literature benchmark",
+        "metrics": {"class": "polymer_htl"},
+        "transformation_note": "Performance evidence supports efficiency while cost lowers industrial score."
+      }
+    ],
+    "red_flags": ["high cost and batch variation"],
+    "notes": "Benchmark, not necessarily best industrial target."
+  },
+  {
+    "material_id": "cuscn",
+    "name": "CuSCN",
+    "category": "inorganic_htl",
+    "intended_role": "spiro_replacement_htl",
+    "homo_ev": -5.3,
+    "lumo_ev": -1.8,
+    "thermal_stability_c": 150,
+    "uv_stability": 0.80,
+    "hydrophobicity": 0.70,
+    "dopant_free": true,
+    "orthogonal_solvent": true,
+    "commercially_available": true,
+    "toxicity_flag": "medium",
+    "scores": {
+      "efficiency": 0.78,
+      "operational_stability": 0.88,
+      "interface_compatibility": 0.68,
+      "scalability": 0.92,
+      "cost": 0.93,
+      "evidence_quality": 0.76
+    },
+    "evidence": [
+      {
+        "source": "literature:CuSCN PSC stability",
+        "level": "peer_reviewed",
+        "claim": "CuSCN is a low-cost inorganic HTL with thermal stability potential.",
+        "anchor": "CuSCN HTL reports",
+        "metrics": {"class": "inorganic_htl"},
+        "transformation_note": "Inorganic low-cost stability evidence supports stability, cost, and scalability."
+      }
+    ],
+    "red_flags": ["solvent/process compatibility must be checked"],
+    "notes": "Good inorganic branch candidate."
+  },
+  {
+    "material_id": "nio_x",
+    "name": "NiOx interlayer",
+    "category": "inorganic_interface",
+    "intended_role": "hole_contact_interface",
+    "homo_ev": -5.1,
+    "lumo_ev": -1.9,
+    "thermal_stability_c": 160,
+    "uv_stability": 0.82,
+    "hydrophobicity": 0.55,
+    "dopant_free": true,
+    "orthogonal_solvent": true,
+    "commercially_available": true,
+    "toxicity_flag": "low",
+    "scores": {
+      "efficiency": 0.75,
+      "operational_stability": 0.90,
+      "interface_compatibility": 0.86,
+      "scalability": 0.86,
+      "cost": 0.82,
+      "evidence_quality": 0.84
+    },
+    "evidence": [
+      {
+        "source": "doi:10.1126/science.aef1620",
+        "level": "local_reference",
+        "claim": "The local AI-guided PSC paper uses NiOx/SAM/Al2O3 interface logic for stable devices.",
+        "anchor": "pdf/extracted_text.txt::NiOx/SAM/Al2O3",
+        "metrics": {"operational_temperature_c": 100, "aging_hours": 1000},
+        "transformation_note": "Paper-grounded interface rationale supports interface_compatibility and evidence_quality."
+      }
+    ],
+    "red_flags": ["standalone n-i-p top HTL behavior needs stack-specific validation"],
+    "notes": "Included as interface-layer branch, not a simple one-layer Spiro drop-in."
+  },
+  {
+    "material_id": "meo_dppacz",
+    "name": "MeO-DPPACz-derived phosphonic acid interface",
+    "category": "sam_derived_interface",
+    "intended_role": "sam_derived_interface",
+    "homo_ev": -5.35,
+    "lumo_ev": -2.0,
+    "thermal_stability_c": 120,
+    "uv_stability": 0.92,
+    "hydrophobicity": 0.74,
+    "dopant_free": true,
+    "orthogonal_solvent": true,
+    "commercially_available": false,
+    "toxicity_flag": "unknown",
+    "scores": {
+      "efficiency": 0.81,
+      "operational_stability": 0.94,
+      "interface_compatibility": 0.90,
+      "scalability": 0.55,
+      "cost": 0.42,
+      "evidence_quality": 0.88
+    },
+    "evidence": [
+      {
+        "source": "doi:10.1126/science.aef1620",
+        "level": "local_reference",
+        "claim": "Biphenyl carbazole phosphonic acid design improves UV resilience relative to MeO-2PACz.",
+        "anchor": "pdf/extracted_text.txt::MeO-DPPACz UV stability",
+        "metrics": {"uv_stability": "improved"},
+        "transformation_note": "Local paper evidence supports UV and interface components; low availability limits scalability."
+      }
+    ],
+    "red_flags": ["mainly p-i-n/SAM evidence; n-i-p top-contact translation must be experimentally proven"],
+    "notes": "Rule-extraction candidate for robust anchored molecular interfaces."
+  },
+  {
+    "material_id": "spiro_ometad",
+    "name": "Spiro-OMeTAD comparator",
+    "category": "small_molecule_htm",
+    "intended_role": "spiro_comparator",
+    "homo_ev": -5.1,
+    "lumo_ev": -2.2,
+    "thermal_stability_c": 80,
+    "uv_stability": 0.42,
+    "hydrophobicity": 0.45,
+    "dopant_free": false,
+    "orthogonal_solvent": true,
+    "commercially_available": true,
+    "toxicity_flag": "medium",
+    "scores": {
+      "efficiency": 0.92,
+      "operational_stability": 0.40,
+      "interface_compatibility": 0.62,
+      "scalability": 0.45,
+      "cost": 0.28,
+      "evidence_quality": 0.90
+    },
+    "evidence": [
+      {
+        "source": "literature:Spiro-OMeTAD baseline",
+        "level": "peer_reviewed",
+        "claim": "High efficiency benchmark but stability is limited by dopant and hygroscopic additive risks.",
+        "anchor": "baseline comparator",
+        "metrics": {"role": "comparator"},
+        "transformation_note": "Retained as comparator even when it fails replacement-oriented stability filters."
+      }
+    ],
+    "red_flags": ["LiTFSI/tBP migration", "hygroscopic dopants", "high cost"],
+    "notes": "Comparator row, not a recommended replacement."
+  },
+  {
+    "material_id": "misaligned_deep_htm",
+    "name": "Deep-HOMO hypothetical HTM",
+    "category": "small_molecule_htm",
+    "intended_role": "spiro_replacement_htl",
+    "homo_ev": -6.05,
+    "lumo_ev": -2.1,
+    "thermal_stability_c": 130,
+    "uv_stability": 0.70,
+    "hydrophobicity": 0.70,
+    "dopant_free": true,
+    "orthogonal_solvent": true,
+    "commercially_available": false,
+    "toxicity_flag": "unknown",
+    "scores": {
+      "efficiency": 0.55,
+      "operational_stability": 0.80,
+      "interface_compatibility": 0.30,
+      "scalability": 0.40,
+      "cost": 0.40,
+      "evidence_quality": 0.35
+    },
+    "evidence": [
+      {
+        "source": "estimated:virtual_screen",
+        "level": "estimated",
+        "claim": "Estimated energy level is too deep for the configured stack.",
+        "anchor": "virtual descriptor",
+        "metrics": {"homo_ev": -6.05},
+        "transformation_note": "Energy mismatch is a hard-filter trigger."
+      }
+    ],
+    "red_flags": ["energy-level mismatch"],
+    "notes": "Negative-control fixture for hard filters."
+  },
+  {
+    "material_id": "graphene_barrier",
+    "name": "Graphene-enhanced HTL barrier",
+    "category": "two_dimensional_barrier",
+    "intended_role": "barrier_enhanced_htl",
+    "homo_ev": -5.0,
+    "lumo_ev": -1.5,
+    "thermal_stability_c": 200,
+    "uv_stability": 0.86,
+    "hydrophobicity": 0.88,
+    "dopant_free": true,
+    "orthogonal_solvent": true,
+    "commercially_available": true,
+    "toxicity_flag": "low",
+    "scores": {
+      "efficiency": 0.68,
+      "operational_stability": 0.92,
+      "interface_compatibility": 0.58,
+      "scalability": 0.70,
+      "cost": 0.62,
+      "evidence_quality": 0.50
+    },
+    "evidence": [
+      {
+        "source": "literature:2D barrier layers in PSCs",
+        "level": "peer_reviewed",
+        "claim": "2D carbon layers can serve as water/oxygen or metal-diffusion barriers when paired with an HTL.",
+        "anchor": "2D barrier literature",
+        "metrics": {"role": "barrier"},
+        "transformation_note": "Barrier evidence improves stability but lower direct HTL evidence limits interface score."
+      }
+    ],
+    "red_flags": ["should be treated as enhancement layer, not standalone HTL"],
+    "notes": "Useful in composite architecture."
+  }
+]

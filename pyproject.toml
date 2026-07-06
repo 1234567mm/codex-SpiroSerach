@@ -1,0 +1,5 @@
+[project]
+name = "spirosearch"
+version = "0.1.0"
+description = "Industrial-grade closed-loop screening baseline for Spiro-OMeTAD replacement HTL candidates."
+requires-python = ">=3.11"

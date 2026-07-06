@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/material-entity-v3.1.schema.json",
+  "title": "MaterialEntityV3_1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "material_id",
+    "canonical_name",
+    "material_class",
+    "intended_role_default",
+    "synthesis_readiness",
+    "supplier_status",
+    "cost_proxy",
+    "ip_or_patent_risk",
+    "scaleup_risk"
+  ],
+  "properties": {
+    "schema_version": { "const": "3.1" },
+    "material_class": {
+      "enum": [
+        "small_molecule_htm",
+        "polymer_htm",
+        "inorganic_htm",
+        "sam_interface",
+        "2d_barrier",
+        "oxide_interlayer",
+        "composite_or_blend",
+        "baseline_spiro"
+      ]
+    },
+    "intended_role_default": {
+      "enum": [
+        "direct_htl",
+        "bilayer_htl",
+        "interface_modifier",
+        "diffusion_barrier",
+        "moisture_barrier",
+        "electrode_buffer",
+        "comparator"
+      ]
+    },
+    "cost_proxy": { "type": "number", "minimum": 0, "maximum": 1 },
+    "architecture_pairing_required": { "type": "boolean" },
+    "synthetic_step_count": { "type": ["integer", "null"], "minimum": 0 }
+  }
+}
