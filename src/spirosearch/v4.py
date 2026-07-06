@@ -6,6 +6,16 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Iterable
 
+from spirosearch.orchestrator_contracts import AuditEvent
+from spirosearch.surrogate import (
+    FailureModelState,
+    FitStatus,
+    SurrogateModelState,
+    convergence_event,
+    observed_hypervolume,
+    refit_surrogate_from_posterior,
+)
+
 
 def _stable_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
@@ -13,6 +23,19 @@ def _stable_json(value: Any) -> str:
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(_stable_json(value).encode("utf-8")).hexdigest()
+
+
+def deprecated(obj: Any) -> Any:
+    """Mark an object as deprecated without adding runtime dependencies.
+
+    Args:
+        obj: Object to mark.
+
+    Returns:
+        The same object with a deprecation marker.
+    """
+    setattr(obj, "__deprecated__", True)
+    return obj
 
 
 @dataclass(frozen=True)
@@ -177,6 +200,73 @@ class DatasetSnapshot:
             snapshot_hash=_digest(payload),
         )
 
+    @classmethod
+    def apply_review_event(
+        cls,
+        snapshot_id: str,
+        claims: Iterable[ExtractedClaim],
+        event: HumanReviewEvent,
+    ) -> "DatasetSnapshotReviewResult":
+        """Apply a review event, rebuild a snapshot, and detect conflicts.
+
+        Args:
+            snapshot_id: New snapshot identifier.
+            claims: Claims in the dataset.
+            event: Review event to apply.
+
+        Returns:
+            Snapshot review result with conflict events and recompute targets.
+        """
+        updated_claims: list[ExtractedClaim] = []
+        for claim in claims:
+            if event.target_type == "claim" and event.target_id == claim.claim_id:
+                updated_claims.append(apply_review_event(claim, event))
+            else:
+                updated_claims.append(claim)
+        snapshot = cls.from_claims(snapshot_id, updated_claims, review_events=[event])
+        from spirosearch.conflict_detector import ClaimConflictDetector
+
+        conflict_events = ClaimConflictDetector().detect(updated_claims)
+        downstream_recompute = ("ranking", "recommendation") if conflict_events else ()
+        return DatasetSnapshotReviewResult(
+            snapshot=snapshot,
+            claims=tuple(updated_claims),
+            conflict_events=conflict_events,
+            human_review_events=tuple(conflict.to_human_review_event("review_queue") for conflict in conflict_events),
+            downstream_recompute=downstream_recompute,
+        )
+
+
+@dataclass(frozen=True)
+class DatasetSnapshotReviewResult:
+    snapshot: DatasetSnapshot
+    claims: tuple[ExtractedClaim, ...]
+    conflict_events: tuple[Any, ...]
+    human_review_events: tuple[HumanReviewEvent, ...]
+    downstream_recompute: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the review result to a JSON-compatible dictionary.
+
+        Returns:
+            JSON-compatible dictionary.
+        """
+        return {
+            "snapshot": {
+                "snapshot_id": self.snapshot.snapshot_id,
+                "claim_ids": list(self.snapshot.claim_ids),
+                "claim_hashes": list(self.snapshot.claim_hashes),
+                "review_event_ids": list(self.snapshot.review_event_ids),
+                "snapshot_hash": self.snapshot.snapshot_hash,
+            },
+            "claims": [claim.to_dict() for claim in self.claims],
+            "conflict_events": [
+                event.to_dict() if hasattr(event, "to_dict") else event for event in self.conflict_events
+            ],
+            "human_review_events": [event.to_dict() for event in self.human_review_events],
+            "downstream_recompute": list(self.downstream_recompute),
+        }
+
 
 @dataclass(frozen=True)
 class CandidatePoolSnapshot:
@@ -222,11 +312,21 @@ class CandidatePoolSnapshot:
         }
 
 
-def build_evidence_bundle(claims: Iterable[ExtractedClaim]) -> dict[str, Any]:
-    return {
+def build_evidence_bundle(
+    claims: Iterable[ExtractedClaim],
+    conflict_events: Iterable[Any] = (),
+) -> dict[str, Any]:
+    bundle: dict[str, Any] = {
         "claims": [claim.to_dict() for claim in claims],
         "conclusion": None,
     }
+    conflict_list = [
+        event.to_dict() if hasattr(event, "to_dict") else event
+        for event in conflict_events
+    ]
+    if conflict_list:
+        bundle["conflict_events"] = conflict_list
+    return bundle
 
 
 @dataclass(frozen=True)
@@ -396,6 +496,16 @@ class ExperimentLedger:
     def record_quarantine(self, request_id: str, candidate_id: str, reason: str) -> None:
         self._upsert(ExperimentLedgerEntry(request_id, candidate_id, "quarantine", "", reason=reason))
 
+    def record_router_update(self, update_id: str, candidate_id: str, reason: str) -> None:
+        """Record that a router update affected a candidate.
+
+        Args:
+            update_id: Stable router update identifier.
+            candidate_id: Affected candidate identifier.
+            reason: Router update reason.
+        """
+        self._upsert(ExperimentLedgerEntry(update_id, candidate_id, "router_update", "", reason=reason))
+
     def status_for_candidate(self, candidate_id: str) -> str | None:
         statuses = [entry.status for entry in self._entries if entry.candidate_id == candidate_id]
         if not statuses:
@@ -459,6 +569,9 @@ class Posterior:
     noise_observed: tuple[dict[str, float], ...] = ()
     costs: tuple[float, ...] = ()
     failure_labels: tuple[tuple[str, ...], ...] = ()
+    failure_training_labels: tuple[tuple[str, ...], ...] = ()
+    surrogate_state: SurrogateModelState = field(default_factory=SurrogateModelState.empty)
+    failure_model_state: FailureModelState = field(default_factory=FailureModelState)
 
     @classmethod
     def empty(cls, model_version: str) -> "Posterior":
@@ -472,13 +585,43 @@ class Posterior:
         cost: float,
         failure_labels: tuple[str, ...],
     ) -> "Posterior":
-        return replace(
+        appended = replace(
             self,
             X_observed=self.X_observed + (dict(features),),
             y_observed=self.y_observed + (objectives,),
             noise_observed=self.noise_observed + (dict(noise),),
             costs=self.costs + (float(cost),),
             failure_labels=self.failure_labels + (tuple(failure_labels),),
+        )
+        surrogate_state, _metrics = refit_surrogate_from_posterior(appended)
+        return replace(appended, surrogate_state=surrogate_state)
+
+    def with_failure_training_labels(
+        self,
+        failure_labels: tuple[str, ...],
+        features: dict[str, float] | None = None,
+        candidate_id: str = "",
+    ) -> "Posterior":
+        """Append failure labels without adding a PCE training target.
+
+        Args:
+            failure_labels: Failure labels for a failed or partial experiment.
+            features: Failed candidate features.
+            candidate_id: Failed candidate identifier.
+
+        Returns:
+            Posterior with independent failure labels and stale surrogate state.
+        """
+        failure_model_state = self.failure_model_state.with_label(
+            candidate_id=candidate_id,
+            features=features or {},
+            labels=failure_labels,
+        )
+        return replace(
+            self,
+            failure_training_labels=self.failure_training_labels + (tuple(failure_labels),),
+            surrogate_state=replace(self.surrogate_state, fit_status=FitStatus.STALE),
+            failure_model_state=failure_model_state,
         )
 
 
@@ -490,6 +633,13 @@ class ModelUpdateEvent:
     posterior_after: Posterior
     request_id: str
     candidate_id: str
+    training_set_hash: str = ""
+    fit_status: str = FitStatus.UNFITTED.value
+    posterior_version: int = 0
+    surrogate_type: str = "HEURISTIC"
+    metrics: dict[str, float] = field(default_factory=dict)
+    convergence: dict[str, Any] = field(default_factory=dict)
+    audit_event: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -545,6 +695,7 @@ class ScreeningMetrics:
         return all(better_or_equal) and any(strictly_better)
 
 
+@deprecated
 class V4DecisionEngine:
     def __init__(
         self,
@@ -566,60 +717,45 @@ class V4DecisionEngine:
         batch_size: int,
         budget: float,
     ) -> list[ExperimentRequest]:
-        excluded = ledger.excluded_candidate_ids()
-        available = [
-            candidate
-            for candidate in candidates
-            if candidate.candidate_id not in excluded
-            and candidate.route_gate_action not in {"reject", "curate_evidence", "source_or_synthesize"}
-        ]
-        selected: list[ExperimentRequest] = []
-        selected_ids: set[str] = set()
-        spent = 0.0
-        for candidate in sorted(available, key=lambda item: (-self._acquisition_score(item, posterior), item.candidate_id)):
-            if candidate.candidate_id in selected_ids:
-                continue
-            estimated_cost = candidate.predicted_objectives.cost
-            if spent + estimated_cost > budget:
-                continue
-            request = self._request_for(candidate, posterior)
-            selected.append(request)
-            selected_ids.add(candidate.candidate_id)
-            ledger.record_planned(request.request_id, candidate.candidate_id, request.decision_digest)
-            spent += estimated_cost
-            if len(selected) >= batch_size:
-                break
-        return selected
+        from spirosearch.orchestrator import ActiveLearningAgent
 
-    def _request_for(self, candidate: Candidate, posterior: Posterior) -> ExperimentRequest:
-        acquisition_score = self._acquisition_score(candidate, posterior)
-        digest_payload = {
-            "candidate_id": candidate.candidate_id,
-            "dataset_snapshot_id": self.dataset_snapshot_id,
-            "candidate_pool_hash": self.candidate_pool_hash,
-            "model_version": self.model_version,
-            "acquisition_config": self.acquisition_config,
-            "features": candidate.features,
-            "predicted_objectives": candidate.predicted_objectives.to_dict(),
-        }
-        decision_digest = _digest(digest_payload)
-        request_id = f"exp-{decision_digest[:12]}"
-        return ExperimentRequest(
-            request_id=request_id,
-            candidate_id=candidate.candidate_id,
+        recommendation = ActiveLearningAgent(
             dataset_snapshot_id=self.dataset_snapshot_id,
             candidate_pool_hash=self.candidate_pool_hash,
             model_version=self.model_version,
             acquisition_config=self.acquisition_config,
-            decision_digest=decision_digest,
-            acquisition_score=acquisition_score,
-            estimated_cost=candidate.predicted_objectives.cost,
+        ).recommend_batch(
+            candidate_pool=candidates,
+            posterior=posterior,
+            constraints={
+                "batch_size": batch_size,
+                "budget": budget,
+                "excluded_candidate_ids": ledger.excluded_candidate_ids(),
+            },
         )
+        for request in recommendation.requests:
+            ledger.record_planned(request.request_id, request.candidate_id, request.decision_digest)
+        return list(recommendation.requests)
+
+    def _request_for(self, candidate: Candidate, posterior: Posterior) -> ExperimentRequest:
+        from spirosearch.orchestrator import ActiveLearningAgent
+
+        return ActiveLearningAgent(
+            dataset_snapshot_id=self.dataset_snapshot_id,
+            candidate_pool_hash=self.candidate_pool_hash,
+            model_version=self.model_version,
+            acquisition_config=self.acquisition_config,
+        ).request_for(candidate, posterior)
 
     def _acquisition_score(self, candidate: Candidate, posterior: Posterior) -> float:
-        observed_best = max((item.pce for item in posterior.y_observed), default=0.0)
-        improvement = max(0.0, candidate.predicted_objectives.pce - observed_best)
-        return improvement + candidate.uncertainty - 0.01 * candidate.predicted_objectives.cost
+        from spirosearch.orchestrator import ActiveLearningAgent
+
+        return ActiveLearningAgent(
+            dataset_snapshot_id=self.dataset_snapshot_id,
+            candidate_pool_hash=self.candidate_pool_hash,
+            model_version=self.model_version,
+            acquisition_config=self.acquisition_config,
+        ).acquisition_score(candidate, posterior)
 
 
 class ExperimentComputationLoop:
@@ -632,6 +768,7 @@ class ExperimentComputationLoop:
         observation: ExperimentObservation,
     ) -> ModelUpdateEvent:
         old_best = max((item.pce for item in posterior.y_observed), default=None)
+        previous_objectives = posterior.y_observed
         if observation.outcome == "success":
             posterior_after = posterior.with_observation(
                 features=observation.features,
@@ -641,11 +778,33 @@ class ExperimentComputationLoop:
                 failure_labels=observation.failure_labels,
             )
             self.ledger.record_completed(observation.request_id, observation.outcome)
+            audit_reason = "successful experiment refit surrogate posterior"
         else:
             reason = ",".join(observation.failure_labels) or observation.outcome
-            posterior_after = posterior
+            posterior_after = posterior.with_failure_training_labels(
+                observation.failure_labels,
+                features=observation.features,
+                candidate_id=observation.candidate_id,
+            )
             self.ledger.record_quarantine(observation.request_id, observation.candidate_id, reason=reason)
+            audit_reason = "failed experiment routed to failure_training_labels"
         new_best = max((item.pce for item in posterior_after.y_observed), default=None)
+        convergence = convergence_event(
+            previous_objectives,
+            posterior_after.y_observed,
+            posterior_after.surrogate_state.posterior_version,
+        )
+        metrics = {
+            "training_rows": float(len(posterior_after.X_observed)),
+            "target_mean": (
+                sum(item.pce for item in posterior_after.y_observed) / len(posterior_after.y_observed)
+                if posterior_after.y_observed
+                else 0.0
+            ),
+            "observed_hypervolume": observed_hypervolume(posterior_after.y_observed),
+        }
+        if convergence.delta_hypervolume is not None:
+            metrics["delta_hypervolume"] = convergence.delta_hypervolume
         return ModelUpdateEvent(
             model_version=posterior.model_version,
             old_best_pce=old_best,
@@ -653,6 +812,19 @@ class ExperimentComputationLoop:
             posterior_after=posterior_after,
             request_id=observation.request_id,
             candidate_id=observation.candidate_id,
+            training_set_hash=posterior_after.surrogate_state.training_set_hash,
+            fit_status=posterior_after.surrogate_state.fit_status.value,
+            posterior_version=posterior_after.surrogate_state.posterior_version,
+            surrogate_type=posterior_after.surrogate_state.surrogate_type,
+            metrics=metrics,
+            convergence=convergence.to_dict(),
+            audit_event=AuditEvent(
+                actor="ExperimentComputationLoop",
+                target_type="posterior",
+                target_id=f"{posterior.model_version}:{posterior_after.surrogate_state.posterior_version}",
+                reason=audit_reason,
+                affected_snapshot_ids=(),
+            ).to_dict(),
         )
 
 
@@ -759,11 +931,65 @@ class FailureAnalysis:
     router_updates: tuple[str, ...]
 
 
+FAILURE_CORRECTIVE_ACTIONS: dict[str, tuple[str, ...]] = {
+    "material_identity": ("require_material_identity_recheck", "hold_candidate_until_identity_confirmed"),
+    "synthesis_supply": ("route_to_synthesis_supply_review", "refresh_precursor_procurement_quote"),
+    "solution_process": ("tighten_solution_process_window", "rerun_solution_stability_screen"),
+    "film_morphology": ("exclude_from_pce_training", "rerun_film_qc_before_device_screen", "quarantine_candidate"),
+    "interface_energetics": ("adjust_interface_energetics_gate", "require_voc_loss_diagnostic"),
+    "interface_chemistry": ("adjust_interface_gate_threshold", "require_interface_chemistry_assay"),
+    "dopant_migration": ("flag_dopant_system_high_risk", "require_dopant_migration_screen"),
+    "device_fabrication": ("route_to_device_fabrication_qc", "repeat_device_with_fresh_stack"),
+    "measurement_artifact": ("require_measurement_artifact_review", "repeat_calibrated_measurement"),
+    "stability_degradation": ("increase_stability_degradation_risk_prior", "require_stability_protocol_repeat"),
+    "model_data_gap": ("request_model_data_gap_curation", "exclude_from_pce_training"),
+}
+
+
+FAILURE_ROUTER_UPDATES: dict[str, tuple[str, ...]] = {
+    "material_identity": ("require_material_identity_recheck",),
+    "synthesis_supply": ("route_to_synthesis_supply_review",),
+    "solution_process": ("tighten_solution_process_window",),
+    "film_morphology": ("increase_film_morphology_risk_prior", "route_next_batch_to_film_screen"),
+    "interface_energetics": ("adjust_interface_energetics_gate",),
+    "interface_chemistry": ("adjust_interface_gate_threshold",),
+    "dopant_migration": ("flag_dopant_system_high_risk",),
+    "device_fabrication": ("route_to_device_fabrication_qc",),
+    "measurement_artifact": ("require_measurement_artifact_review",),
+    "stability_degradation": ("increase_stability_degradation_risk_prior",),
+    "model_data_gap": ("request_model_data_gap_curation",),
+}
+
+
+FAILURE_SYMPTOM_ROOTS: dict[str, str] = {
+    "identity_mismatch": "material_identity",
+    "mass_spec_mismatch": "material_identity",
+    "precursor_unavailable": "synthesis_supply",
+    "synthesis_failed": "synthesis_supply",
+    "poor_solubility": "solution_process",
+    "coating_nonuniform": "solution_process",
+    "pinholes": "film_morphology",
+    "low_ff": "film_morphology",
+    "strong_hysteresis": "film_morphology",
+    "voc_loss": "interface_energetics",
+    "band_misalignment": "interface_energetics",
+    "interfacial_reaction": "interface_chemistry",
+    "interface_decomposition": "interface_chemistry",
+    "dopant_migration": "dopant_migration",
+    "mobile_ion_signal": "dopant_migration",
+    "shunt": "device_fabrication",
+    "contact_failure": "device_fabrication",
+    "calibration_error": "measurement_artifact",
+    "eqe_mismatch": "measurement_artifact",
+    "rapid_degradation": "stability_degradation",
+    "thermal_drift": "stability_degradation",
+    "unknown_failure": "model_data_gap",
+}
+
+
 class FailureAnalysisAgent:
     def analyze_result(self, result: ExperimentResultV4) -> FailureAnalysis:
         symptoms = set(result.symptoms)
-        actions: list[str] = []
-        router_updates: list[str] = []
         root_cause = "model_data_gap"
         confidence = 0.4
 
@@ -772,27 +998,25 @@ class FailureAnalysisAgent:
             and (result.device_metrics.hysteresis_index or 0.0) > 0.25
             and result.film_qc.pinholes
         )
-        if morphology_signal or {"low_ff", "strong_hysteresis", "pinholes"}.issubset(symptoms):
+        matched_taxonomy_symptom = False
+        for symptom in sorted(symptoms):
+            if symptom in FAILURE_SYMPTOM_ROOTS:
+                root_cause = FAILURE_SYMPTOM_ROOTS[symptom]
+                confidence = 0.82 if root_cause == "film_morphology" else 0.72
+                matched_taxonomy_symptom = True
+                break
+        if not matched_taxonomy_symptom and morphology_signal:
             root_cause = "film_morphology"
             confidence = 0.82
-            actions.extend(
-                [
-                    "exclude_from_pce_training",
-                    "quarantine_candidate",
-                    "rerun_film_qc_before_device_screen",
-                ]
-            )
-            router_updates.extend(
-                [
-                    "increase_film_morphology_risk_prior",
-                    "route_next_batch_to_film_screen",
-                ]
-            )
 
+        actions = list(FAILURE_CORRECTIVE_ACTIONS[root_cause])
+        router_updates = list(FAILURE_ROUTER_UPDATES[root_cause])
         if result.device_metrics.eqe_integrated_jsc is None:
             actions.append("require_eqe_jsc_before_training")
 
-        quarantine = result.outcome in {"failed", "partial"} and "exclude_from_pce_training" in actions
+        quarantine = result.outcome in {"failed", "partial"} and (
+            "exclude_from_pce_training" in actions or root_cause != "measurement_artifact"
+        )
         return FailureAnalysis(
             root_cause=root_cause,
             confidence=confidence,
