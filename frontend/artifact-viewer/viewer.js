@@ -6,33 +6,59 @@ const state = {
 document.getElementById("manifestFile").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
-  state.manifest = JSON.parse(await file.text());
-  renderManifest(state.manifest);
-  renderKnownArtifacts();
+  try {
+    clearError();
+    state.manifest = JSON.parse(await file.text());
+    renderManifest(state.manifest);
+    renderKnownArtifacts();
+  } catch (error) {
+    showError(`manifest ${error.message}`);
+  }
 });
 
 document.getElementById("artifactFiles").addEventListener("change", async (event) => {
-  state.artifacts.clear();
-  for (const file of event.target.files) {
-    const text = await file.text();
-    state.artifacts.set(file.name, parseArtifact(file.name, text));
+  try {
+    clearError();
+    state.artifacts.clear();
+    for (const file of event.target.files) {
+      const text = await file.text();
+      const artifactName = file.webkitRelativePath || file.name;
+      const parsed = parseArtifact(artifactName, text);
+      state.artifacts.set(artifactName, parsed);
+      if (artifactName !== file.name && !state.artifacts.has(file.name)) {
+        state.artifacts.set(file.name, parsed);
+      }
+    }
+    renderKnownArtifacts();
+  } catch (error) {
+    showError(error.message);
   }
-  renderKnownArtifacts();
 });
 
 function parseArtifact(name, text) {
   if (name.endsWith(".jsonl")) {
-    return parseJsonl(text);
+    return parseJsonl(text, name);
   }
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${name} JSON parse failed: ${error.message}`);
+  }
 }
 
-function parseJsonl(text) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+function parseJsonl(text, name = "jsonl") {
+  const records = [];
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      records.push(JSON.parse(trimmed));
+    } catch (error) {
+      throw new Error(`${name} line ${index + 1}: ${error.message}`);
+    }
+  });
+  return records;
 }
 
 function renderManifest(manifest) {
@@ -80,13 +106,18 @@ function renderKnownArtifacts() {
 }
 
 function getArtifact(fileName, kind) {
-  if (state.artifacts.has(fileName)) {
-    return state.artifacts.get(fileName);
-  }
   const artifact = (state.manifest?.artifacts || []).find((item) => item.kind === kind);
-  if (!artifact?.path) return null;
-  const pathName = artifact.path.split(/[\\/]/).pop();
-  return state.artifacts.get(pathName) || state.artifacts.get(artifact.path) || null;
+  if (artifact?.path) {
+    const pathName = artifact.path.split(/[\\/]/).pop();
+    if (state.artifacts.has(artifact.path)) {
+      return state.artifacts.get(artifact.path);
+    }
+    if (artifact.path === pathName) {
+      return state.artifacts.get(pathName) || null;
+    }
+    return null;
+  }
+  return state.artifacts.get(fileName) || null;
 }
 
 function renderRecommendations(recommendations) {
@@ -156,8 +187,10 @@ function renderEnrichmentFlow(enrichment, cacheIndex, reviewQueue, trace) {
   document.getElementById("cacheSummary").textContent = cacheIndex
     ? `hit ${safeCount(cacheIndex.hit_count)} / miss ${safeCount(cacheIndex.miss_count)} / failed ${safeCount(cacheIndex.failure_count)}`
     : "No cache data";
-  document.getElementById("candidateCount").textContent = String(records.length);
-  document.getElementById("needsReviewCount").textContent = String(records.filter((record) => record.status === "needs_review").length);
+  if (enrichment) {
+    document.getElementById("candidateCount").textContent = String(records.length);
+    document.getElementById("needsReviewCount").textContent = String(records.filter((record) => record.status === "needs_review").length);
+  }
   if (!records.length) {
     container.innerHTML = `<div class="empty">No enrichment results loaded</div>`;
     return;
@@ -287,6 +320,18 @@ function safeCount(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "-";
   return escapeHtml(String(number));
+}
+
+function showError(message) {
+  const errorState = document.getElementById("errorState");
+  errorState.textContent = message;
+  errorState.style.display = "block";
+}
+
+function clearError() {
+  const errorState = document.getElementById("errorState");
+  errorState.textContent = "";
+  errorState.style.display = "none";
 }
 
 renderRecommendations(null);

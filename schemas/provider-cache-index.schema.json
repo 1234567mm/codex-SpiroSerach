@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/provider-cache-index.schema.json",
+  "title": "ProviderCacheIndexArtifact",
+  "$comment": "Schema for provider-cache-index.json. cache_key identifies the provider/query slot; response_id identifies the observed provider response.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cache_path",
+    "entry_count",
+    "entries_written",
+    "entries_read",
+    "hit_count",
+    "miss_count",
+    "failure_count",
+    "cache_keys",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": { "const": "v6.provider_cache_index.v1" },
+    "cache_path": { "type": "string", "minLength": 1 },
+    "entry_count": { "type": "integer", "minimum": 0 },
+    "entries_written": { "type": "integer", "minimum": 0 },
+    "entries_read": { "type": "integer", "minimum": 0 },
+    "hit_count": { "type": "integer", "minimum": 0 },
+    "miss_count": { "type": "integer", "minimum": 0 },
+    "failure_count": { "type": "integer", "minimum": 0 },
+    "cache_keys": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/cache_index_entry" }
+    }
+  },
+  "$defs": {
+    "cache_index_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "provider",
+        "query",
+        "lookup_id",
+        "cache_key",
+        "response_id",
+        "cache_status",
+        "source_url",
+        "raw_hash",
+        "read",
+        "written",
+        "retrieved_at",
+        "ttl_hours"
+      ],
+      "properties": {
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "query": { "type": "string", "minLength": 1 },
+        "lookup_id": { "type": "string" },
+        "cache_key": { "type": "string", "minLength": 1 },
+        "response_id": { "type": "string", "minLength": 1 },
+        "cache_status": { "type": "string", "minLength": 1 },
+        "source_url": { "type": "string", "minLength": 1 },
+        "raw_hash": { "type": "string", "minLength": 1 },
+        "read": { "type": "boolean" },
+        "written": { "type": "boolean" },
+        "retrieved_at": { "type": "string", "minLength": 1 },
+        "ttl_hours": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "reason": { "type": "string" },
+        "trace_event_id": { "type": "string" }
+      }
+    }
+  }
+}

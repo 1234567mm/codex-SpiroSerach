@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/review-queue-item.schema.json",
+  "title": "ReviewQueueItem",
+  "$comment": "Schema for each line in review-queue.jsonl. Reason-specific payload fields remain extensible.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "target_type",
+    "target_id",
+    "reason",
+    "severity",
+    "review_item_id"
+  ],
+  "properties": {
+    "target_type": { "type": "string", "minLength": 1 },
+    "target_id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string" },
+    "reason": { "type": "string", "minLength": 1 },
+    "severity": { "type": "string", "minLength": 1 },
+    "review_item_id": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string" },
+    "query": { "type": "string" },
+    "source_url": { "type": "string" },
+    "cache_status": { "type": "string" },
+    "cache_key": { "type": "string" },
+    "raw_hash": { "type": "string" },
+    "response_id": { "type": "string" },
+    "lookup_id": { "type": "string" },
+    "trace_event_id": { "type": "string" },
+    "field": { "type": "string" },
+    "error_message": { "type": "string" },
+    "missing_fields": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

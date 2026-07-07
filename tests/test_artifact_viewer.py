@@ -18,6 +18,7 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="candidateFlow"', html)
         self.assertIn('id="reviewQueueList"', html)
         self.assertIn('id="cacheSummary"', html)
+        self.assertIn('id="errorState"', html)
         self.assertNotIn("landing", html.casefold())
 
     def test_viewer_script_parses_jsonl_and_renders_manifest_artifacts(self):
@@ -41,6 +42,7 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("outcome", script)
         self.assertIn("safeCount(event.candidate_count)", script)
         self.assertIn("function safeCount", script)
+        self.assertIn("function showError", script)
         self.assertIn("escapeHtml", script)
 
     def test_viewer_renders_enrichment_flow_with_precise_review_correlation_and_escaping(self):
@@ -56,6 +58,7 @@ function element(id) {
       id,
       textContent: "",
       innerHTML: "",
+      style: {},
       addEventListener: () => {},
     });
   }
@@ -166,6 +169,106 @@ process.stdout.write(JSON.stringify({
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered["candidateFlow"])
         self.assertNotIn("<script>alert(1)</script>", rendered["candidateFlow"])
         self.assertIn("review-a", rendered["reviewQueueList"])
+
+    def test_viewer_reports_jsonl_line_errors_preserves_manifest_counts_and_prefers_manifest_path(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+
+const context = {
+  console,
+  Map,
+  Number,
+  String,
+  JSON,
+  document: {
+    getElementById: element,
+  },
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+let parseError = "";
+try {
+  context.parseArtifact("review-queue.jsonl", '{"ok":true}\n\n{bad}\n');
+} catch (error) {
+  parseError = error.message;
+}
+
+context.renderManifest({
+  run_id: "legacy-run",
+  candidate_count: 7,
+  context: { provider_outcomes: { failure_count: 2 } },
+});
+context.renderEnrichmentFlow(null, null, [], []);
+
+vm.runInContext(`
+state.manifest = {
+  artifacts: [{kind: "provider_cache_index", path: "nested/provider-cache-index.json"}]
+};
+state.artifacts.clear();
+state.artifacts.set("provider-cache-index.json", {marker: "wrong-default"});
+state.artifacts.set("nested/provider-cache-index.json", {marker: "manifest-path"});
+`, context);
+const matched = context.getArtifact("provider-cache-index.json", "provider_cache_index");
+vm.runInContext('state.artifacts.delete("nested/provider-cache-index.json");', context);
+const unmatched = context.getArtifact("provider-cache-index.json", "provider_cache_index");
+context.showError("visible failure");
+const errorText = element("errorState").textContent;
+const errorDisplay = element("errorState").style.display;
+context.clearError();
+const clearedDisplay = element("errorState").style.display;
+
+process.stdout.write(JSON.stringify({
+  parseError,
+  candidateCount: element("candidateCount").textContent,
+  needsReviewCount: element("needsReviewCount").textContent,
+  candidateFlow: element("candidateFlow").innerHTML,
+  matched,
+  unmatched,
+  errorText,
+  errorDisplay,
+  clearedDisplay,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        rendered = json.loads(result.stdout)
+        self.assertIn("review-queue.jsonl line 3", rendered["parseError"])
+        self.assertEqual(rendered["candidateCount"], "7")
+        self.assertEqual(rendered["needsReviewCount"], "2")
+        self.assertIn("No enrichment results loaded", rendered["candidateFlow"])
+        self.assertEqual(rendered["matched"], {"marker": "manifest-path"})
+        self.assertIsNone(rendered["unmatched"])
+        self.assertEqual(rendered["errorText"], "visible failure")
+        self.assertEqual(rendered["errorDisplay"], "block")
+        self.assertEqual(rendered["clearedDisplay"], "none")
 
 
 if __name__ == "__main__":

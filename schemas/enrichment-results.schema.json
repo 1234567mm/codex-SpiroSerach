@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/enrichment-results.schema.json",
+  "title": "EnrichmentResultsArtifact",
+  "$comment": "Schema for enrichment-results.json. Provider facts remain flexible; trace join fields are explicit for viewer correlation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "candidate_count",
+    "source_registry_hash",
+    "registry_providers",
+    "summary",
+    "records"
+  ],
+  "properties": {
+    "schema_version": { "const": "v6.enrichment_results.v1" },
+    "mode": { "enum": ["offline_local_first", "live_cache_first"] },
+    "candidate_count": { "type": "integer", "minimum": 0 },
+    "source_registry_hash": { "type": "string", "minLength": 1 },
+    "registry_providers": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete_count", "needs_review_count"],
+      "properties": {
+        "complete_count": { "type": "integer", "minimum": 0 },
+        "needs_review_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/enrichment_record" }
+    }
+  },
+  "$defs": {
+    "enrichment_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "name",
+        "category",
+        "status",
+        "facts",
+        "trust",
+        "missing_fields",
+        "provider_refs",
+        "review_item_ids"
+      ],
+      "properties": {
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "enum": ["complete", "needs_review"] },
+        "facts": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "trust": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "missing_fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "provider_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/provider_ref" }
+        },
+        "review_item_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "provider_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "query",
+        "source_url",
+        "raw_hash",
+        "response_id",
+        "lookup_id",
+        "cache_key",
+        "trust_level",
+        "confidence",
+        "cache_status",
+        "retrieved_at",
+        "contract_version",
+        "trace_event_id"
+      ],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "query": { "type": "string", "minLength": 1 },
+        "source_url": { "type": "string", "minLength": 1 },
+        "raw_hash": { "type": "string", "minLength": 1 },
+        "response_id": { "type": "string", "minLength": 1 },
+        "lookup_id": { "type": "string" },
+        "cache_key": { "type": "string", "minLength": 1 },
+        "trust_level": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "cache_status": { "type": "string", "minLength": 1 },
+        "retrieved_at": { "type": "string", "minLength": 1 },
+        "contract_version": { "const": "provider-response-v1" },
+        "trace_event_id": { "type": "string" }
+      }
+    }
+  }
+}

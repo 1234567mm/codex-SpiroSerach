@@ -9,6 +9,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
+
 from spirosearch.cli import _main_enrich
 from spirosearch.enrichment_runtime import LiveProviderSource, run_enrichment
 from spirosearch.providers.base import ProviderResponse
@@ -50,6 +53,34 @@ def artifact_text(output_dir):
         path.read_text(encoding="utf-8")
         for path in sorted(Path(output_dir).glob("*"))
         if path.is_file()
+    )
+
+
+def load_schema(name):
+    return json.loads(Path(f"schemas/{name}").read_text(encoding="utf-8"))
+
+
+def schema_registry():
+    schemas = [
+        load_schema("agent-trace-event.schema.json"),
+        load_schema("enrichment-results.schema.json"),
+        load_schema("provider-cache-index.schema.json"),
+        load_schema("provider-cache.schema.json"),
+        load_schema("provider-response.schema.json"),
+        load_schema("review-queue-item.schema.json"),
+    ]
+    return Registry().with_resources(
+        (schema["$id"], Resource.from_contents(schema))
+        for schema in schemas
+    )
+
+
+def assert_schema_valid(testcase, payload, schema, path="artifact"):
+    validator = Draft202012Validator(schema, registry=schema_registry())
+    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
+    testcase.assertEqual(
+        [],
+        [f"{path}.{'.'.join(str(item) for item in error.path)}: {error.message}" for error in errors],
     )
 
 
@@ -134,6 +165,67 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 artifact_kinds,
                 {"enrichment_results", "review_queue", "provider_cache_index", "provider_cache", "agent_trace"},
             )
+
+    def test_enrichment_artifacts_satisfy_declared_traceability_schemas(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            output_dir = root / "enrich"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="schema_htl", name="Schema HTL", band_gap_ev=None)]),
+                encoding="utf-8",
+            )
+
+            run_enrichment(
+                candidates_path=candidates_path,
+                output_dir=output_dir,
+                source_registry_path="data/source_registry.json",
+            )
+
+            enrichment_schema = load_schema("enrichment-results.schema.json")
+            cache_index_schema = load_schema("provider-cache-index.schema.json")
+            review_schema = load_schema("review-queue-item.schema.json")
+            trace_schema = load_schema("agent-trace-event.schema.json")
+            provider_cache_schema = load_schema("provider-cache.schema.json")
+            enrichment = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
+            cache_index = json.loads((output_dir / "provider-cache-index.json").read_text(encoding="utf-8"))
+            review_queue = [
+                json.loads(line)
+                for line in (output_dir / "review-queue.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            trace_events = [
+                json.loads(line)
+                for line in (output_dir / "agent-trace.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            provider_cache = [
+                json.loads(line)
+                for line in (output_dir / "provider-cache.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+            assert_schema_valid(self, enrichment, enrichment_schema, "enrichment-results")
+            assert_schema_valid(self, cache_index, cache_index_schema, "provider-cache-index")
+            for index, item in enumerate(review_queue):
+                assert_schema_valid(self, item, review_schema, f"review-queue[{index}]")
+            for index, event in enumerate(trace_events):
+                assert_schema_valid(self, event, trace_schema, f"agent-trace[{index}]")
+            for index, entry in enumerate(provider_cache):
+                assert_schema_valid(self, entry, provider_cache_schema, f"provider-cache[{index}]")
+
+            local_provider_ref = enrichment["records"][0]["provider_refs"][0]
+            local_cache_entry = cache_index["entries"][0]
+            self.assertEqual(local_provider_ref["lookup_id"], "")
+            self.assertEqual(local_provider_ref["trace_event_id"], "")
+            self.assertIsNone(local_cache_entry["ttl_hours"])
+            self.assertNotIn("trust_level", local_cache_entry)
+            with self.assertRaises(AssertionError):
+                invalid_cache_index = dict(cache_index)
+                invalid_cache_index["unexpected"] = True
+                assert_schema_valid(self, invalid_cache_index, cache_index_schema, "invalid provider-cache-index")
+            self.assertIn(review_queue[0]["review_item_id"], enrichment["records"][0]["review_item_ids"])
+            self.assertEqual(cache_index["entries"][0]["response_id"], enrichment["records"][0]["provider_refs"][0]["response_id"])
 
     def test_enrich_cache_index_only_lists_entries_written_by_current_run(self):
         with TemporaryDirectory() as temp_dir:

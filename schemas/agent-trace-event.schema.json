@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/agent-trace-event.schema.json",
+  "title": "AgentTraceEvent",
+  "$comment": "Schema for each line in agent-trace.jsonl. Event-type-specific fields remain extensible while common trace identity is required.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "event_type",
+    "actor",
+    "event_id",
+    "run_id",
+    "generated_at"
+  ],
+  "properties": {
+    "event_type": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+    "event_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "candidate_id": { "type": "string" },
+    "provider": { "type": "string" },
+    "query": { "type": "string" },
+    "lookup_id": { "type": "string" },
+    "cache_status": { "type": "string" },
+    "cache_key": { "type": "string" },
+    "raw_hash": { "type": "string" },
+    "response_id": { "type": "string" },
+    "trace_event_id": { "type": "string" },
+    "review_item_id": { "type": "string" },
+    "outcome": { "type": "string" },
+    "reason": { "type": "string" },
+    "source_url": { "type": "string" }
+  }
+}
