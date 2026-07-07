@@ -113,11 +113,11 @@ def _main_v4_round(argv: list[str]) -> int:
             f"({manifest['run_id']}, {manifest['batch_size']} requested batch size)."
         )
         return EXIT_SUCCESS
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"input/output path error: {exc}", file=sys.stderr)
+    except (OSError, ValueError, json.JSONDecodeError):
+        print("input/output path error", file=sys.stderr)
         return EXIT_PATH_ERROR
-    except Exception as exc:
-        print(f"internal error: {exc}", file=sys.stderr)
+    except Exception:
+        print("internal error", file=sys.stderr)
         return EXIT_INTERNAL_ERROR
 
 
@@ -125,6 +125,17 @@ def _main_enrich(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Run local-first candidate data enrichment.")
     parser.add_argument("--candidates", required=True, help="Path to candidate JSON list.")
     parser.add_argument("--output-dir", required=True, help="Directory for enrichment artifacts.")
+    parser.add_argument(
+        "--mode",
+        default="offline-local",
+        choices=("offline-local", "live-cache-first"),
+        help="Enrichment execution mode. Default never calls live providers.",
+    )
+    parser.add_argument(
+        "--providers",
+        default="",
+        help="Comma-separated live providers for live-cache-first mode.",
+    )
     parser.add_argument(
         "--source-registry",
         default="data/source_registry.json",
@@ -137,14 +148,18 @@ def _main_enrich(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     try:
+        selected_providers = [item.strip() for item in args.providers.split(",") if item.strip()]
         manifest = run_enrichment(
             candidates_path=args.candidates,
             output_dir=args.output_dir,
             source_registry_path=args.source_registry,
             provider_cache_path=args.provider_cache,
+            live=args.mode == "live-cache-first",
+            providers=selected_providers,
         )
+        display_mode = args.mode if args.mode == "live-cache-first" else "local-first"
         print(
-            "V6 local-first enrichment artifacts "
+            f"V6 {display_mode} enrichment artifacts "
             f"written to {args.output_dir} "
             f"({manifest['run_id']}, {manifest['candidate_count']} candidates)."
         )
@@ -153,11 +168,11 @@ def _main_enrich(argv: list[str]) -> int:
         write_validation_errors(exc.errors, args.output_dir)
         print(f"validation failed: {len(exc.errors)} error(s)", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"input/output path error: {exc}", file=sys.stderr)
+    except (OSError, ValueError, json.JSONDecodeError):
+        print("input/output path error", file=sys.stderr)
         return EXIT_PATH_ERROR
-    except Exception as exc:
-        print(f"internal error: {exc}", file=sys.stderr)
+    except Exception:
+        print("internal error", file=sys.stderr)
         return EXIT_INTERNAL_ERROR
 
 

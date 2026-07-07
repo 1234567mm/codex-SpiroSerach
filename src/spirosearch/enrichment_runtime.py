@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterable
 
 from spirosearch.artifacts import (
     RunArtifact,
@@ -11,18 +13,28 @@ from spirosearch.artifacts import (
     write_json_artifact,
     write_jsonl_artifact,
 )
-from spirosearch.data_workflow import EnergyLevelCompletenessAgent
+from spirosearch.data_workflow import EnergyLevelCompletenessAgent, StructureDisambiguationAgent
 from spirosearch.models import CandidateMaterial
 from spirosearch.orchestrator_contracts import stable_hash, stable_json
 from spirosearch.pipeline import load_candidates
 from spirosearch.providers.base import ProviderResponse
 from spirosearch.providers.cache import JSONLProviderCache
-from spirosearch.source_registry import load_source_registry
+from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider
+from spirosearch.providers.pubchem import PubChemPUGRestProvider
+from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
 
 PRODUCER_VERSION = "spirosearch-v6-enrichment-runtime-v1"
 ENRICHMENT_SCHEMA_VERSION = "v6.enrichment_results.v1"
 PROVIDER_CACHE_INDEX_SCHEMA_VERSION = "v6.provider_cache_index.v1"
+
+
+@dataclass(frozen=True)
+class LiveProviderSource:
+    provider: str
+    query_for_candidate: Callable[[CandidateMaterial], str | None]
+    fetch: Callable[[CandidateMaterial], ProviderResponse]
+    failure_reason: str = "provider_live_failed"
 
 
 def run_enrichment(
@@ -31,6 +43,9 @@ def run_enrichment(
     output_dir: str | Path,
     source_registry_path: str | Path = "data/source_registry.json",
     provider_cache_path: str | Path | None = None,
+    live: bool = False,
+    providers: Iterable[str] | None = None,
+    provider_sources: Iterable[LiveProviderSource] | None = None,
 ) -> dict[str, Any]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -41,44 +56,117 @@ def run_enrichment(
     registry = load_source_registry(source_registry_path)
     registry_hash = stable_hash(registry.to_dict())
     candidates = load_candidates(candidates_path)
+    mode = "live_cache_first" if live else "offline_local_first"
+    selected_providers = tuple(providers or ())
+    live_sources = tuple(provider_sources or ())
+    if live and not live_sources:
+        live_sources = _default_live_provider_sources(
+            selected_providers=selected_providers,
+            registry=registry,
+            generated_at=generated_at,
+        )
 
     cache_path = Path(provider_cache_path) if provider_cache_path else output / "provider-cache.jsonl"
     if provider_cache_path is None and cache_path.exists():
         cache_path.unlink()
     cache = JSONLProviderCache(cache_path)
     cache_keys: list[str] = []
+    cache_stats = {
+        "hit_count": 0,
+        "miss_count": 0,
+        "failure_count": 0,
+    }
+    cache_index_entries: list[dict[str, Any]] = []
     records: list[dict[str, Any]] = []
     review_queue: list[dict[str, Any]] = []
     trace_events: list[dict[str, Any]] = []
 
     energy_agent = EnergyLevelCompletenessAgent()
+    structure_agent = StructureDisambiguationAgent()
     for candidate in candidates:
+        provider_refs: list[dict[str, Any]] = []
+        candidate_review_queue: list[dict[str, Any]] = []
+        responses: list[ProviderResponse] = []
+
         response = _local_candidate_energy_response(candidate, generated_at=generated_at)
-        cache.put(response)
-        cache_keys.append(cache.key_for(response.provider, response.query))
+        cache_key = _cache_response(cache, cache_keys, response)
+        cache_index_entries.append(
+            _cache_index_entry(
+                candidate=candidate,
+                response=response,
+                cache_key=cache_key,
+                cache_status="local",
+                read=False,
+                written=True,
+            )
+        )
+        responses.append(response)
+        provider_refs.append(_provider_ref(response, cache_status="local"))
+
+        if live:
+            for source in live_sources:
+                live_response = _load_or_fetch_live_response(
+                    source=source,
+                    candidate=candidate,
+                    registry=registry,
+                    cache=cache,
+                    cache_keys=cache_keys,
+                    cache_index_entries=cache_index_entries,
+                    cache_stats=cache_stats,
+                    trace_events=trace_events,
+                    now=generated_at,
+                )
+                if isinstance(live_response, ProviderResponse):
+                    responses.append(live_response)
+                    provider_refs.append(
+                        _provider_ref(live_response, cache_status=getattr(live_response, "_cache_status", "miss"))
+                    )
+                    if live_response.provider == "pubchem":
+                        try:
+                            structure = structure_agent.resolve(
+                                molecule_id=candidate.material_id,
+                                name=candidate.name,
+                                provider_response=live_response,
+                            )
+                        except ValueError as exc:
+                            candidate_review_queue.append(
+                                _structure_invalid_review_item(
+                                    candidate=candidate,
+                                    provider_response=live_response,
+                                    error_message=_sanitize_error(str(exc)),
+                                )
+                            )
+                        else:
+                            candidate_review_queue.extend(structure.review_queue)
+                else:
+                    candidate_review_queue.append(live_response)
+            candidate_review_queue.extend(_fact_conflict_review_items(candidate, responses[1:]))
+
         assessment = energy_agent.assess(
             target_id=candidate.material_id,
-            provider_responses=[response],
+            provider_responses=responses,
         )
         for item in assessment.review_queue:
-            review_queue.append(dict(item))
+            candidate_review_queue.append(dict(item))
+        review_queue.extend(candidate_review_queue)
 
-        records.append(_enrichment_record(candidate, response, assessment))
+        records.append(_enrichment_record(candidate, responses, assessment, provider_refs, candidate_review_queue))
 
     trace_events.append(
         {
             "event_type": "enrichment_run",
             "actor": "EnrichmentRuntime",
-            "mode": "offline_local_first",
+            "mode": mode,
             "candidate_count": len(candidates),
             "review_queue_count": len(review_queue),
             "source_registry_hash": registry_hash,
+            "live_providers": [source.provider for source in live_sources],
         }
     )
     trace_events.extend(
         {
             "event_type": "review_queue",
-            "actor": "EnergyLevelCompletenessAgent",
+            "actor": _review_actor(item),
             **item,
         }
         for item in review_queue
@@ -86,7 +174,7 @@ def run_enrichment(
 
     results_payload = {
         "schema_version": ENRICHMENT_SCHEMA_VERSION,
-        "mode": "offline_local_first",
+        "mode": mode,
         "candidate_count": len(candidates),
         "source_registry_hash": registry_hash,
         "registry_providers": list(registry.providers()),
@@ -98,18 +186,55 @@ def run_enrichment(
     }
     cache_index_payload = {
         "schema_version": PROVIDER_CACHE_INDEX_SCHEMA_VERSION,
-        "cache_path": _relative_or_name(cache_path, output),
+        "cache_path": _safe_path_label(cache_path, output),
         "entry_count": len(cache_keys),
+        "entries_written": len(cache_keys),
+        "entries_read": cache_stats["hit_count"],
+        "hit_count": cache_stats["hit_count"],
+        "miss_count": cache_stats["miss_count"],
+        "failure_count": cache_stats["failure_count"],
         "cache_keys": cache_keys,
+        "entries": cache_index_entries,
     }
 
     run_id = stable_hash(
         {
             "input_hash": input_hash,
             "source_registry_hash": registry_hash,
+            "mode": mode,
+            "providers_requested": list(selected_providers),
+            "live_providers": [source.provider for source in live_sources],
+            "provider_outcomes": dict(cache_stats),
+            "review_queue": review_queue,
             "records": records,
         }
     )[:16]
+    providers_failed = _providers_failed(review_queue)
+    providers_succeeded = sorted(
+        {
+            entry["provider"]
+            for entry in cache_index_entries
+            if entry["provider"] != "local_candidate_input" and entry["cache_status"] in {"hit", "miss"}
+        }
+    )
+    providers_attempted = sorted(
+        {
+            entry["provider"]
+            for entry in cache_index_entries
+            if entry["provider"] != "local_candidate_input"
+        }
+        | {item["provider"] for item in providers_failed}
+    )
+    provider_cache_artifact = _safe_record_existing_artifact(
+        output,
+        cache_path,
+        display_path=_safe_path_label(cache_path, output),
+        kind="provider_cache",
+        run_id=run_id,
+        input_hash=input_hash,
+        generated_at=generated_at,
+        producer_version=PRODUCER_VERSION,
+    )
     artifacts: list[RunArtifact] = [
         write_json_artifact(
             output,
@@ -131,15 +256,7 @@ def run_enrichment(
             generated_at=generated_at,
             producer_version=PRODUCER_VERSION,
         ),
-        record_existing_artifact(
-            output,
-            _relative_or_name(cache_path, output),
-            kind="provider_cache",
-            run_id=run_id,
-            input_hash=input_hash,
-            generated_at=generated_at,
-            producer_version=PRODUCER_VERSION,
-        ),
+        provider_cache_artifact,
         write_json_artifact(
             output,
             "provider-cache-index.json",
@@ -171,10 +288,31 @@ def run_enrichment(
     ).to_dict()
     manifest.update(
         {
-            "mode": "offline_local_first",
+            "mode": mode,
             "candidate_count": len(candidates),
             "source_registry_hash": registry_hash,
-            "provider_cache_path": _relative_or_name(cache_path, output),
+            "provider_cache_path": _safe_path_label(cache_path, output),
+            "live_providers": [source.provider for source in live_sources],
+            "context": {
+                "execution_mode": mode,
+                "network_enabled": live,
+                "cache_policy": "read-write",
+                "source_registry_path": _safe_path_label(Path(source_registry_path), output),
+                "source_registry_hash": registry_hash,
+                "providers_requested": list(selected_providers),
+                "providers_used": sorted({"local_candidate_input"} | {source.provider for source in live_sources}),
+                "providers_attempted": providers_attempted,
+                "providers_succeeded": providers_succeeded,
+                "providers_failed": providers_failed,
+                "provider_outcomes": dict(cache_stats),
+                "provider_cache": {
+                    "path": _safe_path_label(cache_path, output),
+                    "contract_version": cache.contract_version,
+                    "entries_read": cache_stats["hit_count"],
+                    "entries_written": len(cache_keys),
+                    "entries": cache_index_entries,
+                },
+            },
         }
     )
     (output / "run-manifest.json").write_text(stable_json(manifest) + "\n", encoding="utf-8")
@@ -207,10 +345,55 @@ def _local_candidate_energy_response(candidate: CandidateMaterial, *, generated_
 
 def _enrichment_record(
     candidate: CandidateMaterial,
-    response: ProviderResponse,
+    responses: list[ProviderResponse],
     assessment: Any,
+    provider_refs: list[dict[str, Any]],
+    review_items: list[dict[str, Any]],
 ) -> dict[str, Any]:
     required_fields = tuple(EnergyLevelCompletenessAgent.required_fields)
+    facts = _candidate_fact_map(candidate)
+    trust = {field: responses[0].trust_level for field in facts}
+    for response in responses[1:]:
+        for key, value in response.normalized_result.items():
+            if key in {
+                "cid",
+                "molecular_formula",
+                "molecular_weight",
+                "canonical_smiles",
+                "inchi_key",
+                "xlogp",
+                "tpsa",
+                "hbd_count",
+                "hba_count",
+                "chemical_formula",
+                "space_group",
+                "xc_functional",
+                "formation_energy_ev_per_atom",
+                "energy_above_hull",
+                "density",
+            } and value is not None:
+                facts.setdefault(key, value)
+                trust.setdefault(key, response.trust_level)
+            elif key in required_fields and key not in facts and value is not None:
+                facts[key] = value
+                trust[key] = response.trust_level
+    return {
+        "candidate_id": candidate.material_id,
+        "name": candidate.name,
+        "category": candidate.category,
+        "status": "needs_review" if review_items else assessment.status,
+        "facts": facts,
+        "trust": trust,
+        "missing_fields": [
+            field
+            for field in required_fields
+            if field not in facts
+        ],
+        "provider_refs": provider_refs,
+    }
+
+
+def _candidate_fact_map(candidate: CandidateMaterial) -> dict[str, Any]:
     facts_with_nulls = {
         "homo_ev": candidate.homo_ev,
         "lumo_ev": candidate.lumo_ev,
@@ -223,35 +406,501 @@ def _enrichment_record(
         "commercially_available": candidate.commercially_available,
         "toxicity_flag": candidate.toxicity_flag,
     }
-    facts = {
+    return {
         key: value
         for key, value in facts_with_nulls.items()
         if value is not None
     }
-    trust = {field: response.trust_level for field in facts}
-    return {
+
+
+def _fact_conflict_review_items(
+    candidate: CandidateMaterial,
+    provider_responses: list[ProviderResponse],
+) -> list[dict[str, Any]]:
+    local_facts = _candidate_fact_map(candidate)
+    conflicts: list[dict[str, Any]] = []
+    for response in provider_responses:
+        for field, provider_value in response.normalized_result.items():
+            if field in local_facts and provider_value is not None and provider_value != local_facts[field]:
+                conflicts.append(
+                    {
+                        "target_type": "provider_enrichment",
+                        "target_id": candidate.material_id,
+                        "name": candidate.name,
+                        "reason": "provider_fact_conflict",
+                        "provider": response.provider,
+                        "query": response.query,
+                        "source_url": response.source_url,
+                        "severity": "needs_curator",
+                        "field": field,
+                        "existing_value": local_facts[field],
+                        "provider_value": provider_value,
+                        "raw_hash": response.raw_hash,
+                    }
+                )
+    return conflicts
+
+
+def _load_or_fetch_live_response(
+    *,
+    source: LiveProviderSource,
+    candidate: CandidateMaterial,
+    registry: Any,
+    cache: JSONLProviderCache,
+    cache_keys: list[str],
+    cache_index_entries: list[dict[str, Any]],
+    cache_stats: dict[str, int],
+    trace_events: list[dict[str, Any]],
+    now: str,
+) -> ProviderResponse | dict[str, Any]:
+    query = source.query_for_candidate(candidate)
+    if not query:
+        cache_stats["failure_count"] += 1
+        _trace_provider_lookup(
+            trace_events,
+            candidate=candidate,
+            provider=source.provider,
+            query="",
+            cache_status="failed",
+            reason="provider_query_unavailable",
+        )
+        return _provider_review_item(
+            candidate=candidate,
+            provider=source.provider,
+            reason="provider_query_unavailable",
+            query="",
+            source_url="",
+            error_message="query unavailable",
+        )
+    try:
+        registry_entry = registry.get(source.provider)
+    except KeyError:
+        cache_stats["failure_count"] += 1
+        _trace_provider_lookup(
+            trace_events,
+            candidate=candidate,
+            provider=source.provider,
+            query=query,
+            cache_status="failed",
+            reason="provider_config_invalid",
+        )
+        return _provider_review_item(
+            candidate=candidate,
+            provider=source.provider,
+            reason="provider_config_invalid",
+            query=query,
+            source_url="",
+            error_message=f"unknown provider: {source.provider}",
+        )
+
+    cached_any = cache.get(source.provider, query)
+    cached = cache.get_for_entry(registry_entry, query, now=now)
+    if cached is not None:
+        try:
+            _validate_provider_response(cached, source=source, query=query, registry_entry=registry_entry)
+        except (TypeError, ValueError) as exc:
+            cache_stats["failure_count"] += 1
+            _trace_provider_lookup(
+                trace_events,
+                candidate=candidate,
+                provider=source.provider,
+                query=query,
+                cache_status="failed",
+                reason="provider_cache_invalid",
+            )
+            cache_index_entries.append(
+                _cache_index_entry(
+                    candidate=candidate,
+                    response=cached,
+                    cache_key=cache.key_for(source.provider, query),
+                    cache_status="failed",
+                    read=True,
+                    written=False,
+                    reason="provider_cache_invalid",
+                )
+            )
+            return _provider_review_item(
+                candidate=candidate,
+                provider=source.provider,
+                reason="provider_cache_invalid",
+                query=query,
+                source_url=cached.source_url,
+                error_message=_sanitize_error(str(exc)),
+            )
+        cache_stats["hit_count"] += 1
+        _trace_provider_lookup(
+            trace_events,
+            candidate=candidate,
+            provider=source.provider,
+            query=query,
+            cache_status="hit",
+            source_url=cached.source_url,
+        )
+        cache_index_entries.append(
+            _cache_index_entry(
+                candidate=candidate,
+                response=cached,
+                cache_key=cache.key_for(source.provider, query),
+                cache_status="hit",
+                read=True,
+                written=False,
+                ttl_hours=registry_entry.cache_ttl_hours,
+            )
+        )
+        return _with_cache_status(cached, "hit")
+    if cached_any is not None:
+        cache_index_entries.append(
+            _cache_index_entry(
+                candidate=candidate,
+                response=cached_any,
+                cache_key=cache.key_for(source.provider, query),
+                cache_status="stale",
+                read=True,
+                written=False,
+                ttl_hours=registry_entry.cache_ttl_hours,
+                reason="cache_ttl_expired",
+            )
+        )
+        _trace_provider_lookup(
+            trace_events,
+            candidate=candidate,
+            provider=source.provider,
+            query=query,
+            cache_status="stale",
+            source_url=cached_any.source_url,
+            reason="cache_ttl_expired",
+        )
+    try:
+        response = source.fetch(candidate)
+    except Exception as exc:
+        cache_stats["failure_count"] += 1
+        reason = source.failure_reason
+        _trace_provider_lookup(
+            trace_events,
+            candidate=candidate,
+            provider=source.provider,
+            query=query,
+            cache_status="failed",
+            reason=reason,
+        )
+        return _provider_review_item(
+            candidate=candidate,
+            provider=source.provider,
+            reason=reason,
+            query=query,
+            source_url="",
+            error_message=_sanitize_error(str(exc)),
+        )
+    try:
+        _validate_provider_response(response, source=source, query=query, registry_entry=registry_entry)
+    except (TypeError, ValueError) as exc:
+        cache_stats["failure_count"] += 1
+        _trace_provider_lookup(
+            trace_events,
+            candidate=candidate,
+            provider=source.provider,
+            query=query,
+            cache_status="failed",
+            reason="provider_invalid_response",
+        )
+        return _provider_review_item(
+            candidate=candidate,
+            provider=source.provider,
+            reason="provider_invalid_response",
+            query=query,
+            source_url=response.source_url if isinstance(response, ProviderResponse) else "",
+            error_message=_sanitize_error(str(exc)),
+        )
+    cache_stats["miss_count"] += 1
+    cache_key = _cache_response(cache, cache_keys, response)
+    _trace_provider_lookup(
+        trace_events,
+        candidate=candidate,
+        provider=source.provider,
+        query=query,
+        cache_status="miss",
+        source_url=response.source_url,
+    )
+    cache_index_entries.append(
+        _cache_index_entry(
+            candidate=candidate,
+            response=response,
+            cache_key=cache_key,
+            cache_status="miss",
+            read=False,
+            written=True,
+            ttl_hours=registry_entry.cache_ttl_hours,
+        )
+    )
+    return _with_cache_status(response, "miss")
+
+
+def _validate_provider_response(
+    response: Any,
+    *,
+    source: LiveProviderSource,
+    query: str,
+    registry_entry: Any,
+) -> None:
+    if not isinstance(response, ProviderResponse):
+        raise TypeError("provider returned non-ProviderResponse")
+    if response.provider != source.provider:
+        raise ValueError("provider response provider mismatch")
+    if response.query != query:
+        raise ValueError("provider response query mismatch")
+    registry_entry.validate_output_fields(response.normalized_result)
+
+
+def _cache_response(cache: JSONLProviderCache, cache_keys: list[str], response: ProviderResponse) -> str:
+    cache.put(response)
+    cache_key = cache.key_for(response.provider, response.query)
+    cache_keys.append(cache_key)
+    return cache_key
+
+
+def _cache_index_entry(
+    *,
+    candidate: CandidateMaterial,
+    response: ProviderResponse,
+    cache_key: str,
+    cache_status: str,
+    read: bool,
+    written: bool,
+    ttl_hours: int | None = None,
+    reason: str = "",
+) -> dict[str, Any]:
+    entry = {
         "candidate_id": candidate.material_id,
-        "name": candidate.name,
-        "category": candidate.category,
-        "status": assessment.status,
-        "facts": facts,
-        "trust": trust,
-        "missing_fields": [
-            field
-            for field in required_fields
-            if field not in facts
-        ],
-        "provider_refs": [
-            {
-                "provider": response.provider,
-                "query": response.query,
-                "source_url": response.source_url,
-                "raw_hash": response.raw_hash,
-                "trust_level": response.trust_level,
-                "confidence": response.confidence,
-            }
-        ],
+        "provider": response.provider,
+        "query": response.query,
+        "cache_key": cache_key,
+        "cache_status": cache_status,
+        "source_url": response.source_url,
+        "raw_hash": response.raw_hash,
+        "retrieved_at": response.retrieved_at,
+        "ttl_hours": ttl_hours,
+        "read": read,
+        "written": written,
     }
+    if reason:
+        entry["reason"] = reason
+    return entry
+
+
+def _with_cache_status(response: ProviderResponse, cache_status: str) -> ProviderResponse:
+    object.__setattr__(response, "_cache_status", cache_status)
+    return response
+
+
+def _provider_ref(response: ProviderResponse, *, cache_status: str) -> dict[str, Any]:
+    return {
+        "provider": response.provider,
+        "query": response.query,
+        "source_url": response.source_url,
+        "raw_hash": response.raw_hash,
+        "trust_level": response.trust_level,
+        "confidence": response.confidence,
+        "cache_status": cache_status,
+    }
+
+
+def _provider_review_item(
+    *,
+    candidate: CandidateMaterial,
+    provider: str,
+    reason: str,
+    query: str,
+    source_url: str,
+    error_message: str,
+) -> dict[str, Any]:
+    return {
+        "target_type": "provider_enrichment",
+        "target_id": candidate.material_id,
+        "name": candidate.name,
+        "reason": reason,
+        "provider": provider,
+        "query": query,
+        "source_url": source_url,
+        "severity": "needs_curator",
+        "error_message": error_message,
+    }
+
+
+def _providers_failed(review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[tuple[str, str], int] = {}
+    for item in review_queue:
+        reason = str(item.get("reason", ""))
+        provider = str(item.get("provider", ""))
+        if provider and reason.startswith("provider_"):
+            key = (provider, reason)
+            counts[key] = counts.get(key, 0) + 1
+    return [
+        {"provider": provider, "reason": reason, "count": count}
+        for (provider, reason), count in sorted(counts.items())
+    ]
+
+
+def _structure_invalid_review_item(
+    *,
+    candidate: CandidateMaterial,
+    provider_response: ProviderResponse,
+    error_message: str,
+) -> dict[str, Any]:
+    return {
+        "target_type": "molecule_structure",
+        "target_id": candidate.material_id,
+        "name": candidate.name,
+        "reason": "pubchem_structure_invalid",
+        "provider": provider_response.provider,
+        "query": provider_response.query,
+        "source_url": provider_response.source_url,
+        "severity": "needs_curator",
+        "raw_hash": provider_response.raw_hash,
+        "error_message": error_message,
+    }
+
+
+def _review_actor(item: dict[str, Any]) -> str:
+    reason = str(item.get("reason", ""))
+    if reason.startswith("pubchem_structure_"):
+        return "StructureDisambiguationAgent"
+    if reason.startswith("provider_"):
+        return "EnrichmentRuntime"
+    if reason == "energy_levels_missing":
+        return "EnergyLevelCompletenessAgent"
+    return "EnrichmentRuntime"
+
+
+def _trace_provider_lookup(
+    trace_events: list[dict[str, Any]],
+    *,
+    candidate: CandidateMaterial,
+    provider: str,
+    query: str,
+    cache_status: str,
+    source_url: str = "",
+    reason: str = "",
+) -> None:
+    event = {
+        "event_type": "provider_lookup",
+        "actor": "EnrichmentRuntime",
+        "candidate_id": candidate.material_id,
+        "provider": provider,
+        "query": query,
+        "cache_status": cache_status,
+        "source_url": source_url,
+    }
+    if reason:
+        event["reason"] = reason
+    trace_events.append(event)
+
+
+def _sanitize_error(message: str) -> str:
+    if not message:
+        return "provider call failed"
+    scrubbed = message.replace("SECRET-123", "[redacted]")
+    lowered = scrubbed.casefold()
+    if re.fullmatch(
+        r"Provider '[a-z0-9_]+' requires API key environment variable [A-Z0-9_]+",
+        scrubbed,
+    ):
+        return scrubbed
+    for marker in (
+        "api_key",
+        "api-key",
+        "api key",
+        "x-api-key",
+        "key=",
+        "key:",
+        "token",
+        "secret",
+        "authorization",
+        "bearer ",
+        "sk-",
+    ):
+        if marker in lowered:
+            return "provider call failed; sensitive details redacted"
+    if re.search(r"[A-Za-z]:\\|[/\\][\w .-]+[/\\][\w .-]+", scrubbed):
+        return "provider call failed; sensitive details redacted"
+    if re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", scrubbed):
+        return "provider call failed; sensitive details redacted"
+    return "provider call failed; sensitive details redacted"
+
+
+def _default_live_provider_sources(
+    *,
+    selected_providers: tuple[str, ...],
+    registry: Any,
+    generated_at: str,
+) -> tuple[LiveProviderSource, ...]:
+    provider_names = selected_providers or ("pubchem",)
+    sources: list[LiveProviderSource] = []
+    known_providers = set(registry.providers())
+    for provider_name in provider_names:
+        if provider_name not in known_providers:
+            sources.append(
+                LiveProviderSource(
+                    provider=provider_name,
+                    query_for_candidate=lambda candidate, provider=provider_name: (
+                        f"provider:{provider}:{candidate.material_id}"
+                    ),
+                    fetch=lambda candidate, provider=provider_name: _raise(
+                        RuntimeError(f"unknown provider: {provider}")
+                    ),
+                    failure_reason="provider_config_invalid",
+                )
+            )
+    if "pubchem" in provider_names:
+        pubchem = PubChemPUGRestProvider.from_registry(registry, retrieved_at=generated_at)
+        sources.append(
+            LiveProviderSource(
+                provider="pubchem",
+                query_for_candidate=lambda candidate: f"name:{candidate.name.casefold()}",
+                fetch=lambda candidate, provider=pubchem: provider.lookup_name(candidate.name),
+            )
+        )
+    if "nomad" in provider_names:
+        nomad = NOMADElectronicProvider.from_registry(registry, retrieved_at=generated_at)
+        sources.append(
+            LiveProviderSource(
+                provider="nomad",
+                query_for_candidate=_formula_query_for_candidate,
+                fetch=lambda candidate, provider=nomad: provider.lookup_formula(candidate.name),
+            )
+        )
+    if "materials_project" in provider_names:
+        try:
+            mp = MaterialsProjectProvider.from_registry(
+                registry,
+                api_keys=ApiKeyManager(registry),
+                retrieved_at=generated_at,
+            )
+        except RuntimeError as exc:
+            sources.append(
+                LiveProviderSource(
+                    provider="materials_project",
+                    query_for_candidate=_formula_query_for_candidate,
+                    fetch=lambda candidate, error=exc: (_raise(error)),
+                    failure_reason="provider_api_key_missing",
+                )
+            )
+        else:
+            sources.append(
+                LiveProviderSource(
+                    provider="materials_project",
+                    query_for_candidate=_formula_query_for_candidate,
+                    fetch=lambda candidate, provider=mp: provider.lookup_formula(candidate.name),
+                )
+            )
+    return tuple(sources)
+
+
+def _formula_query_for_candidate(candidate: CandidateMaterial) -> str:
+    return f"formula:{candidate.name}"
+
+
+def _raise(exc: Exception) -> ProviderResponse:
+    raise exc
 
 
 def _relative_or_name(path: Path, base: Path) -> str:
@@ -259,3 +908,43 @@ def _relative_or_name(path: Path, base: Path) -> str:
         return path.relative_to(base).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _safe_path_label(path: Path, base: Path) -> str:
+    try:
+        return path.relative_to(base).as_posix()
+    except ValueError:
+        return path.name
+
+
+def _safe_record_existing_artifact(
+    output_dir: Path,
+    path: Path,
+    *,
+    display_path: str,
+    kind: str,
+    run_id: str,
+    input_hash: str,
+    generated_at: str,
+    producer_version: str,
+) -> RunArtifact:
+    artifact = record_existing_artifact(
+        output_dir,
+        path,
+        kind=kind,
+        run_id=run_id,
+        input_hash=input_hash,
+        generated_at=generated_at,
+        producer_version=producer_version,
+    )
+    return RunArtifact(
+        schema_version=artifact.schema_version,
+        run_id=artifact.run_id,
+        input_hash=artifact.input_hash,
+        generated_at=artifact.generated_at,
+        producer_version=artifact.producer_version,
+        path=display_path,
+        kind=artifact.kind,
+        sha256=artifact.sha256,
+        bytes=artifact.bytes,
+    )
