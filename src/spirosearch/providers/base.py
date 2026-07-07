@@ -153,6 +153,20 @@ class ProviderResponse:
         if self.contract_version != PROVIDER_RESPONSE_CONTRACT_VERSION:
             raise ValueError(f"unknown provider response contract_version: {self.contract_version}")
 
+    @property
+    def response_id(self) -> str:
+        return stable_hash(
+            {
+                "v": "provider-response-v1",
+                "provider": self.provider,
+                "query": self.query,
+                "source_url": self.source_url,
+                "retrieved_at": self.retrieved_at,
+                "raw_hash": self.raw_hash,
+                "contract_version": self.contract_version,
+            }
+        )[:16]
+
     @classmethod
     def from_payload(
         cls,
@@ -208,6 +222,7 @@ class ProviderResponse:
             "retrieved_at": self.retrieved_at,
             "license_hint": self.license_hint,
             "raw_hash": self.raw_hash,
+            "response_id": self.response_id,
             "confidence": self.confidence,
             "trust_level": self.trust_level,
             "contract_version": self.contract_version,

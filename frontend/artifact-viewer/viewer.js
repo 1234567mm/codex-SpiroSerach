@@ -37,8 +37,10 @@ function parseJsonl(text) {
 
 function renderManifest(manifest) {
   document.getElementById("artifactCount").textContent = String((manifest.artifacts || []).length);
-  document.getElementById("modelVersion").textContent = manifest.model_version || "-";
-  document.getElementById("budgetValue").textContent = manifest.budget ?? "-";
+  document.getElementById("candidateCount").textContent = String(manifest.candidate_count ?? 0);
+  document.getElementById("needsReviewCount").textContent = String(
+    manifest.context?.provider_outcomes?.failure_count ?? 0
+  );
   document.getElementById("runSummary").textContent = [
     manifest.run_id ? `run ${manifest.run_id}` : "run pending",
     manifest.dataset_snapshot_id || "",
@@ -63,13 +65,28 @@ function renderManifest(manifest) {
 }
 
 function renderKnownArtifacts() {
-  const recommendations = state.artifacts.get("recommendations.json");
-  const trace = state.artifacts.get("agent-trace.jsonl") || [];
+  const recommendations = getArtifact("recommendations.json", "recommendations");
+  const trace = getArtifact("agent-trace.jsonl", "agent_trace") || [];
+  const enrichment = getArtifact("enrichment-results.json", "enrichment_results");
+  const cacheIndex = getArtifact("provider-cache-index.json", "provider_cache_index");
+  const reviewQueue = getArtifact("review-queue.jsonl", "review_queue") || [];
   if (state.manifest) {
     renderManifest(state.manifest);
   }
   renderRecommendations(recommendations);
   renderTimeline(trace);
+  renderEnrichmentFlow(enrichment, cacheIndex, reviewQueue, trace);
+  renderReviewQueue(reviewQueue);
+}
+
+function getArtifact(fileName, kind) {
+  if (state.artifacts.has(fileName)) {
+    return state.artifacts.get(fileName);
+  }
+  const artifact = (state.manifest?.artifacts || []).find((item) => item.kind === kind);
+  if (!artifact?.path) return null;
+  const pathName = artifact.path.split(/[\\/]/).pop();
+  return state.artifacts.get(pathName) || state.artifacts.get(artifact.path) || null;
 }
 
 function renderRecommendations(recommendations) {
@@ -112,10 +129,143 @@ function renderTimeline(trace) {
         <span>${escapeHtml(event.actor || "-")}</span>
       </div>
       <div class="item-meta">
-        candidates ${safeCount(event.candidate_count)} / recommended ${safeCount(event.recommended_count)} / observations ${safeCount(event.observation_count)}
+        candidates ${safeCount(event.candidate_count)} / recommended ${safeCount(event.recommended_count)} / observations ${safeCount(event.observation_count)}<br>
+        ${compactMeta([
+          ["candidate", event.candidate_id],
+          ["provider", event.provider],
+          ["cache", event.cache_status],
+          ["outcome", event.outcome],
+          ["event", shortId(event.event_id)],
+          ["lookup", shortId(event.lookup_id)],
+          ["response", shortId(event.response_id)],
+          ["reason", event.reason],
+        ])}
       </div>
     </div>`)
     .join("");
+}
+
+function renderEnrichmentFlow(enrichment, cacheIndex, reviewQueue, trace) {
+  const container = document.getElementById("candidateFlow");
+  const records = enrichment?.records || [];
+  const cacheEntries = cacheIndex?.entries || [];
+  const traceById = new Map((trace || []).map((event) => [event.event_id, event]));
+  const reviewsById = new Map((reviewQueue || []).map((item) => [item.review_item_id, item]));
+  const reviewsByTarget = groupBy(reviewQueue || [], (item) => item.target_id);
+  const cacheByCandidate = groupBy(cacheEntries, (entry) => entry.candidate_id);
+  document.getElementById("cacheSummary").textContent = cacheIndex
+    ? `hit ${safeCount(cacheIndex.hit_count)} / miss ${safeCount(cacheIndex.miss_count)} / failed ${safeCount(cacheIndex.failure_count)}`
+    : "No cache data";
+  document.getElementById("candidateCount").textContent = String(records.length);
+  document.getElementById("needsReviewCount").textContent = String(records.filter((record) => record.status === "needs_review").length);
+  if (!records.length) {
+    container.innerHTML = `<div class="empty">No enrichment results loaded</div>`;
+    return;
+  }
+  container.innerHTML = records
+    .map((record) => {
+      const entries = cacheByCandidate.get(record.candidate_id) || [];
+      const reviews = reviewsForRecord(record, reviewsById, reviewsByTarget);
+      return `<section class="flow-item">
+        <div class="item-title">
+          <span>${escapeHtml(record.candidate_id || "-")}</span>
+          <span class="status">${escapeHtml(record.status || "-")}</span>
+        </div>
+        <div class="item-meta">${escapeHtml(record.name || "")}${record.missing_fields?.length ? `<br>missing ${escapeHtml(record.missing_fields.join(", "))}` : ""}</div>
+        <div class="chip-row">
+          ${entries.map((entry) => renderCacheChip(entry, traceById.get(entry.trace_event_id))).join("") || `<span class="chip muted">local only</span>`}
+        </div>
+        <div class="review-inline">
+          ${reviews.map((item) => renderReviewChip(item, traceById.get(item.trace_event_id))).join("") || `<span class="muted">No review items</span>`}
+        </div>
+      </section>`;
+    })
+    .join("");
+}
+
+function reviewsForRecord(record, reviewsById, reviewsByTarget) {
+  const matched = (record.review_item_ids || [])
+    .map((reviewId) => reviewsById.get(reviewId))
+    .filter(Boolean);
+  if (matched.length) {
+    return matched;
+  }
+  return reviewsByTarget.get(record.candidate_id) || [];
+}
+
+function renderReviewQueue(reviewQueue) {
+  const list = document.getElementById("reviewQueueList");
+  document.getElementById("reviewQueueCount").textContent = `${reviewQueue.length} items`;
+  if (!reviewQueue.length) {
+    list.innerHTML = `<div class="empty">No review queue loaded</div>`;
+    return;
+  }
+  list.innerHTML = reviewQueue
+    .map((item) => `<div class="review-item">
+      <div class="item-title">
+        <span>${escapeHtml(item.reason || "review")}</span>
+        <span>${escapeHtml(item.severity || "-")}</span>
+      </div>
+      <div class="item-meta">
+        ${compactMeta([
+          ["candidate_id", item.target_id],
+          ["provider", item.provider],
+          ["cache_status", item.cache_status],
+          ["field", item.field],
+          ["review_item_id", shortId(item.review_item_id)],
+          ["trace_event_id", shortId(item.trace_event_id)],
+          ["lookup_id", shortId(item.lookup_id)],
+          ["response_id", shortId(item.response_id)],
+          ["raw_hash", shortId(item.raw_hash)],
+        ])}
+      </div>
+    </div>`)
+    .join("");
+}
+
+function renderCacheChip(entry, event) {
+  return `<span class="chip" title="${escapeHtml(entry.cache_key || "")}">
+    ${escapeHtml(entry.provider || "-")} ${escapeHtml(entry.cache_status || "-")}
+    ${entry.outcome ? escapeHtml(entry.outcome) : escapeHtml(event?.outcome || "")}
+    <small>${escapeHtml(shortId(entry.cache_key))} ${escapeHtml(shortId(entry.raw_hash))}</small>
+  </span>`;
+}
+
+function renderReviewChip(item, event) {
+  return `<span class="chip review-chip">
+    ${escapeHtml(item.reason || "review")}
+    <small>${compactMeta([
+      ["provider", item.provider],
+      ["cache", item.cache_status],
+      ["outcome", event?.outcome],
+      ["trace", shortId(item.trace_event_id)],
+      ["lookup", shortId(item.lookup_id)],
+      ["response", shortId(item.response_id)],
+      ["review", shortId(item.review_item_id)],
+    ])}</small>
+  </span>`;
+}
+
+function groupBy(items, keyFn) {
+  const grouped = new Map();
+  for (const item of items || []) {
+    const key = keyFn(item) || "";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(item);
+  }
+  return grouped;
+}
+
+function compactMeta(pairs) {
+  return pairs
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([label, value]) => `${escapeHtml(label)} ${escapeHtml(value)}`)
+    .join(" / ");
+}
+
+function shortId(value) {
+  if (!value) return "";
+  return String(value).slice(0, 12);
 }
 
 function formatNumber(value) {
@@ -141,3 +291,5 @@ function safeCount(value) {
 
 renderRecommendations(null);
 renderTimeline([]);
+renderEnrichmentFlow(null, null, [], []);
+renderReviewQueue([]);

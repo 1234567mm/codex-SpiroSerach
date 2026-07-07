@@ -137,7 +137,10 @@ def run_enrichment(
                                 )
                             )
                         else:
-                            candidate_review_queue.extend(structure.review_queue)
+                            candidate_review_queue.extend(
+                                _review_item_with_response_metadata(dict(item), live_response)
+                                for item in structure.review_queue
+                            )
                 else:
                     candidate_review_queue.append(live_response)
             candidate_review_queue.extend(_fact_conflict_review_items(candidate, responses[1:]))
@@ -148,6 +151,7 @@ def run_enrichment(
         )
         for item in assessment.review_queue:
             candidate_review_queue.append(dict(item))
+        candidate_review_queue = [_finalize_review_item(item) for item in candidate_review_queue]
         review_queue.extend(candidate_review_queue)
 
         records.append(_enrichment_record(candidate, responses, assessment, provider_refs, candidate_review_queue))
@@ -164,11 +168,7 @@ def run_enrichment(
         }
     )
     trace_events.extend(
-        {
-            "event_type": "review_queue",
-            "actor": _review_actor(item),
-            **item,
-        }
+        _review_trace_event(item)
         for item in review_queue
     )
 
@@ -235,6 +235,7 @@ def run_enrichment(
         generated_at=generated_at,
         producer_version=PRODUCER_VERSION,
     )
+    trace_events = _decorate_trace_events(trace_events, run_id=run_id, generated_at=generated_at)
     artifacts: list[RunArtifact] = [
         write_json_artifact(
             output,
@@ -390,6 +391,7 @@ def _enrichment_record(
             if field not in facts
         ],
         "provider_refs": provider_refs,
+        "review_item_ids": [str(item["review_item_id"]) for item in review_items],
     }
 
 
@@ -436,6 +438,11 @@ def _fact_conflict_review_items(
                         "existing_value": local_facts[field],
                         "provider_value": provider_value,
                         "raw_hash": response.raw_hash,
+                        "response_id": response.response_id,
+                        "cache_status": getattr(response, "_cache_status", ""),
+                        "cache_key": getattr(response, "_cache_key", ""),
+                        "lookup_id": getattr(response, "_lookup_id", ""),
+                        "trace_event_id": getattr(response, "_trace_event_id", ""),
                     }
                 )
     return conflicts
@@ -455,14 +462,17 @@ def _load_or_fetch_live_response(
 ) -> ProviderResponse | dict[str, Any]:
     query = source.query_for_candidate(candidate)
     if not query:
+        lookup_id = _lookup_id(candidate, source.provider, "")
         cache_stats["failure_count"] += 1
-        _trace_provider_lookup(
+        event_id = _trace_provider_lookup(
             trace_events,
             candidate=candidate,
             provider=source.provider,
             query="",
+            lookup_id=lookup_id,
             cache_status="failed",
             reason="provider_query_unavailable",
+            outcome="provider_query_unavailable",
         )
         return _provider_review_item(
             candidate=candidate,
@@ -471,18 +481,24 @@ def _load_or_fetch_live_response(
             query="",
             source_url="",
             error_message="query unavailable",
+            cache_status="failed",
+            lookup_id=lookup_id,
+            trace_event_id=event_id,
         )
+    lookup_id = _lookup_id(candidate, source.provider, query)
     try:
         registry_entry = registry.get(source.provider)
     except KeyError:
         cache_stats["failure_count"] += 1
-        _trace_provider_lookup(
+        event_id = _trace_provider_lookup(
             trace_events,
             candidate=candidate,
             provider=source.provider,
             query=query,
+            lookup_id=lookup_id,
             cache_status="failed",
             reason="provider_config_invalid",
+            outcome="provider_config_invalid",
         )
         return _provider_review_item(
             candidate=candidate,
@@ -490,9 +506,14 @@ def _load_or_fetch_live_response(
             reason="provider_config_invalid",
             query=query,
             source_url="",
-            error_message=f"unknown provider: {source.provider}",
+            error_message="unknown provider",
+            cache_status="failed",
+            cache_key=cache.key_for(source.provider, query),
+            lookup_id=lookup_id,
+            trace_event_id=event_id,
         )
 
+    cache_key = cache.key_for(source.provider, query)
     cached_any = cache.get(source.provider, query)
     cached = cache.get_for_entry(registry_entry, query, now=now)
     if cached is not None:
@@ -500,23 +521,30 @@ def _load_or_fetch_live_response(
             _validate_provider_response(cached, source=source, query=query, registry_entry=registry_entry)
         except (TypeError, ValueError) as exc:
             cache_stats["failure_count"] += 1
-            _trace_provider_lookup(
+            event_id = _trace_provider_lookup(
                 trace_events,
                 candidate=candidate,
                 provider=source.provider,
                 query=query,
+                lookup_id=lookup_id,
                 cache_status="failed",
                 reason="provider_cache_invalid",
+                cache_key=cache_key,
+                raw_hash=cached.raw_hash,
+                response_id=cached.response_id,
+                outcome="provider_cache_invalid",
             )
             cache_index_entries.append(
                 _cache_index_entry(
                     candidate=candidate,
                     response=cached,
-                    cache_key=cache.key_for(source.provider, query),
+                    cache_key=cache_key,
                     cache_status="failed",
                     read=True,
                     written=False,
                     reason="provider_cache_invalid",
+                    trace_event_id=event_id,
+                    lookup_id=lookup_id,
                 )
             )
             return _provider_review_item(
@@ -526,62 +554,91 @@ def _load_or_fetch_live_response(
                 query=query,
                 source_url=cached.source_url,
                 error_message=_sanitize_error(str(exc)),
+                cache_status="failed",
+                cache_key=cache_key,
+                raw_hash=cached.raw_hash,
+                response_id=cached.response_id,
+                lookup_id=lookup_id,
+                trace_event_id=event_id,
             )
         cache_stats["hit_count"] += 1
-        _trace_provider_lookup(
+        event_id = _trace_provider_lookup(
             trace_events,
             candidate=candidate,
             provider=source.provider,
             query=query,
+            lookup_id=lookup_id,
             cache_status="hit",
             source_url=cached.source_url,
+            cache_key=cache_key,
+            raw_hash=cached.raw_hash,
+            response_id=cached.response_id,
+            outcome="cache_hit",
         )
         cache_index_entries.append(
             _cache_index_entry(
                 candidate=candidate,
                 response=cached,
-                cache_key=cache.key_for(source.provider, query),
+                cache_key=cache_key,
                 cache_status="hit",
                 read=True,
                 written=False,
                 ttl_hours=registry_entry.cache_ttl_hours,
+                trace_event_id=event_id,
+                lookup_id=lookup_id,
             )
         )
-        return _with_cache_status(cached, "hit")
+        return _with_cache_metadata(
+            cached,
+            cache_status="hit",
+            cache_key=cache_key,
+            lookup_id=lookup_id,
+            trace_event_id=event_id,
+        )
     if cached_any is not None:
+        stale_event_id = _trace_provider_lookup(
+            trace_events,
+            candidate=candidate,
+            provider=source.provider,
+            query=query,
+            lookup_id=lookup_id,
+            cache_status="stale",
+            source_url=cached_any.source_url,
+            reason="cache_ttl_expired",
+            cache_key=cache_key,
+            raw_hash=cached_any.raw_hash,
+            response_id=cached_any.response_id,
+            outcome="cache_stale",
+        )
         cache_index_entries.append(
             _cache_index_entry(
                 candidate=candidate,
                 response=cached_any,
-                cache_key=cache.key_for(source.provider, query),
+                cache_key=cache_key,
                 cache_status="stale",
                 read=True,
                 written=False,
                 ttl_hours=registry_entry.cache_ttl_hours,
                 reason="cache_ttl_expired",
+                trace_event_id=stale_event_id,
+                lookup_id=lookup_id,
             )
-        )
-        _trace_provider_lookup(
-            trace_events,
-            candidate=candidate,
-            provider=source.provider,
-            query=query,
-            cache_status="stale",
-            source_url=cached_any.source_url,
-            reason="cache_ttl_expired",
         )
     try:
         response = source.fetch(candidate)
     except Exception as exc:
         cache_stats["failure_count"] += 1
         reason = source.failure_reason
-        _trace_provider_lookup(
+        event_id = _trace_provider_lookup(
             trace_events,
             candidate=candidate,
             provider=source.provider,
             query=query,
+            lookup_id=lookup_id,
             cache_status="failed",
             reason=reason,
+            cache_key=cache_key,
+            outcome=reason,
         )
         return _provider_review_item(
             candidate=candidate,
@@ -590,18 +647,27 @@ def _load_or_fetch_live_response(
             query=query,
             source_url="",
             error_message=_sanitize_error(str(exc)),
+            cache_status="failed",
+            cache_key=cache_key,
+            lookup_id=lookup_id,
+            trace_event_id=event_id,
         )
     try:
         _validate_provider_response(response, source=source, query=query, registry_entry=registry_entry)
     except (TypeError, ValueError) as exc:
         cache_stats["failure_count"] += 1
-        _trace_provider_lookup(
+        event_id = _trace_provider_lookup(
             trace_events,
             candidate=candidate,
             provider=source.provider,
             query=query,
+            lookup_id=lookup_id,
             cache_status="failed",
             reason="provider_invalid_response",
+            cache_key=cache_key,
+            raw_hash=response.raw_hash if isinstance(response, ProviderResponse) else "",
+            response_id=response.response_id if isinstance(response, ProviderResponse) else "",
+            outcome="provider_invalid_response",
         )
         return _provider_review_item(
             candidate=candidate,
@@ -610,16 +676,27 @@ def _load_or_fetch_live_response(
             query=query,
             source_url=response.source_url if isinstance(response, ProviderResponse) else "",
             error_message=_sanitize_error(str(exc)),
+            cache_status="failed",
+            cache_key=cache_key,
+            raw_hash=response.raw_hash if isinstance(response, ProviderResponse) else "",
+            response_id=response.response_id if isinstance(response, ProviderResponse) else "",
+            lookup_id=lookup_id,
+            trace_event_id=event_id,
         )
     cache_stats["miss_count"] += 1
     cache_key = _cache_response(cache, cache_keys, response)
-    _trace_provider_lookup(
+    event_id = _trace_provider_lookup(
         trace_events,
         candidate=candidate,
         provider=source.provider,
         query=query,
+        lookup_id=lookup_id,
         cache_status="miss",
         source_url=response.source_url,
+        cache_key=cache_key,
+        raw_hash=response.raw_hash,
+        response_id=response.response_id,
+        outcome="provider_fetch_succeeded",
     )
     cache_index_entries.append(
         _cache_index_entry(
@@ -630,9 +707,17 @@ def _load_or_fetch_live_response(
             read=False,
             written=True,
             ttl_hours=registry_entry.cache_ttl_hours,
+            trace_event_id=event_id,
+            lookup_id=lookup_id,
         )
     )
-    return _with_cache_status(response, "miss")
+    return _with_cache_metadata(
+        response,
+        cache_status="miss",
+        cache_key=cache_key,
+        lookup_id=lookup_id,
+        trace_event_id=event_id,
+    )
 
 
 def _validate_provider_response(
@@ -668,12 +753,16 @@ def _cache_index_entry(
     written: bool,
     ttl_hours: int | None = None,
     reason: str = "",
+    trace_event_id: str = "",
+    lookup_id: str = "",
 ) -> dict[str, Any]:
     entry = {
         "candidate_id": candidate.material_id,
         "provider": response.provider,
         "query": response.query,
+        "lookup_id": lookup_id or _lookup_id(candidate, response.provider, response.query),
         "cache_key": cache_key,
+        "response_id": response.response_id,
         "cache_status": cache_status,
         "source_url": response.source_url,
         "raw_hash": response.raw_hash,
@@ -684,11 +773,23 @@ def _cache_index_entry(
     }
     if reason:
         entry["reason"] = reason
+    if trace_event_id:
+        entry["trace_event_id"] = trace_event_id
     return entry
 
 
-def _with_cache_status(response: ProviderResponse, cache_status: str) -> ProviderResponse:
+def _with_cache_metadata(
+    response: ProviderResponse,
+    *,
+    cache_status: str,
+    cache_key: str,
+    lookup_id: str,
+    trace_event_id: str,
+) -> ProviderResponse:
     object.__setattr__(response, "_cache_status", cache_status)
+    object.__setattr__(response, "_cache_key", cache_key)
+    object.__setattr__(response, "_lookup_id", lookup_id)
+    object.__setattr__(response, "_trace_event_id", trace_event_id)
     return response
 
 
@@ -698,9 +799,15 @@ def _provider_ref(response: ProviderResponse, *, cache_status: str) -> dict[str,
         "query": response.query,
         "source_url": response.source_url,
         "raw_hash": response.raw_hash,
+        "response_id": response.response_id,
+        "lookup_id": getattr(response, "_lookup_id", ""),
+        "cache_key": getattr(response, "_cache_key", JSONLProviderCache.key_for(response.provider, response.query)),
         "trust_level": response.trust_level,
         "confidence": response.confidence,
         "cache_status": cache_status,
+        "retrieved_at": response.retrieved_at,
+        "contract_version": response.contract_version,
+        "trace_event_id": getattr(response, "_trace_event_id", ""),
     }
 
 
@@ -712,8 +819,14 @@ def _provider_review_item(
     query: str,
     source_url: str,
     error_message: str,
+    cache_status: str = "",
+    cache_key: str = "",
+    raw_hash: str = "",
+    response_id: str = "",
+    lookup_id: str = "",
+    trace_event_id: str = "",
 ) -> dict[str, Any]:
-    return {
+    item = {
         "target_type": "provider_enrichment",
         "target_id": candidate.material_id,
         "name": candidate.name,
@@ -724,6 +837,19 @@ def _provider_review_item(
         "severity": "needs_curator",
         "error_message": error_message,
     }
+    if cache_status:
+        item["cache_status"] = cache_status
+    if cache_key:
+        item["cache_key"] = cache_key
+    if raw_hash:
+        item["raw_hash"] = raw_hash
+    if response_id:
+        item["response_id"] = response_id
+    if lookup_id:
+        item["lookup_id"] = lookup_id
+    if trace_event_id:
+        item["trace_event_id"] = trace_event_id
+    return item
 
 
 def _providers_failed(review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -738,6 +864,17 @@ def _providers_failed(review_queue: list[dict[str, Any]]) -> list[dict[str, Any]
         {"provider": provider, "reason": reason, "count": count}
         for (provider, reason), count in sorted(counts.items())
     ]
+
+
+def _lookup_id(candidate: CandidateMaterial, provider: str, query: str) -> str:
+    return stable_hash(
+        {
+            "v": "provider-lookup-v1",
+            "candidate_id": candidate.material_id,
+            "provider": provider,
+            "query": query,
+        }
+    )[:16]
 
 
 def _structure_invalid_review_item(
@@ -756,8 +893,59 @@ def _structure_invalid_review_item(
         "source_url": provider_response.source_url,
         "severity": "needs_curator",
         "raw_hash": provider_response.raw_hash,
+        "response_id": provider_response.response_id,
+        "cache_status": getattr(provider_response, "_cache_status", ""),
+        "cache_key": getattr(provider_response, "_cache_key", ""),
+        "lookup_id": getattr(provider_response, "_lookup_id", ""),
+        "trace_event_id": getattr(provider_response, "_trace_event_id", ""),
         "error_message": error_message,
     }
+
+
+def _review_item_with_response_metadata(item: dict[str, Any], response: ProviderResponse) -> dict[str, Any]:
+    item.setdefault("raw_hash", response.raw_hash)
+    item.setdefault("response_id", response.response_id)
+    item.setdefault("cache_status", getattr(response, "_cache_status", ""))
+    item.setdefault("cache_key", getattr(response, "_cache_key", ""))
+    item.setdefault("lookup_id", getattr(response, "_lookup_id", ""))
+    item.setdefault("trace_event_id", getattr(response, "_trace_event_id", ""))
+    return item
+
+
+def _finalize_review_item(item: dict[str, Any]) -> dict[str, Any]:
+    finalized = dict(item)
+    finalized.setdefault("review_item_id", stable_hash(_review_identity(finalized))[:16])
+    return finalized
+
+
+def _review_identity(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "target_type": item.get("target_type", ""),
+        "target_id": item.get("target_id", ""),
+        "reason": item.get("reason", ""),
+        "provider": item.get("provider", ""),
+        "query": item.get("query", ""),
+        "field": item.get("field", ""),
+        "lookup_id": item.get("lookup_id", ""),
+    }
+
+
+def _review_trace_event(item: dict[str, Any]) -> dict[str, Any]:
+    event = {
+        "event_type": "review_queue",
+        "actor": _review_actor(item),
+        **item,
+    }
+    event["event_id"] = stable_hash(
+        {
+            "event_type": "review_queue",
+            "review_item_id": item.get("review_item_id", ""),
+            "trace_event_id": item.get("trace_event_id", ""),
+            "lookup_id": item.get("lookup_id", ""),
+            "response_id": item.get("response_id", ""),
+        }
+    )[:16]
+    return event
 
 
 def _review_actor(item: dict[str, Any]) -> str:
@@ -777,22 +965,69 @@ def _trace_provider_lookup(
     candidate: CandidateMaterial,
     provider: str,
     query: str,
+    lookup_id: str,
     cache_status: str,
     source_url: str = "",
     reason: str = "",
-) -> None:
+    cache_key: str = "",
+    raw_hash: str = "",
+    response_id: str = "",
+    outcome: str = "",
+) -> str:
     event = {
         "event_type": "provider_lookup",
         "actor": "EnrichmentRuntime",
         "candidate_id": candidate.material_id,
         "provider": provider,
         "query": query,
+        "lookup_id": lookup_id,
         "cache_status": cache_status,
         "source_url": source_url,
+        "outcome": outcome or cache_status,
     }
+    if cache_key:
+        event["cache_key"] = cache_key
+    if raw_hash:
+        event["raw_hash"] = raw_hash
+    if response_id:
+        event["response_id"] = response_id
     if reason:
         event["reason"] = reason
+    event["event_id"] = stable_hash(_trace_identity(event))[:16]
     trace_events.append(event)
+    return str(event["event_id"])
+
+
+def _trace_identity(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "event_type": event.get("event_type", ""),
+        "candidate_id": event.get("candidate_id", ""),
+        "provider": event.get("provider", ""),
+        "query": event.get("query", ""),
+        "cache_status": event.get("cache_status", ""),
+        "reason": event.get("reason", ""),
+        "cache_key": event.get("cache_key", ""),
+        "raw_hash": event.get("raw_hash", ""),
+        "response_id": event.get("response_id", ""),
+        "lookup_id": event.get("lookup_id", ""),
+        "outcome": event.get("outcome", ""),
+    }
+
+
+def _decorate_trace_events(
+    trace_events: list[dict[str, Any]],
+    *,
+    run_id: str,
+    generated_at: str,
+) -> list[dict[str, Any]]:
+    decorated: list[dict[str, Any]] = []
+    for index, event in enumerate(trace_events):
+        item = dict(event)
+        item.setdefault("event_id", stable_hash({"index": index, **item})[:16])
+        item["run_id"] = run_id
+        item["generated_at"] = generated_at
+        decorated.append(item)
+    return decorated
 
 
 def _sanitize_error(message: str) -> str:

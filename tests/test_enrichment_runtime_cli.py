@@ -269,16 +269,27 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(records["cached_htl"]["facts"]["molecular_weight"], 182.2)
             self.assertEqual(records["cached_htl"]["trust"]["molecular_weight"], "T3_literature_machine")
             self.assertEqual(records["cached_htl"]["provider_refs"][1]["cache_status"], "hit")
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["cache_key"], JSONLProviderCache.key_for("pubchem", "name:cached htl"))
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["response_id"], cached_response.response_id)
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["retrieved_at"], "2026-07-07T00:00:00+00:00")
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["contract_version"], "provider-response-v1")
             cache_index = json.loads((output_dir / "provider-cache-index.json").read_text(encoding="utf-8"))
             self.assertEqual(cache_index["hit_count"], 1)
             self.assertEqual(cache_index["miss_count"], 0)
             self.assertEqual(cache_index["failure_count"], 0)
+            hit_entry = next(
+                entry
+                for entry in cache_index["entries"]
+                if entry["candidate_id"] == "cached_htl" and entry["provider"] == "pubchem"
+            )
             self.assertTrue(
                 any(
                     entry["candidate_id"] == "cached_htl"
                     and entry["provider"] == "pubchem"
                     and entry["query"] == "name:cached htl"
                     and entry["cache_status"] == "hit"
+                    and entry["response_id"] == cached_response.response_id
+                    and entry["lookup_id"] == records["cached_htl"]["provider_refs"][1]["lookup_id"]
                     and entry["read"] is True
                     and entry["written"] is False
                     for entry in cache_index["entries"]
@@ -289,6 +300,22 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 for line in (output_dir / "agent-trace.jsonl").read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
+            hit_event = next(
+                event
+                for event in trace_events
+                if event.get("event_type") == "provider_lookup" and event.get("provider") == "pubchem"
+            )
+            self.assertEqual(hit_entry["trace_event_id"], hit_event["event_id"])
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["trace_event_id"], hit_event["event_id"])
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["lookup_id"], hit_event["lookup_id"])
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["response_id"], hit_event["response_id"])
+            self.assertEqual(hit_entry["lookup_id"], hit_event["lookup_id"])
+            self.assertEqual(hit_entry["response_id"], hit_event["response_id"])
+            self.assertEqual(hit_event["cache_key"], JSONLProviderCache.key_for("pubchem", "name:cached htl"))
+            self.assertEqual(hit_event["raw_hash"], cached_response.raw_hash)
+            self.assertEqual(hit_event["outcome"], "cache_hit")
+            self.assertEqual(hit_event["run_id"], manifest["run_id"])
+            self.assertIn("generated_at", hit_event)
             self.assertTrue(
                 any(
                     event.get("event_type") == "provider_lookup"
@@ -353,15 +380,33 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             ]
 
             self.assertEqual(calls, ["ambiguous_htl"])
-            self.assertTrue(
-                any(
-                    item["target_id"] == "ambiguous_htl"
-                    and item["reason"] == "pubchem_structure_ambiguous"
-                    and item["ambiguous_cids"] == [111, 222]
-                    for item in review_queue
-                )
+            ambiguous_item = next(
+                item
+                for item in review_queue
+                if item["target_id"] == "ambiguous_htl" and item["reason"] == "pubchem_structure_ambiguous"
             )
+            results = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
+            record = results["records"][0]
+            trace_events = [
+                json.loads(line)
+                for line in (output_dir / "agent-trace.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            review_trace_event = next(
+                event
+                for event in trace_events
+                if event.get("event_type") == "review_queue" and event.get("review_item_id") == ambiguous_item["review_item_id"]
+            )
+            self.assertEqual(ambiguous_item["ambiguous_cids"], [111, 222])
+            self.assertEqual(ambiguous_item["trace_event_id"], review_trace_event["trace_event_id"])
+            self.assertEqual(ambiguous_item["raw_hash"], review_trace_event["raw_hash"])
+            self.assertEqual(ambiguous_item["cache_status"], "miss")
+            self.assertEqual(ambiguous_item["cache_key"], JSONLProviderCache.key_for("pubchem", "name:ambiguous htl"))
+            self.assertIn(ambiguous_item["review_item_id"], record["review_item_ids"])
+            self.assertEqual(ambiguous_item["lookup_id"], review_trace_event["lookup_id"])
+            self.assertEqual(ambiguous_item["response_id"], review_trace_event["response_id"])
             self.assertTrue(any(line["response"]["provider"] == "pubchem" for line in cache_lines))
+            self.assertTrue(any(line["response"]["response_id"] == ambiguous_item["response_id"] for line in cache_lines))
             cache_index = json.loads((output_dir / "provider-cache-index.json").read_text(encoding="utf-8"))
             self.assertEqual(cache_index["miss_count"], 1)
             self.assertEqual(cache_index["entries_written"], 2)
@@ -635,6 +680,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             )
 
             review_text = (output_dir / "review-queue.jsonl").read_text(encoding="utf-8")
+            review_queue = [json.loads(line) for line in review_text.splitlines() if line.strip()]
             manifest = json.loads((output_dir / "run-manifest.json").read_text(encoding="utf-8"))
             trace_events = [
                 json.loads(line)
@@ -642,6 +688,8 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 if line.strip()
             ]
             self.assertIn("provider_config_invalid", review_text)
+            self.assertEqual(review_queue[0]["error_message"], "unknown provider")
+            self.assertNotIn("typo_provider", review_queue[0]["error_message"])
             self.assertEqual(manifest["context"]["providers_requested"], ["typo_provider"])
             self.assertEqual(manifest["context"]["providers_failed"], [{"provider": "typo_provider", "reason": "provider_config_invalid", "count": 1}])
             self.assertTrue(
@@ -653,6 +701,61 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                     for event in trace_events
                 )
             )
+
+    def test_review_item_id_is_stable_across_response_observations(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="stable_review_htl", name="Stable Review HTL")]),
+                encoding="utf-8",
+            )
+
+            def run_once(output_dir: Path, retrieved_at: str, raw_payload: dict[str, object]) -> dict[str, object]:
+                def fetcher(candidate):
+                    return ProviderResponse.from_payload(
+                        provider="pubchem",
+                        query="name:stable review htl",
+                        normalized_result={
+                            "resolution_status": "ambiguous",
+                            "ambiguity_flag": True,
+                            "ambiguous_cids": [111, 222],
+                        },
+                        source_url="fixture://pubchem/stable-review",
+                        retrieved_at=retrieved_at,
+                        license_hint="fixture",
+                        raw_payload=raw_payload,
+                        confidence=0.35,
+                        trust_level="T3_literature_machine",
+                    )
+
+                run_enrichment(
+                    candidates_path=candidates_path,
+                    output_dir=output_dir,
+                    source_registry_path="data/source_registry.json",
+                    live=True,
+                    provider_sources=[
+                        LiveProviderSource(
+                            provider="pubchem",
+                            query_for_candidate=lambda candidate: f"name:{candidate.name.casefold()}",
+                            fetch=fetcher,
+                        )
+                    ],
+                )
+                review_queue = [
+                    json.loads(line)
+                    for line in (output_dir / "review-queue.jsonl").read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                return next(item for item in review_queue if item["reason"] == "pubchem_structure_ambiguous")
+
+            first = run_once(root / "first", "2026-07-07T00:00:00+00:00", {"hits": [111, 222], "run": 1})
+            second = run_once(root / "second", "2026-07-07T01:00:00+00:00", {"hits": [111, 222], "run": 2})
+
+            self.assertNotEqual(first["response_id"], second["response_id"])
+            self.assertNotEqual(first["trace_event_id"], second["trace_event_id"])
+            self.assertEqual(first["lookup_id"], second["lookup_id"])
+            self.assertEqual(first["review_item_id"], second["review_item_id"])
 
     def test_cli_enrich_unexpected_error_does_not_echo_exception_text(self):
         with TemporaryDirectory() as temp_dir:

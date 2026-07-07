@@ -36,6 +36,7 @@ class ProviderCacheTests(unittest.TestCase):
         self.assertEqual(response.query, "Spiro-OMeTAD")
         self.assertEqual(response.normalized_result["cid"], 12345)
         self.assertIn("raw_hash", response.to_dict())
+        self.assertIn("response_id", response.to_dict())
         self.assertEqual(response.to_dict()["contract_version"], "provider-response-v1")
         self.assertEqual(response.to_dict()["trust_level"], "T3_literature_machine")
 
@@ -159,6 +160,7 @@ class ProviderCacheTests(unittest.TestCase):
 
         self.assertEqual(restored.contract_version, "provider-response-v1")
         self.assertEqual(restored.trust_level, "T3_literature_machine")
+        self.assertEqual(restored.response_id, restored.to_dict()["response_id"])
 
     def test_cache_get_fresh_uses_registry_ttl(self):
         with tempfile.TemporaryDirectory() as temp_dir:

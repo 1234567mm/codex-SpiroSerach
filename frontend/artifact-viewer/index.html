@@ -35,12 +35,12 @@
           <strong id="artifactCount">0</strong>
         </div>
         <div class="metric">
-          <span>Model</span>
-          <strong id="modelVersion">-</strong>
+          <span>Candidates</span>
+          <strong id="candidateCount">0</strong>
         </div>
         <div class="metric">
-          <span>Budget</span>
-          <strong id="budgetValue">-</strong>
+          <span>Needs review</span>
+          <strong id="needsReviewCount">0</strong>
         </div>
       </section>
 
@@ -63,6 +63,22 @@
               <tbody id="artifactTable"></tbody>
             </table>
           </div>
+        </div>
+
+        <div class="panel wide">
+          <div class="panel-head">
+            <h2>Enrichment Flow</h2>
+            <span id="cacheSummary">No cache data</span>
+          </div>
+          <div id="candidateFlow" class="flow-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Review Queue</h2>
+            <span id="reviewQueueCount">0 items</span>
+          </div>
+          <div id="reviewQueueList" class="review-list"></div>
         </div>
 
         <div class="panel">

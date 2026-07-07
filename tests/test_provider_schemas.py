@@ -14,6 +14,7 @@ class ProviderSchemaTests(unittest.TestCase):
         self.assertEqual(schema["properties"]["confidence"]["minimum"], 0)
         self.assertEqual(schema["properties"]["confidence"]["maximum"], 1)
         self.assertIn("normalized_result", schema["required"])
+        self.assertIn("response_id", schema["required"])
         self.assertIn("write contract", schema["$comment"])
 
     def test_provider_cache_schema_wraps_response_with_stable_key(self):

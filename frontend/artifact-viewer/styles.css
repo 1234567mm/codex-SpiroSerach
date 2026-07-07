@@ -182,7 +182,9 @@ th {
 }
 
 .recommendations li,
-.timeline-item {
+.timeline-item,
+.flow-item,
+.review-item {
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
@@ -192,6 +194,7 @@ th {
   justify-content: space-between;
   gap: 10px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .item-meta {
@@ -204,6 +207,52 @@ th {
 .score {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+.status {
+  color: var(--accent);
+}
+
+.flow-list,
+.review-list {
+  max-height: 648px;
+  overflow: auto;
+}
+
+.chip-row,
+.review-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.chip small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.review-chip {
+  background: #fff7e8;
+  border-color: #f1d2a4;
+}
+
+.muted {
+  color: var(--muted);
 }
 
 .timeline {
