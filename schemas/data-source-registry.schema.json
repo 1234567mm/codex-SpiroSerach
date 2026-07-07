@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/data-source-registry.schema.json",
+  "title": "DataSourceRegistry",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "provider",
+      "base_url",
+      "license_hint",
+      "trust_level",
+      "rate_limit",
+      "requires_api_key",
+      "cache_ttl_hours",
+      "allowed_output_fields",
+      "disambiguation_required"
+    ],
+    "properties": {
+      "provider": { "type": "string", "minLength": 1 },
+      "base_url": { "type": "string", "minLength": 1 },
+      "license_hint": { "type": "string", "minLength": 1 },
+      "trust_level": {
+        "enum": [
+          "T0_missing",
+          "T1_calculated",
+          "T2_computed_db",
+          "T3_literature_machine",
+          "T4_literature_curated",
+          "T5_experimental_device"
+        ]
+      },
+      "rate_limit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requests_per_second", "backoff_strategy"],
+        "properties": {
+          "requests_per_second": { "type": "number", "exclusiveMinimum": 0 },
+          "backoff_strategy": { "enum": ["none", "fixed", "exponential"] }
+        }
+      },
+      "requires_api_key": { "type": "boolean" },
+      "api_key_env": { "type": ["string", "null"] },
+      "cache_ttl_hours": { "type": "integer", "minimum": 1 },
+      "allowed_output_fields": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "type": "string", "minLength": 1 }
+      },
+      "disambiguation_required": { "type": "boolean" }
+    }
+  }
+}

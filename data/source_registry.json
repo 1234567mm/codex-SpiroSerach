@@ -1,0 +1,119 @@
+[
+  {
+    "provider": "pubchem",
+    "base_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug",
+    "license_hint": "PubChem data terms; cite NCBI PubChem",
+    "trust_level": "T3_literature_machine",
+    "rate_limit": {
+      "requests_per_second": 5,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 720,
+    "allowed_output_fields": [
+      "cid",
+      "canonical_smiles",
+      "inchi_key",
+      "molecular_formula",
+      "molecular_weight",
+      "xlogp",
+      "tpsa",
+      "hbd_count",
+      "hba_count",
+      "synonyms",
+      "ambiguity_flag",
+      "ambiguous_cids",
+      "resolution_status"
+    ],
+    "disambiguation_required": true
+  },
+  {
+    "provider": "nomad",
+    "base_url": "https://nomad-lab.eu/prod/v1/api/v1",
+    "license_hint": "NOMAD public data terms",
+    "trust_level": "T2_computed_db",
+    "rate_limit": {
+      "requests_per_second": 2,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "band_gap_ev",
+      "homo_ev",
+      "lumo_ev",
+      "chemical_formula",
+      "space_group",
+      "xc_functional",
+      "computed"
+    ],
+    "disambiguation_required": false
+  },
+  {
+    "provider": "crossref",
+    "base_url": "https://api.crossref.org",
+    "license_hint": "Crossref REST API terms",
+    "trust_level": "T3_literature_machine",
+    "rate_limit": {
+      "requests_per_second": 10,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "doi",
+      "title",
+      "journal",
+      "published_at",
+      "authors",
+      "license",
+      "retraction_flag"
+    ],
+    "disambiguation_required": false
+  },
+  {
+    "provider": "openalex",
+    "base_url": "https://api.openalex.org",
+    "license_hint": "OpenAlex CC0 data",
+    "trust_level": "T3_literature_machine",
+    "rate_limit": {
+      "requests_per_second": 10,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "openalex_id",
+      "doi",
+      "title",
+      "concepts",
+      "oa_status",
+      "cited_by_count"
+    ],
+    "disambiguation_required": false
+  },
+  {
+    "provider": "materials_project",
+    "base_url": "https://api.materialsproject.org",
+    "license_hint": "Materials Project API terms",
+    "trust_level": "T2_computed_db",
+    "rate_limit": {
+      "requests_per_second": 2,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": true,
+    "api_key_env": "MATERIALS_PROJECT_API_KEY",
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "material_id",
+      "formula",
+      "band_gap_ev",
+      "formation_energy_ev_per_atom",
+      "energy_above_hull",
+      "density",
+      "space_group",
+      "computed"
+    ],
+    "disambiguation_required": false
+  }
+]

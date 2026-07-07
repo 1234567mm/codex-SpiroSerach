@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SpiroSearch Run Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>SpiroSearch Run Viewer</h1>
+        <p id="runSummary">No run loaded</p>
+      </div>
+      <div class="filebar">
+        <label class="file-control">
+          <span>Manifest</span>
+          <input id="manifestFile" type="file" accept=".json,application/json">
+        </label>
+        <label class="file-control">
+          <span>Artifacts</span>
+          <input id="artifactFiles" type="file" multiple accept=".json,.jsonl,application/json">
+        </label>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="band overview-grid" aria-label="Run overview">
+        <div class="metric">
+          <span>Recommendations</span>
+          <strong id="recommendationCount">0</strong>
+        </div>
+        <div class="metric">
+          <span>Artifacts</span>
+          <strong id="artifactCount">0</strong>
+        </div>
+        <div class="metric">
+          <span>Model</span>
+          <strong id="modelVersion">-</strong>
+        </div>
+        <div class="metric">
+          <span>Budget</span>
+          <strong id="budgetValue">-</strong>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <div class="panel wide">
+          <div class="panel-head">
+            <h2>Artifacts</h2>
+            <span id="loadState">Waiting for files</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Path</th>
+                  <th>Bytes</th>
+                  <th>Hash</th>
+                </tr>
+              </thead>
+              <tbody id="artifactTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Recommendations</h2>
+            <span id="totalEstimatedCost">-</span>
+          </div>
+          <ol id="recommendationList" class="recommendations"></ol>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Iteration Trace</h2>
+            <span id="traceCount">0 events</span>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="viewer.js"></script>
+  </body>
+</html>

@@ -80,3 +80,12 @@ LOCAL_PAPER_TRUST_LEVELS = (
     "L4_doi_metadata_matched",
     "L5_curated_reference",
 )
+
+TRUST_LEVELS = (
+    "T0_missing",
+    "T1_calculated",
+    "T2_computed_db",
+    "T3_literature_machine",
+    "T4_literature_curated",
+    "T5_experimental_device",
+)

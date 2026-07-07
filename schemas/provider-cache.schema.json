@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/provider-cache.schema.json",
+  "title": "ProviderCacheEntry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "cache_key",
+    "response"
+  ],
+  "properties": {
+    "contract_version": { "const": "provider-cache-v1" },
+    "cache_key": { "type": "string", "minLength": 1 },
+    "response": {
+      "$ref": "provider-response.schema.json"
+    }
+  }
+}

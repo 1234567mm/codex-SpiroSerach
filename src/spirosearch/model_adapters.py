@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
+from spirosearch.htl_scoring import score_spiro_htl_candidate
 from spirosearch.models import CandidateMaterial, EvidenceRecord
 from spirosearch.screening_v31 import (
     DeviceEvidence,
@@ -94,11 +95,20 @@ def candidate_material_to_v4(
     }
     _put_optional(features, "homo_ev", material.homo_ev)
     _put_optional(features, "lumo_ev", material.lumo_ev)
+    _put_optional(features, "band_gap_ev", material.band_gap_ev)
     _put_optional(features, "thermal_stability_c", material.thermal_stability_c)
     _put_optional(features, "uv_stability", material.uv_stability)
     _put_optional(features, "hydrophobicity", material.hydrophobicity)
     for key, value in sorted(material.scores.items()):
         features[f"score_{key}"] = float(value)
+    htl_result = score_spiro_htl_candidate(material)
+    features["htl_total_score"] = htl_result.total_score
+    features["htl_passed_hard_filters"] = _bool_feature(htl_result.passed_hard_filters)
+    for key, value in sorted(htl_result.components.items()):
+        features[f"htl_{key}"] = float(value)
+    features["htl_filter_count"] = float(len(htl_result.filter_codes))
+    missing_energy_fields = _missing_energy_fields(material)
+    features["energy_level_missing_count"] = float(len(missing_energy_fields))
 
     objectives = ObjectiveVector(
         pce=_score(material.scores, "pce", "efficiency"),
@@ -263,6 +273,8 @@ def _sanitize_ref(value: str) -> str:
 
 
 def _route_gate_from_v2(material: CandidateMaterial) -> str:
+    if _missing_energy_fields(material):
+        return "curate_evidence"
     if not material.evidence or any(flag in material.red_flags for flag in ("NO_SPIRO_COMPARATOR", "LOW_REPLICATE_COUNT")):
         return "curate_evidence"
     if not material.commercially_available:
@@ -270,6 +282,17 @@ def _route_gate_from_v2(material: CandidateMaterial) -> str:
     if not material.dopant_free or not material.orthogonal_solvent:
         return "curate_evidence"
     return "film_screen"
+
+
+def _missing_energy_fields(material: CandidateMaterial) -> tuple[str, ...]:
+    missing = []
+    if material.homo_ev is None:
+        missing.append("homo_ev")
+    if material.lumo_ev is None:
+        missing.append("lumo_ev")
+    if material.band_gap_ev is None:
+        missing.append("band_gap_ev")
+    return tuple(missing)
 
 
 def _route_gate_from_decision(decision: ScreeningDecision) -> str:

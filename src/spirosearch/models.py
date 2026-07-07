@@ -54,6 +54,7 @@ class CandidateMaterial:
     red_flags: list[str] = field(default_factory=list)
     intended_role: str = "spiro_replacement_htl"
     notes: str = ""
+    band_gap_ev: float | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CandidateMaterial":
@@ -63,6 +64,7 @@ class CandidateMaterial:
             category=str(data["category"]),
             homo_ev=_optional_float(data.get("homo_ev")),
             lumo_ev=_optional_float(data.get("lumo_ev")),
+            band_gap_ev=_optional_float(data.get("band_gap_ev")),
             thermal_stability_c=_optional_float(data.get("thermal_stability_c")),
             uv_stability=_optional_float(data.get("uv_stability")),
             hydrophobicity=_optional_float(data.get("hydrophobicity")),
@@ -84,6 +86,7 @@ class CandidateMaterial:
             "category": self.category,
             "homo_ev": self.homo_ev,
             "lumo_ev": self.lumo_ev,
+            "band_gap_ev": self.band_gap_ev,
             "thermal_stability_c": self.thermal_stability_c,
             "uv_stability": self.uv_stability,
             "hydrophobicity": self.hydrophobicity,

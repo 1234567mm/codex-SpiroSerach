@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/provider-response.schema.json",
+  "title": "ProviderResponse",
+  "$comment": "provider-response-v1 is the strict write contract. Runtime ProviderResponse.from_dict keeps legacy read compatibility by defaulting missing trust_level and contract_version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "provider",
+    "query",
+    "normalized_result",
+    "source_url",
+    "retrieved_at",
+    "license_hint",
+    "raw_hash",
+    "confidence",
+    "trust_level"
+  ],
+  "properties": {
+    "contract_version": { "const": "provider-response-v1" },
+    "provider": { "type": "string", "minLength": 1 },
+    "query": { "type": "string", "minLength": 1 },
+    "normalized_result": {
+      "type": "object"
+    },
+    "source_url": { "type": "string", "minLength": 1 },
+    "retrieved_at": { "type": "string", "minLength": 1 },
+    "license_hint": { "type": "string", "minLength": 1 },
+    "raw_hash": { "type": "string", "minLength": 1 },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "trust_level": {
+      "enum": [
+        "T0_missing",
+        "T1_calculated",
+        "T2_computed_db",
+        "T3_literature_machine",
+        "T4_literature_curated",
+        "T5_experimental_device"
+      ]
+    }
+  }
+}

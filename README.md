@@ -201,12 +201,101 @@ event = ExperimentComputationLoop(ledger).integrate_experimental_results(
 )
 ```
 
+## V4 运行闭环
+
+`v4-round` 子命令提供最小文件型闭环，用于把旧版候选 JSON 转成 V4 candidate，生成下一批实验推荐，并写出前端可读取的 artifacts。
+
+```powershell
+uv run --with-editable . python -m spirosearch.cli v4-round `
+  --candidates data/seed_candidates.json `
+  --output-dir outputs/v4-round-1 `
+  --batch-size 2 `
+  --budget 100
+```
+
+运行后会生成：
+
+```text
+outputs/v4-round-1/
+  recommendations.json
+  ledger.jsonl
+  posterior.json
+  agent-trace.jsonl
+  model-updates.jsonl
+  run-manifest.json
+```
+
+## V6 本地优先数据富集
+
+`enrich` 子命令提供第一版本地优先真实数据接入层。默认不访问网络 provider；它会把候选文件中的本地事实转换为可审计的 provider response，写出 provider cache，并在 HOMO/LUMO/band gap 缺失时生成 review queue，避免缺失能级字段直接进入排序。
+
+```powershell
+uv run --with-editable . python -m spirosearch.cli enrich `
+  --candidates data/seed_candidates.json `
+  --source-registry data/source_registry.json `
+  --output-dir outputs/enrichment
+```
+
+运行后会生成：
+
+```text
+outputs/enrichment/
+  enrichment-results.json
+  provider-cache.jsonl
+  provider-cache-index.json
+  review-queue.jsonl
+  agent-trace.jsonl
+  run-manifest.json
+```
+
+`enrichment-results.json` 只保存事实、字段级 trust label、缺失字段和 provider 引用。Provider response 不允许包含推荐或科学结论。前端可以先读取 `run-manifest.json`，再加载 `enrichment-results.json`、`review-queue.jsonl` 和 `provider-cache-index.json` 来可视化数据富集进度和人工复核缺口。
+
+下一轮可以传入上一轮状态和实验反馈：
+
+```powershell
+uv run --with-editable . python -m spirosearch.cli v4-round `
+  --candidates data/seed_candidates.json `
+  --ledger outputs/v4-round-1/ledger.jsonl `
+  --posterior outputs/v4-round-1/posterior.json `
+  --observations data/observations-round-1.json `
+  --output-dir outputs/v4-round-2 `
+  --batch-size 2 `
+  --budget 100
+```
+
+`run-manifest.json` 使用统一 artifact 索引，包含每个输出文件的 schema、路径、hash、大小、run ID、input hash 和生成时间。前端第一版可以只读取这个 manifest 来发现候选推荐、账本、posterior 和 agent trace。
+
+本地 artifact viewer 位于：
+
+```text
+frontend/artifact-viewer/index.html
+```
+
+直接用浏览器打开该文件，选择 `run-manifest.json` 和同一轮输出的 artifact 文件即可查看推荐列表、artifact 索引和迭代 trace。
+
 关键规则：
 
 - `planned`、`running`、`completed`、`quarantine` 候选不会被重复推荐。
 - `failed`、`partial`、`censored` 实验不会写入 PCE 训练目标，会进入 quarantine。
 - `ExperimentLedger` 支持 JSONL 持久化：`write_jsonl()` 和 `read_jsonl()`。
 - `ScreeningMetrics.calculate_pareto_front()` 按 PCE、稳定性最大化，按成本、合成风险、失败风险最小化计算 Pareto 前沿。
+
+## Spiro HTL 本地筛选能力
+
+本地筛选目标集中在 conventional n-i-p perovskite 的 Spiro-OMeTAD 替代 HTL：
+
+- `spirosearch.htl_scoring` 固化稳定性优先的 HTL 评分，包含热稳定、UV 稳定、疏水性、dopant-free、HOMO/LUMO 匹配、空穴传输代理和工艺性。
+- `candidate_material_to_v4()` 会把 HTL 评分写入 V4 candidate features，例如 `htl_total_score`、`htl_stability`、`htl_energy_alignment` 和 `htl_passed_hard_filters`。
+- `spirosearch.descriptors` 提供本地分子描述符入口。有 RDKit 时计算分子量、LogP、TPSA、HBD/HBA；没有 RDKit 时只输出保守结构计数，并显式标记为 `partial` 或 `unavailable`。
+- `spirosearch.providers.local.LocalMoleculePropertyProvider` 支持本地整理的分子属性记录，输出可缓存的 provider response，不允许 provider 结果包含科学结论。
+- `data/source_registry.json` 记录真实数据源的 trust level、rate limit、cache TTL、API key 环境变量和允许输出字段；provider 通过 registry 初始化时会执行限速、字段白名单和 trust level 约束。
+- `spirosearch.providers.pubchem.PubChemPUGRestProvider` 提供第一条真实数据源接入链路：名称到 CID/SMILES/InChIKey/分子量等基础身份字段。建议用 `PubChemPUGRestProvider.from_registry(...)` 创建真实数据源 adapter。
+- `spirosearch.providers.electronic.NOMADElectronicProvider` 和 `MaterialsProjectProvider` 提供 computed electronic property 接入，输出 band gap、formula、space group、DFT/MP 计算字段和 `computed: true`，不输出筛选结论。
+- `spirosearch.data_workflow.StructureDisambiguationAgent` 将 PubChem resolved/ambiguous/not_found 结果转换为 `MoleculeEntity` 或 review queue，不自动猜测多命中结构。
+- `spirosearch.data_workflow.EnergyLevelCompletenessAgent` 在 HOMO/LUMO/band gap 缺失时生成 `energy_levels_missing` review queue，避免把只有 band gap 的 computed 数据直接用于 Spiro HTL 排名。
+- `.env.example` 列出后续真实 provider 需要的 API key，例如 `MATERIALS_PROJECT_API_KEY`。
+
+这部分仍是本地优先实现；联网 PubChem、论文索引和开源数据库 adapter 应按同一 `ProviderResponse` 契约继续扩展。
 
 ## 制造性门控与失败反馈
 
@@ -236,6 +325,13 @@ V4 提供 `assess_manufacturability()`，用于判断候选是否能进入实验
 - [schemas/v4-active-learning.schema.json](schemas/v4-active-learning.schema.json)
 - [schemas/v4-evidence-factory.schema.json](schemas/v4-evidence-factory.schema.json)
 - [schemas/v4-manufacturing-failure.schema.json](schemas/v4-manufacturing-failure.schema.json)
+- [schemas/molecule-entity.schema.json](schemas/molecule-entity.schema.json)
+- [schemas/data-source-registry.schema.json](schemas/data-source-registry.schema.json)
+- [schemas/provider-response.schema.json](schemas/provider-response.schema.json)
+- [schemas/provider-cache.schema.json](schemas/provider-cache.schema.json)
+- V4 runtime artifacts use `v6.run_artifact.v1` and `v6.run_manifest.v1` from `spirosearch.artifacts`.
+
+`provider-response.schema.json` 是 v1 严格写出契约；运行时代码仍可读入缺少 `trust_level` / `contract_version` 的旧 provider payload，并在读入时补默认值。
 
 旧版候选和报告 schema 仍保留在 `schemas/` 目录中。
 
@@ -256,6 +352,10 @@ uv run --with pytest --with-editable . pytest
 - V4 主动学习、账本、失败隔离
 - V4 证据契约和 schema
 - V4 制造性门控和失败反馈
+- V4 runtime CLI、分子实体契约、provider cache 和前端 artifact manifest
+- 本地分子描述符、Spiro HTL 评分、local provider adapter 和静态 artifact viewer
+- Phase 0 真实数据源基础设施：source registry、PubChem adapter、API key manager、结构歧义 review queue
+- Phase 1 computed electronic property 接入：NOMAD / Materials Project adapter、HOMO/LUMO/band gap 完整性 review queue
 
 注意：`uv` 运行时可能生成 `uv.lock`。当前项目未把它作为仓库契约文件使用，提交前请确认是否需要保留。
 
@@ -291,5 +391,5 @@ tests/      单元测试和契约测试
 ## 开发约定
 
 - PDF、SI、对象存储和人工 inbox 不进 Git，相关路径已写入 `.gitignore`。
-- 默认 CLI 仍走 V2/V3.1 报告线；V4 当前作为 Python API 和契约层提供。
+- 默认 CLI 仍走 V2/V3.1 报告线；`v4-round` 提供最小 V4 文件型闭环。
 - 新增实验闭环能力时，优先补测试，再扩展运行时逻辑。
