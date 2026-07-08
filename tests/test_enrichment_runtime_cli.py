@@ -119,6 +119,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             )
 
             results = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
+            canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
             review_queue = [
                 json.loads(line)
                 for line in (output_dir / "review-queue.jsonl").read_text(encoding="utf-8").splitlines()
@@ -148,6 +149,20 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(records["missing_gap_htl"]["missing_fields"], ["band_gap_ev"])
             self.assertNotIn("band_gap_ev", records["missing_gap_htl"]["facts"])
             self.assertEqual(records["missing_gap_htl"]["provider_refs"][0]["provider"], "local_candidate_input")
+            self.assertNotIn("canonical_evidence", records["complete_htl"])
+
+            self.assertEqual(canonical["schema_version"], "v9.canonical_evidence.v1")
+            self.assertEqual(canonical["candidate_count"], 2)
+            canonical_records = {record["candidate_id"]: record for record in canonical["records"]}
+            self.assertEqual(canonical_records["complete_htl"]["material"]["material_id"], "complete_htl")
+            self.assertEqual(canonical_records["complete_htl"]["use_instance"]["material_id"], "complete_htl")
+            self.assertEqual(
+                [item["property_name"] for item in canonical_records["complete_htl"]["energy_evidence"]],
+                ["homo_ev", "lumo_ev"],
+            )
+            self.assertTrue(
+                all(item["eligible_for_scoring"] for item in canonical_records["complete_htl"]["energy_evidence"])
+            )
 
             self.assertEqual(len(review_queue), 1)
             self.assertEqual(review_queue[0]["target_id"], "missing_gap_htl")
@@ -163,7 +178,14 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             artifact_kinds = {artifact["kind"] for artifact in manifest["artifacts"]}
             self.assertEqual(
                 artifact_kinds,
-                {"enrichment_results", "review_queue", "provider_cache_index", "provider_cache", "agent_trace"},
+                {
+                    "canonical_evidence",
+                    "enrichment_results",
+                    "review_queue",
+                    "provider_cache_index",
+                    "provider_cache",
+                    "agent_trace",
+                },
             )
 
     def test_enrichment_artifacts_satisfy_declared_traceability_schemas(self):

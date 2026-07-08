@@ -19,6 +19,7 @@ V4_ARTIFACT_KINDS = {
     "provider_cache_index",
     "provider_cache",
     "enrichment_results",
+    "canonical_evidence",
 }
 
 

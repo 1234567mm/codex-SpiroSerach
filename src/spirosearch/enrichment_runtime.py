@@ -13,6 +13,7 @@ from spirosearch.artifacts import (
     write_json_artifact,
     write_jsonl_artifact,
 )
+from spirosearch.adapters.legacy_models import candidate_material_to_domain
 from spirosearch.data_workflow import EnergyLevelCompletenessAgent, StructureDisambiguationAgent
 from spirosearch.models import CandidateMaterial
 from spirosearch.orchestrator_contracts import stable_hash, stable_json
@@ -26,6 +27,7 @@ from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
 PRODUCER_VERSION = "spirosearch-v6-enrichment-runtime-v1"
 ENRICHMENT_SCHEMA_VERSION = "v6.enrichment_results.v1"
+CANONICAL_EVIDENCE_SCHEMA_VERSION = "v9.canonical_evidence.v1"
 PROVIDER_CACHE_INDEX_SCHEMA_VERSION = "v6.provider_cache_index.v1"
 
 
@@ -78,12 +80,20 @@ def run_enrichment(
     }
     cache_index_entries: list[dict[str, Any]] = []
     records: list[dict[str, Any]] = []
+    canonical_records: list[dict[str, Any]] = []
     review_queue: list[dict[str, Any]] = []
     trace_events: list[dict[str, Any]] = []
 
     energy_agent = EnergyLevelCompletenessAgent()
     structure_agent = StructureDisambiguationAgent()
     for candidate in candidates:
+        canonical_projection = candidate_material_to_domain(candidate).to_dict()
+        canonical_records.append(
+            {
+                "candidate_id": candidate.material_id,
+                **canonical_projection,
+            }
+        )
         provider_refs: list[dict[str, Any]] = []
         candidate_review_queue: list[dict[str, Any]] = []
         responses: list[ProviderResponse] = []
@@ -184,6 +194,11 @@ def run_enrichment(
         },
         "records": records,
     }
+    canonical_payload = {
+        "schema_version": CANONICAL_EVIDENCE_SCHEMA_VERSION,
+        "candidate_count": len(candidates),
+        "records": canonical_records,
+    }
     cache_index_payload = {
         "schema_version": PROVIDER_CACHE_INDEX_SCHEMA_VERSION,
         "cache_path": _safe_path_label(cache_path, output),
@@ -242,6 +257,16 @@ def run_enrichment(
             "enrichment-results.json",
             results_payload,
             kind="enrichment_results",
+            run_id=run_id,
+            input_hash=input_hash,
+            generated_at=generated_at,
+            producer_version=PRODUCER_VERSION,
+        ),
+        write_json_artifact(
+            output,
+            "canonical-evidence.json",
+            canonical_payload,
+            kind="canonical_evidence",
             run_id=run_id,
             input_hash=input_hash,
             generated_at=generated_at,
