@@ -157,6 +157,17 @@ class LiteratureClaim:
     polarity: str = "supports"
     extraction_confidence: float = 0.0
     curation_status: str = "machine_extracted"
+    document_id: str | None = None
+    doi: str | None = None
+    source_title: str | None = None
+    artifact_uri: str | None = None
+    artifact_sha256: str | None = None
+    artifact_type: str | None = None
+    page: int | None = None
+    table: str | None = None
+    span: str | None = None
+    text_sha256: str | None = None
+    method: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("claim_id", "source_id", "chunk_id", "raw_span", "property_name", "unit", "extractor_version"):
@@ -183,4 +194,15 @@ class LiteratureClaim:
             "extractor_version": self.extractor_version,
             "extraction_confidence": self.extraction_confidence,
             "curation_status": self.curation_status,
+            "document_id": self.document_id,
+            "doi": self.doi,
+            "source_title": self.source_title,
+            "artifact_uri": self.artifact_uri,
+            "artifact_sha256": self.artifact_sha256,
+            "artifact_type": self.artifact_type,
+            "page": self.page,
+            "table": self.table,
+            "span": self.span,
+            "text_sha256": self.text_sha256,
+            "method": self.method,
         }
