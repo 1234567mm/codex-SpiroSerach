@@ -237,6 +237,7 @@ uv run --with-editable . python -m spirosearch.cli v4-round `
 - Task 5 Materials Project partial: API-key-gated summary lookup is implemented for computed/material evidence. COD is still open.
 - Task 6 V4/enrichment runtime: live-cache-first provider cache, cache index artifact, enrichment results, review queue, trace events, and viewer integration are implemented.
 - Phase 1 HOMO/LUMO follow-up from V8: `pubchemqc` is now registered and wired as a computed HOMO/LUMO provider.
+- Phase 1.3 HOMO/LUMO fallback first increment: missing HOMO/LUMO values now route to unresolved filter codes without triggering hard rejection in `scoring.py`.
 
 ### Still Open
 

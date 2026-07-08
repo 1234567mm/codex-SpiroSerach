@@ -27,7 +27,7 @@ def evaluate_candidate(candidate: CandidateMaterial) -> CandidateEvaluation:
     failures, codes = hard_filter(candidate)
     components = {key: _bounded_score(candidate.scores.get(key, 0.0)) for key in WEIGHTS}
     total = sum(components[key] * weight for key, weight in WEIGHTS.items())
-    uncertainty = _estimate_uncertainty(candidate)
+    uncertainty = _estimate_uncertainty(candidate, codes)
     score = ScoreBreakdown(
         formula_version=FORMULA_VERSION,
         total=total,
@@ -52,16 +52,23 @@ def hard_filter(candidate: CandidateMaterial) -> tuple[list[str], list[str]]:
         codes.append(code)
         failures.append(message)
 
+    def defer(code: str) -> None:
+        codes.append(code)
+
     if candidate.intended_role not in ALLOWED_ROLES:
         fail("ROLE_OUT_OF_SCOPE", "candidate is not an HTL, hole-contact, SAM-derived, or barrier-enhanced Spiro replacement")
 
     if not candidate.evidence:
         fail("NO_TRACEABLE_EVIDENCE", "candidate has no traceable evidence records")
 
-    if candidate.homo_ev is None or not (-5.8 <= candidate.homo_ev <= -4.8):
+    if candidate.homo_ev is None:
+        defer("HOMO_NOT_YET_RESOLVED")
+    elif not (-5.8 <= candidate.homo_ev <= -4.8):
         fail("HOMO_MISMATCH", "HOMO is outside the configured n-i-p perovskite VBM compatibility window")
 
-    if candidate.lumo_ev is None or candidate.lumo_ev < -3.2:
+    if candidate.lumo_ev is None:
+        defer("LUMO_NOT_YET_RESOLVED")
+    elif candidate.lumo_ev < -3.2:
         fail("LUMO_ELECTRON_BLOCKING_RISK", "LUMO is too low for a conservative electron-blocking screen")
 
     if candidate.thermal_stability_c is None or candidate.thermal_stability_c < 85:
@@ -139,8 +146,12 @@ def _bounded_score(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
-def _estimate_uncertainty(candidate: CandidateMaterial) -> float:
+def _estimate_uncertainty(candidate: CandidateMaterial, filter_codes: list[str]) -> float:
     missing_components = sum(1 for key in WEIGHTS if key not in candidate.scores)
     evidence_penalty = 0.20 if not candidate.evidence else 0.0
     weak_evidence = sum(1 for item in candidate.evidence if item.level in {"estimated", "hypothesis", "unknown"})
-    return min(0.75, 0.05 + 0.08 * missing_components + 0.04 * weak_evidence + evidence_penalty)
+    unresolved_energy_penalty = 0.12 * sum(
+        code in {"HOMO_NOT_YET_RESOLVED", "LUMO_NOT_YET_RESOLVED"}
+        for code in filter_codes
+    )
+    return min(0.75, 0.05 + 0.08 * missing_components + 0.04 * weak_evidence + evidence_penalty + unresolved_energy_penalty)

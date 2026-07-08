@@ -344,13 +344,16 @@ source_registry ─┬─→ PubChem PUG ──┬─→ PubChemQC* ────
   - Registered as `pubchemqc` with trust level `T2_computed_db`.
   - Wired into `run_enrichment(..., live=True, providers=["pubchemqc"])`.
   - Verified by `tests/test_electronic_property_providers.py`, `tests/test_source_registry.py`, and `tests/test_enrichment_runtime_cli.py`.
+- Phase 1.3 HOMO/LUMO fallback first increment: `scoring.py:hard_filter()` now emits `HOMO_NOT_YET_RESOLVED` / `LUMO_NOT_YET_RESOLVED` for missing values without hard-rejecting the candidate.
+  - Resolved but out-of-window HOMO/LUMO values still emit hard-fail codes.
+  - Missing energy values increase score uncertainty so downstream ranking sees the evidence gap.
 - Phase 4.1 Enrichment Runtime: live-cache-first runtime, provider cache index, review queue, trace events, and manifest context are implemented.
 - Phase 5.1 Enrichment Viewer: artifact viewer reads enrichment results, provider cache index, review queue, and trace artifacts.
 
 ## Still Open
 
 - Phase 1.2 NOMAD DFT adapter expansion: current NOMAD adapter normalizes computed band gap and method metadata, but does not yet extract scoped HOMO/LUMO.
-- Phase 1.3 HOMO/LUMO fallback strategy: scoring hard filters still need an explicit "calculate_or_extract" review path instead of treating missing values as ordinary hard failures.
+- Phase 1.3 HOMO/LUMO fallback strategy: explicit "calculate_or_extract" action metadata is still open; the old hard-fail behavior for missing values is fixed.
 - Phase 2 literature/device evidence: Crossref/OpenAlex and LiteratureExtractionAgent remain unimplemented.
 - Phase 4.2/4.3: three-way ConflictAuditAgent upgrade and HumanReviewRouter remain open.
 

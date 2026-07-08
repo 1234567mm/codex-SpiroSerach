@@ -73,6 +73,26 @@ class ScoringTests(unittest.TestCase):
         self.assertIn("requires mobile dopants or dopant state is not acceptable", result.filter_failures)
         self.assertIn("solvent orthogonality risk against perovskite layer", result.filter_failures)
 
+    def test_missing_homo_lumo_routes_to_resolution_without_hard_rejecting(self):
+        result = evaluate_candidate(candidate(material_id="needs_energy", homo_ev=None, lumo_ev=None))
+
+        self.assertTrue(result.passed_hard_filters)
+        self.assertIn("HOMO_NOT_YET_RESOLVED", result.filter_codes)
+        self.assertIn("LUMO_NOT_YET_RESOLVED", result.filter_codes)
+        self.assertNotIn("HOMO_MISMATCH", result.filter_codes)
+        self.assertNotIn("LUMO_ELECTRON_BLOCKING_RISK", result.filter_codes)
+        self.assertEqual(result.filter_failures, [])
+        self.assertGreater(result.score.uncertainty, evaluate_candidate(candidate()).score.uncertainty)
+
+    def test_out_of_window_homo_lumo_still_hard_fail_after_resolution(self):
+        result = evaluate_candidate(candidate(material_id="bad_energy", homo_ev=-6.1, lumo_ev=-3.4))
+
+        self.assertFalse(result.passed_hard_filters)
+        self.assertIn("HOMO_MISMATCH", result.filter_codes)
+        self.assertIn("LUMO_ELECTRON_BLOCKING_RISK", result.filter_codes)
+        self.assertNotIn("HOMO_NOT_YET_RESOLVED", result.filter_codes)
+        self.assertNotIn("LUMO_NOT_YET_RESOLVED", result.filter_codes)
+
     def test_pareto_frontier_keeps_non_dominated_tradeoff_candidates(self):
         stable = candidate(material_id="stable_polymer", scores={
             "efficiency": 0.78,
