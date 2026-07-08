@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/canonical-evidence.schema.json",
+  "title": "CanonicalEvidenceArtifact",
+  "$comment": "Schema for canonical-evidence.json. This is the V9 canonical projection contract for material identity, use instance, and scoring-eligible evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidate_count", "records"],
+  "properties": {
+    "schema_version": { "const": "v9.canonical_evidence.v1" },
+    "candidate_count": { "type": "integer", "minimum": 0 },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/canonical_record" }
+    }
+  },
+  "$defs": {
+    "canonical_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id", "material", "use_instance", "energy_evidence", "review_items"],
+      "properties": {
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "material": { "$ref": "#/$defs/material" },
+        "use_instance": { "$ref": "#/$defs/use_instance" },
+        "energy_evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/energy_evidence" }
+        },
+        "review_items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/review_item" }
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "material_id",
+        "material_kind",
+        "molecule_id",
+        "formula",
+        "composition",
+        "material_class",
+        "form_factor",
+        "grade_or_batch",
+        "supplier_status",
+        "synthesis_readiness",
+        "safety_flags"
+      ],
+      "properties": {
+        "material_id": { "type": "string", "minLength": 1 },
+        "material_kind": {
+          "enum": ["small_molecule", "polymer", "inorganic", "sam", "barrier", "blend", "unknown"]
+        },
+        "molecule_id": { "type": ["string", "null"] },
+        "formula": { "type": ["string", "null"] },
+        "composition": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "material_class": { "type": "string" },
+        "form_factor": { "type": "string" },
+        "grade_or_batch": { "type": ["string", "null"] },
+        "supplier_status": { "type": "string", "minLength": 1 },
+        "synthesis_readiness": { "type": "string", "minLength": 1 },
+        "safety_flags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "use_instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "use_instance_id",
+        "material_id",
+        "role",
+        "profile",
+        "target_stack",
+        "contact_side",
+        "replacement_mode",
+        "process_window",
+        "required_evidence_types",
+        "status"
+      ],
+      "properties": {
+        "use_instance_id": { "type": "string", "minLength": 1 },
+        "material_id": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "profile": { "type": "string", "minLength": 1 },
+        "target_stack": { "type": "string", "minLength": 1 },
+        "contact_side": { "type": ["string", "null"] },
+        "replacement_mode": { "type": ["string", "null"] },
+        "process_window": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "required_evidence_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "status": { "type": "string", "minLength": 1 }
+      }
+    },
+    "energy_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "energy_evidence_id",
+        "material_id",
+        "use_instance_id",
+        "property_name",
+        "value_ev",
+        "unit",
+        "method",
+        "computed",
+        "reference_scale",
+        "conditions",
+        "provenance",
+        "eligible_for_scoring"
+      ],
+      "properties": {
+        "energy_evidence_id": { "type": "string", "minLength": 1 },
+        "material_id": { "type": "string", "minLength": 1 },
+        "use_instance_id": { "type": ["string", "null"] },
+        "property_name": { "enum": ["homo_ev", "lumo_ev", "band_gap_ev", "vbm_ev", "cbm_ev"] },
+        "value_ev": { "type": "number" },
+        "unit": { "const": "eV" },
+        "method": { "type": "string", "minLength": 1 },
+        "computed": { "type": "boolean" },
+        "reference_scale": { "type": ["string", "null"] },
+        "conditions": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "eligible_for_scoring": { "type": "boolean" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "provider_name",
+        "provider_response_id",
+        "retrieved_at",
+        "contract_version",
+        "raw_hash",
+        "doi",
+        "url",
+        "license",
+        "trust_level",
+        "curation_status"
+      ],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "provider_name": { "type": "string", "minLength": 1 },
+        "provider_response_id": { "type": ["string", "null"] },
+        "retrieved_at": { "type": ["string", "null"] },
+        "contract_version": { "type": ["string", "null"] },
+        "raw_hash": { "type": ["string", "null"] },
+        "doi": { "type": ["string", "null"] },
+        "url": { "type": ["string", "null"] },
+        "license": { "type": ["string", "null"] },
+        "trust_level": {
+          "enum": [
+            "T0_missing",
+            "T1_calculated",
+            "T2_computed_db",
+            "T3_literature_machine",
+            "T4_literature_curated",
+            "T5_experimental_device"
+          ]
+        },
+        "curation_status": {
+          "enum": ["raw", "machine_extracted", "needs_review", "curated", "rejected"]
+        }
+      }
+    },
+    "review_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_item_id",
+        "target_type",
+        "target_id",
+        "reason_code",
+        "severity",
+        "blocking_surface",
+        "suggested_action",
+        "assigned_queue",
+        "source_refs",
+        "resolution_status",
+        "review_event_id"
+      ],
+      "properties": {
+        "review_item_id": { "type": "string", "minLength": 1 },
+        "target_type": { "type": "string", "minLength": 1 },
+        "target_id": { "type": "string", "minLength": 1 },
+        "reason_code": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["low", "medium", "high", "critical"] },
+        "blocking_surface": { "type": "string", "minLength": 1 },
+        "suggested_action": { "type": "string", "minLength": 1 },
+        "assigned_queue": { "type": "string", "minLength": 1 },
+        "source_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "resolution_status": { "enum": ["open", "assigned", "resolved", "rejected"] },
+        "review_event_id": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

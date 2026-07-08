@@ -94,6 +94,7 @@ function renderKnownArtifacts() {
   const recommendations = getArtifact("recommendations.json", "recommendations");
   const trace = getArtifact("agent-trace.jsonl", "agent_trace") || [];
   const enrichment = getArtifact("enrichment-results.json", "enrichment_results");
+  const canonicalEvidence = getArtifact("canonical-evidence.json", "canonical_evidence");
   const cacheIndex = getArtifact("provider-cache-index.json", "provider_cache_index");
   const reviewQueue = getArtifact("review-queue.jsonl", "review_queue") || [];
   if (state.manifest) {
@@ -102,6 +103,7 @@ function renderKnownArtifacts() {
   renderRecommendations(recommendations);
   renderTimeline(trace);
   renderEnrichmentFlow(enrichment, cacheIndex, reviewQueue, trace);
+  renderCanonicalEvidence(canonicalEvidence);
   renderReviewQueue(reviewQueue);
 }
 
@@ -256,6 +258,65 @@ function renderReviewQueue(reviewQueue) {
     .join("");
 }
 
+function renderCanonicalEvidence(canonicalEvidence) {
+  const list = document.getElementById("canonicalEvidenceList");
+  const records = canonicalEvidence?.records || [];
+  document.getElementById("canonicalEvidenceCount").textContent = `${records.length} records`;
+  if (!records.length) {
+    list.innerHTML = `<div class="empty">No canonical evidence loaded</div>`;
+    return;
+  }
+  list.innerHTML = records
+    .map((record) => {
+      const material = record.material || {};
+      const useInstance = record.use_instance || {};
+      const energyEvidence = record.energy_evidence || [];
+      const reviewItems = record.review_items || [];
+      return `<section class="flow-item">
+        <div class="item-title">
+          <span>${escapeHtml(record.candidate_id || material.material_id || "-")}</span>
+          <span class="status">${escapeHtml(material.material_kind || "-")}</span>
+        </div>
+        <div class="item-meta">
+          ${compactMeta([
+            ["supplier", material.supplier_status],
+            ["synthesis", material.synthesis_readiness],
+            ["use", useInstance.role],
+            ["profile", useInstance.profile],
+            ["target", useInstance.target_stack],
+          ])}
+        </div>
+        <div class="chip-row">
+          ${energyEvidence.map(renderEnergyEvidenceChip).join("") || `<span class="chip muted">no energy evidence</span>`}
+        </div>
+        <div class="review-inline">
+          ${reviewItems.map(renderCanonicalReviewChip).join("") || `<span class="muted">No canonical review items</span>`}
+        </div>
+      </section>`;
+    })
+    .join("");
+}
+
+function renderEnergyEvidenceChip(item) {
+  const provenance = item.provenance || {};
+  const eligibility = item.eligible_for_scoring ? "eligible" : "not eligible";
+  return `<span class="chip" title="${escapeHtml(item.energy_evidence_id || "")}">
+    ${escapeHtml(item.property_name || "-")} ${escapeHtml(formatNumber(item.value_ev))} ${escapeHtml(item.unit || "")}
+    <small>${escapeHtml(eligibility)} / ${escapeHtml(provenance.provider_name || "-")} / ${escapeHtml(provenance.trust_level || "-")}</small>
+  </span>`;
+}
+
+function renderCanonicalReviewChip(item) {
+  return `<span class="chip review-chip">
+    ${escapeHtml(item.reason_code || "review")}
+    <small>${compactMeta([
+      ["severity", item.severity],
+      ["queue", item.assigned_queue],
+      ["surface", item.blocking_surface],
+    ])}</small>
+  </span>`;
+}
+
 function renderCacheChip(entry, event) {
   return `<span class="chip" title="${escapeHtml(entry.cache_key || "")}">
     ${escapeHtml(entry.provider || "-")} ${escapeHtml(entry.cache_status || "-")}
@@ -337,4 +398,5 @@ function clearError() {
 renderRecommendations(null);
 renderTimeline([]);
 renderEnrichmentFlow(null, null, [], []);
+renderCanonicalEvidence(null);
 renderReviewQueue([]);

@@ -63,6 +63,7 @@ def load_schema(name):
 def schema_registry():
     schemas = [
         load_schema("agent-trace-event.schema.json"),
+        load_schema("canonical-evidence.schema.json"),
         load_schema("enrichment-results.schema.json"),
         load_schema("provider-cache-index.schema.json"),
         load_schema("provider-cache.schema.json"),
@@ -205,11 +206,13 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             )
 
             enrichment_schema = load_schema("enrichment-results.schema.json")
+            canonical_schema = load_schema("canonical-evidence.schema.json")
             cache_index_schema = load_schema("provider-cache-index.schema.json")
             review_schema = load_schema("review-queue-item.schema.json")
             trace_schema = load_schema("agent-trace-event.schema.json")
             provider_cache_schema = load_schema("provider-cache.schema.json")
             enrichment = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
+            canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
             cache_index = json.loads((output_dir / "provider-cache-index.json").read_text(encoding="utf-8"))
             review_queue = [
                 json.loads(line)
@@ -228,6 +231,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             ]
 
             assert_schema_valid(self, enrichment, enrichment_schema, "enrichment-results")
+            assert_schema_valid(self, canonical, canonical_schema, "canonical-evidence")
             assert_schema_valid(self, cache_index, cache_index_schema, "provider-cache-index")
             for index, item in enumerate(review_queue):
                 assert_schema_valid(self, item, review_schema, f"review-queue[{index}]")
@@ -248,6 +252,12 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 assert_schema_valid(self, invalid_cache_index, cache_index_schema, "invalid provider-cache-index")
             self.assertIn(review_queue[0]["review_item_id"], enrichment["records"][0]["review_item_ids"])
             self.assertEqual(cache_index["entries"][0]["response_id"], enrichment["records"][0]["provider_refs"][0]["response_id"])
+            canonical_record = canonical["records"][0]
+            self.assertEqual(canonical_record["material"]["material_id"], canonical_record["candidate_id"])
+            self.assertEqual(canonical_record["use_instance"]["material_id"], canonical_record["candidate_id"])
+            self.assertTrue(
+                all(item["material_id"] == canonical_record["candidate_id"] for item in canonical_record["energy_evidence"])
+            )
 
     def test_enrich_cache_index_only_lists_entries_written_by_current_run(self):
         with TemporaryDirectory() as temp_dir:

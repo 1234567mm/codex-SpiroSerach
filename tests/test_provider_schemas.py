@@ -32,16 +32,24 @@ class ProviderSchemaTests(unittest.TestCase):
         cache_index = self._schema("provider-cache-index.schema.json")
         review_queue = self._schema("review-queue-item.schema.json")
         trace_event = self._schema("agent-trace-event.schema.json")
+        canonical = self._schema("canonical-evidence.schema.json")
 
         self.assertEqual(enrichment["properties"]["schema_version"]["const"], "v6.enrichment_results.v1")
+        self.assertEqual(canonical["properties"]["schema_version"]["const"], "v9.canonical_evidence.v1")
         self.assertEqual(cache_index["properties"]["schema_version"]["const"], "v6.provider_cache_index.v1")
         self.assertIn("records", enrichment["required"])
+        self.assertIn("records", canonical["required"])
         self.assertIn("entries", cache_index["required"])
         self.assertIn("review_item_id", review_queue["required"])
         self.assertIn("event_id", trace_event["required"])
 
         record = enrichment["$defs"]["enrichment_record"]
         provider_ref = enrichment["$defs"]["provider_ref"]
+        canonical_record = canonical["$defs"]["canonical_record"]
+        material = canonical["$defs"]["material"]
+        use_instance = canonical["$defs"]["use_instance"]
+        energy_evidence = canonical["$defs"]["energy_evidence"]
+        provenance = canonical["$defs"]["provenance"]
         cache_entry = cache_index["$defs"]["cache_index_entry"]
         self.assertTrue(
             {
@@ -53,6 +61,53 @@ class ProviderSchemaTests(unittest.TestCase):
                 "provider_refs",
                 "review_item_ids",
             }.issubset(set(record["required"]))
+        )
+        self.assertTrue(
+            {
+                "candidate_id",
+                "material",
+                "use_instance",
+                "energy_evidence",
+                "review_items",
+            }.issubset(set(canonical_record["required"]))
+        )
+        self.assertTrue(
+            {
+                "material_id",
+                "material_kind",
+                "supplier_status",
+                "synthesis_readiness",
+                "safety_flags",
+            }.issubset(set(material["required"]))
+        )
+        self.assertTrue(
+            {
+                "use_instance_id",
+                "material_id",
+                "role",
+                "profile",
+                "required_evidence_types",
+                "status",
+            }.issubset(set(use_instance["required"]))
+        )
+        self.assertTrue(
+            {
+                "energy_evidence_id",
+                "material_id",
+                "property_name",
+                "value_ev",
+                "unit",
+                "provenance",
+                "eligible_for_scoring",
+            }.issubset(set(energy_evidence["required"]))
+        )
+        self.assertTrue(
+            {
+                "source_id",
+                "provider_name",
+                "trust_level",
+                "curation_status",
+            }.issubset(set(provenance["required"]))
         )
         self.assertTrue(
             {

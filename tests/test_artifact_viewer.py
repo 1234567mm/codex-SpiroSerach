@@ -16,6 +16,8 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="recommendationList"', html)
         self.assertIn('id="timeline"', html)
         self.assertIn('id="candidateFlow"', html)
+        self.assertIn('id="canonicalEvidenceList"', html)
+        self.assertIn('id="canonicalEvidenceCount"', html)
         self.assertIn('id="reviewQueueList"', html)
         self.assertIn('id="cacheSummary"', html)
         self.assertIn('id="errorState"', html)
@@ -29,8 +31,10 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("function renderRecommendations", script)
         self.assertIn("function renderTimeline", script)
         self.assertIn("function renderEnrichmentFlow", script)
+        self.assertIn("function renderCanonicalEvidence", script)
         self.assertIn("function getArtifact", script)
         self.assertIn("enrichment-results.json", script)
+        self.assertIn("canonical-evidence.json", script)
         self.assertIn("provider-cache-index.json", script)
         self.assertIn("review-queue.jsonl", script)
         self.assertIn("candidate_id", script)
@@ -40,6 +44,8 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("response_id", script)
         self.assertIn("lookup_id", script)
         self.assertIn("outcome", script)
+        self.assertIn("energy_evidence", script)
+        self.assertIn("eligible_for_scoring", script)
         self.assertIn("safeCount(event.candidate_count)", script)
         self.assertIn("function safeCount", script)
         self.assertIn("function showError", script)
@@ -269,6 +275,101 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(rendered["errorText"], "visible failure")
         self.assertEqual(rendered["errorDisplay"], "block")
         self.assertEqual(rendered["clearedDisplay"], "none")
+
+    def test_viewer_renders_canonical_evidence_with_material_use_and_energy_context(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+
+const context = {
+  console,
+  Map,
+  Number,
+  String,
+  JSON,
+  document: {
+    getElementById: element,
+  },
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+context.renderCanonicalEvidence({
+  records: [{
+    candidate_id: "c1",
+    material: {
+      material_id: "c1",
+      material_kind: "small_molecule",
+      supplier_status: "available",
+      synthesis_readiness: "commercial",
+    },
+    use_instance: {
+      use_instance_id: "c1:HTL",
+      material_id: "c1",
+      role: "HTL",
+      profile: "htl_replacement_profile",
+    },
+    energy_evidence: [{
+      energy_evidence_id: "energy:c1:homo_ev",
+      property_name: "homo_ev",
+      value_ev: -5.2,
+      unit: "eV",
+      eligible_for_scoring: true,
+      provenance: {
+        provider_name: "legacy_candidate",
+        trust_level: "T3_literature_machine",
+        curation_status: "machine_extracted",
+      },
+    }],
+    review_items: [{
+      reason_code: "energy_levels_missing",
+      severity: "medium",
+    }],
+  }],
+});
+
+process.stdout.write(JSON.stringify({
+  count: element("canonicalEvidenceCount").textContent,
+  html: element("canonicalEvidenceList").innerHTML,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        rendered = json.loads(result.stdout)
+        self.assertEqual(rendered["count"], "1 records")
+        self.assertIn("c1", rendered["html"])
+        self.assertIn("small_molecule", rendered["html"])
+        self.assertIn("HTL", rendered["html"])
+        self.assertIn("homo_ev -5.2 eV", rendered["html"])
+        self.assertIn("eligible", rendered["html"])
+        self.assertIn("legacy_candidate", rendered["html"])
+        self.assertIn("energy_levels_missing", rendered["html"])
 
 
 if __name__ == "__main__":
