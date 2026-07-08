@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Callable, Mapping
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from spirosearch.providers.base import ProviderResponse
@@ -11,6 +11,89 @@ from spirosearch.source_registry import ApiKeyManager, SourceRateLimiter, Source
 
 JSONTransport = Callable[[str], Mapping[str, Any]]
 AuthenticatedJSONTransport = Callable[[str, Mapping[str, str]], Mapping[str, Any]]
+
+
+class PubChemQCProvider:
+    provider_name = "pubchemqc"
+
+    def __init__(
+        self,
+        *,
+        base_url: str = "https://pubchemqc.riken.jp/api",
+        transport: JSONTransport | None = None,
+        retrieved_at: str,
+        license_hint: str = "PubChemQC public dataset terms",
+        registry_entry: SourceRegistryEntry | None = None,
+        rate_limiter: SourceRateLimiter | None = None,
+        clock: Callable[[], float] | None = None,
+        sleeper: Callable[[float], None] | None = None,
+    ):
+        if registry_entry is not None:
+            if registry_entry.provider != self.provider_name:
+                raise ValueError(f"registry entry must be for {self.provider_name}")
+            base_url = registry_entry.base_url
+            license_hint = registry_entry.license_hint
+        self.base_url = base_url.rstrip("/")
+        self.transport = transport or _urllib_json_transport
+        self.retrieved_at = retrieved_at
+        self.license_hint = license_hint
+        self.trust_level = registry_entry.trust_level if registry_entry is not None else "T2_computed_db"
+        self.allowed_output_fields = registry_entry.allowed_output_fields if registry_entry is not None else None
+        self.rate_limiter = (
+            rate_limiter or SourceRateLimiter(registry_entry, clock=clock, sleeper=sleeper)
+            if registry_entry is not None
+            else None
+        )
+
+    @classmethod
+    def from_registry(
+        cls,
+        registry: SourceRegistry,
+        *,
+        transport: JSONTransport | None = None,
+        retrieved_at: str,
+        clock: Callable[[], float] | None = None,
+        sleeper: Callable[[float], None] | None = None,
+    ) -> "PubChemQCProvider":
+        return cls(
+            transport=transport,
+            retrieved_at=retrieved_at,
+            registry_entry=registry.get(cls.provider_name),
+            rate_limiter=registry.rate_limiter(cls.provider_name, clock=clock, sleeper=sleeper),
+            clock=clock,
+            sleeper=sleeper,
+        )
+
+    def lookup_name(self, name: str) -> ProviderResponse:
+        query_value = name.strip()
+        if not query_value:
+            raise ValueError("name query is required")
+        if self.rate_limiter is not None:
+            self.rate_limiter.wait_for_slot()
+        url = f"{self.base_url}/properties?{urlencode({'name': query_value})}"
+        payload = self._fetch_with_backoff(url)
+        normalized, confidence = _normalize_pubchemqc_properties(payload)
+        return ProviderResponse.from_payload(
+            provider=self.provider_name,
+            query=f"name:{query_value.casefold()}",
+            normalized_result=normalized,
+            source_url=url,
+            retrieved_at=self.retrieved_at,
+            license_hint=self.license_hint,
+            raw_payload=payload,
+            confidence=confidence,
+            trust_level=self.trust_level,
+            allowed_output_fields=self.allowed_output_fields,
+        )
+
+    def _fetch_with_backoff(self, url: str) -> Mapping[str, Any]:
+        try:
+            return self.transport(url)
+        except Exception:
+            if self.rate_limiter is None:
+                raise
+            self.rate_limiter.wait_for_retry(attempt=1)
+            return self.transport(url)
 
 
 class NOMADElectronicProvider:
@@ -230,11 +313,45 @@ def _normalize_materials_project_summary(payload: Mapping[str, Any]) -> tuple[di
     return normalized, confidence
 
 
+def _normalize_pubchemqc_properties(payload: Mapping[str, Any]) -> tuple[dict[str, Any], float]:
+    record = _first_pubchemqc_record(payload)
+    normalized: dict[str, Any] = {"computed": True}
+    if not record:
+        return normalized, 0.2
+    _put_optional(normalized, "pubchem_cid", record.get("pubchem_cid") or record.get("cid"), int)
+    _put_optional(normalized, "homo_ev", _first_present(record, "homo_ev", "homo", "HOMO"), float)
+    _put_optional(normalized, "lumo_ev", _first_present(record, "lumo_ev", "lumo", "LUMO"), float)
+    _put_optional(normalized, "band_gap_ev", _first_present(record, "band_gap_ev", "band_gap", "gap"), float)
+    _put_optional(normalized, "method", record.get("method"), str)
+    _put_optional(normalized, "basis_set", record.get("basis_set"), str)
+    required = {"homo_ev", "lumo_ev", "band_gap_ev"}
+    if required.issubset(normalized):
+        return normalized, 0.82
+    if required & set(normalized):
+        return normalized, 0.45
+    return normalized, 0.25
+
+
 def _first_record(payload: Mapping[str, Any]) -> dict[str, Any]:
     data = payload.get("data", [])
     if isinstance(data, list) and data:
         return dict(data[0])
     return {}
+
+
+def _first_pubchemqc_record(payload: Mapping[str, Any]) -> dict[str, Any]:
+    for key in ("results", "data"):
+        data = payload.get(key, [])
+        if isinstance(data, list) and data:
+            return dict(data[0])
+    return {}
+
+
+def _first_present(record: Mapping[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in record and record[key] is not None:
+            return record[key]
+    return None
 
 
 def _value_or_raw(value: Any) -> Any:

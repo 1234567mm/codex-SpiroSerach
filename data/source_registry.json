@@ -50,6 +50,28 @@
     "disambiguation_required": false
   },
   {
+    "provider": "pubchemqc",
+    "base_url": "https://pubchemqc.riken.jp/api",
+    "license_hint": "PubChemQC public dataset terms; cite PubChemQC and original quantum chemistry calculations",
+    "trust_level": "T2_computed_db",
+    "rate_limit": {
+      "requests_per_second": 2,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "pubchem_cid",
+      "homo_ev",
+      "lumo_ev",
+      "band_gap_ev",
+      "method",
+      "basis_set",
+      "computed"
+    ],
+    "disambiguation_required": false
+  },
+  {
     "provider": "crossref",
     "base_url": "https://api.crossref.org",
     "license_hint": "Crossref REST API terms",

@@ -137,7 +137,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(results["candidate_count"], 2)
             self.assertEqual(results["summary"]["complete_count"], 1)
             self.assertEqual(results["summary"]["needs_review_count"], 1)
-            self.assertEqual(results["registry_providers"], ["crossref", "materials_project", "nomad", "openalex", "pubchem"])
+            self.assertEqual(results["registry_providers"], ["crossref", "materials_project", "nomad", "openalex", "pubchem", "pubchemqc"])
 
             records = {record["candidate_id"]: record for record in results["records"]}
             self.assertEqual(records["complete_htl"]["status"], "complete")
@@ -967,6 +967,57 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(manifest["context"]["providers_requested"], ["materials_project"])
             self.assertIn("provider_api_key_missing", review_text)
             self.assertIn("MATERIALS_PROJECT_API_KEY", review_text)
+
+    def test_live_cache_first_pubchemqc_completes_missing_energy_levels(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            output_dir = root / "enrich"
+            candidates_path.write_text(
+                json.dumps(
+                    [
+                        candidate_record(
+                            material_id="pubchemqc_htl",
+                            name="Spiro-OMeTAD",
+                            homo_ev=None,
+                            lumo_ev=None,
+                            band_gap_ev=None,
+                        )
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "spirosearch.providers.electronic._urllib_json_transport",
+                return_value={
+                    "results": [
+                        {
+                            "cid": 2244,
+                            "homo": -5.42,
+                            "lumo": -2.18,
+                            "gap": 3.24,
+                            "method": "B3LYP",
+                            "basis_set": "6-31G*",
+                        }
+                    ]
+                },
+            ):
+                run_enrichment(
+                    candidates_path=candidates_path,
+                    output_dir=output_dir,
+                    source_registry_path="data/source_registry.json",
+                    live=True,
+                    providers=["pubchemqc"],
+                )
+
+            results = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
+            record = results["records"][0]
+            self.assertEqual(record["facts"]["homo_ev"], -5.42)
+            self.assertEqual(record["facts"]["lumo_ev"], -2.18)
+            self.assertEqual(record["facts"]["band_gap_ev"], 3.24)
+            self.assertEqual(record["trust"]["homo_ev"], "T2_computed_db")
+            self.assertEqual(record["status"], "complete")
 
     def test_artifacts_do_not_leak_secret_shapes_or_absolute_paths(self):
         with TemporaryDirectory() as temp_dir:

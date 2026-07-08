@@ -24,6 +24,14 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertTrue(materials_project.requires_api_key)
         self.assertEqual(materials_project.api_key_env, "MATERIALS_PROJECT_API_KEY")
 
+        pubchemqc = registry.get("pubchemqc")
+        self.assertEqual(pubchemqc.trust_level, "T2_computed_db")
+        self.assertFalse(pubchemqc.requires_api_key)
+        self.assertFalse(pubchemqc.disambiguation_required)
+        self.assertIn("homo_ev", pubchemqc.allowed_output_fields)
+        self.assertIn("lumo_ev", pubchemqc.allowed_output_fields)
+        self.assertIn("band_gap_ev", pubchemqc.allowed_output_fields)
+
     def test_registry_rejects_unknown_trust_levels(self):
         with self.assertRaisesRegex(ValueError, "unknown trust_level"):
             load_source_registry(

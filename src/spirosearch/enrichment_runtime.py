@@ -19,7 +19,7 @@ from spirosearch.orchestrator_contracts import stable_hash, stable_json
 from spirosearch.pipeline import load_candidates
 from spirosearch.providers.base import ProviderResponse
 from spirosearch.providers.cache import JSONLProviderCache
-from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider
+from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.providers.pubchem import PubChemPUGRestProvider
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
@@ -1101,6 +1101,15 @@ def _default_live_provider_sources(
                 provider="nomad",
                 query_for_candidate=_formula_query_for_candidate,
                 fetch=lambda candidate, provider=nomad: provider.lookup_formula(candidate.name),
+            )
+        )
+    if "pubchemqc" in provider_names:
+        pubchemqc = PubChemQCProvider.from_registry(registry, retrieved_at=generated_at)
+        sources.append(
+            LiveProviderSource(
+                provider="pubchemqc",
+                query_for_candidate=lambda candidate: f"name:{candidate.name.casefold()}",
+                fetch=lambda candidate, provider=pubchemqc: provider.lookup_name(candidate.name),
             )
         )
     if "materials_project" in provider_names:

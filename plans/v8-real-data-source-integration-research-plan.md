@@ -331,6 +331,29 @@ source_registry ─┬─→ PubChem PUG ──┬─→ PubChemQC* ────
 
 # Part G · 与 V7 计划的 diff 摘要
 
+---
+
+# Implementation Status - 2026-07-08
+
+## Completed in main
+
+- Phase 0.1 PubChem PUG-REST adapter: implemented in `src/spirosearch/providers/pubchem.py` with fixture-backed tests.
+- Phase 0.2 Source Registry infrastructure: implemented in `data/source_registry.json`, `schemas/data-source-registry.schema.json`, and `src/spirosearch/source_registry.py`.
+- Phase 1.1 PubChemQC adapter first increment: implemented as `PubChemQCProvider` in `src/spirosearch/providers/electronic.py`.
+  - Normalizes `pubchem_cid`, `homo_ev`, `lumo_ev`, `band_gap_ev`, `method`, `basis_set`, and `computed`.
+  - Registered as `pubchemqc` with trust level `T2_computed_db`.
+  - Wired into `run_enrichment(..., live=True, providers=["pubchemqc"])`.
+  - Verified by `tests/test_electronic_property_providers.py`, `tests/test_source_registry.py`, and `tests/test_enrichment_runtime_cli.py`.
+- Phase 4.1 Enrichment Runtime: live-cache-first runtime, provider cache index, review queue, trace events, and manifest context are implemented.
+- Phase 5.1 Enrichment Viewer: artifact viewer reads enrichment results, provider cache index, review queue, and trace artifacts.
+
+## Still Open
+
+- Phase 1.2 NOMAD DFT adapter expansion: current NOMAD adapter normalizes computed band gap and method metadata, but does not yet extract scoped HOMO/LUMO.
+- Phase 1.3 HOMO/LUMO fallback strategy: scoring hard filters still need an explicit "calculate_or_extract" review path instead of treating missing values as ordinary hard failures.
+- Phase 2 literature/device evidence: Crossref/OpenAlex and LiteratureExtractionAgent remain unimplemented.
+- Phase 4.2/4.3: three-way ConflictAuditAgent upgrade and HumanReviewRouter remain open.
+
 | V7 问题 | V8 修复 |
 |---------|---------|
 | **C1: HOMO/LUMO 缺口** | Phase 1 三管齐下：PubChemQC + NOMAD + hard filter fallback；新增 L1–L5 应对策略 |

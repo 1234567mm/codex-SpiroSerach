@@ -226,6 +226,25 @@ uv run --with-editable . python -m spirosearch.cli v4-round `
 
 ## 5. 不做的事
 
+---
+
+## Implementation Status - 2026-07-08
+
+### Covered by current main
+
+- Task 1 Source Registry: `load_source_registry()` plus schema validation and provider runtime metadata are implemented.
+- Task 2 PubChem adapter: name lookup, ambiguity handling, molecule entity handoff, and descriptor linkage are implemented.
+- Task 5 Materials Project partial: API-key-gated summary lookup is implemented for computed/material evidence. COD is still open.
+- Task 6 V4/enrichment runtime: live-cache-first provider cache, cache index artifact, enrichment results, review queue, trace events, and viewer integration are implemented.
+- Phase 1 HOMO/LUMO follow-up from V8: `pubchemqc` is now registered and wired as a computed HOMO/LUMO provider.
+
+### Still Open
+
+- Task 3 NOMAD Perovskite device evidence: current NOMAD support is electronic-property oriented, not full PSC device evidence normalization.
+- Task 4 Crossref/OpenAlex literature adapter remains open.
+- Task 5 COD support remains open.
+- Task 7 multi-agent data governance remains partially open: structure and energy agents exist, but DeviceEvidenceAgent, ConflictAuditAgent upgrade, and EnrichmentOrchestrator policy expansion remain to be built.
+
 - 不把 provider 结果直接变成推荐结论。
 - 不在第一批接入需要商业授权的供应商 API。
 - 不把药物筛选混入 HTL 排名；ChEMBL 只做隔离 profile。

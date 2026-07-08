@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider
+from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
 
@@ -42,6 +42,21 @@ MATERIALS_PROJECT_FIXTURE = {
             "energy_above_hull": 0.045,
             "density": 4.86,
             "symmetry": {"symbol": "Pm-3m"},
+        }
+    ]
+}
+
+
+PUBCHEMQC_FIXTURE = {
+    "results": [
+        {
+            "cid": 2244,
+            "name": "Spiro-OMeTAD",
+            "homo": -5.42,
+            "lumo": -2.18,
+            "gap": 3.24,
+            "method": "B3LYP",
+            "basis_set": "6-31G*",
         }
     ]
 }
@@ -166,6 +181,45 @@ class ElectronicPropertyProviderTests(unittest.TestCase):
         finally:
             if previous is not None:
                 os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+    def test_pubchemqc_provider_normalizes_computed_homo_lumo_without_conclusions(self):
+        captured = {}
+        provider = PubChemQCProvider.from_registry(
+            load_source_registry("data/source_registry.json"),
+            transport=lambda url: captured.update({"url": url}) or PUBCHEMQC_FIXTURE,
+            retrieved_at="2026-07-08T00:00:00+00:00",
+        )
+
+        response = provider.lookup_name("Spiro-OMeTAD")
+
+        self.assertIn("/properties", captured["url"])
+        self.assertIn("Spiro-OMeTAD", captured["url"])
+        self.assertEqual(response.provider, "pubchemqc")
+        self.assertEqual(response.query, "name:spiro-ometad")
+        self.assertEqual(response.trust_level, "T2_computed_db")
+        self.assertEqual(response.normalized_result["pubchem_cid"], 2244)
+        self.assertEqual(response.normalized_result["homo_ev"], -5.42)
+        self.assertEqual(response.normalized_result["lumo_ev"], -2.18)
+        self.assertEqual(response.normalized_result["band_gap_ev"], 3.24)
+        self.assertEqual(response.normalized_result["method"], "B3LYP")
+        self.assertEqual(response.normalized_result["basis_set"], "6-31G*")
+        self.assertTrue(response.normalized_result["computed"])
+        self.assertNotIn("recommended_action", response.normalized_result)
+
+    def test_pubchemqc_provider_marks_empty_result_without_guessing(self):
+        provider = PubChemQCProvider.from_registry(
+            load_source_registry("data/source_registry.json"),
+            transport=lambda _url: {"results": []},
+            retrieved_at="2026-07-08T00:00:00+00:00",
+        )
+
+        response = provider.lookup_name("unknown")
+
+        self.assertEqual(response.normalized_result["computed"], True)
+        self.assertNotIn("homo_ev", response.normalized_result)
+        self.assertNotIn("lumo_ev", response.normalized_result)
+        self.assertNotIn("band_gap_ev", response.normalized_result)
+        self.assertLess(response.confidence, 0.5)
 
 
 if __name__ == "__main__":

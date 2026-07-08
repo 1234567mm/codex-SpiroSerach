@@ -1,6 +1,6 @@
 from spirosearch.providers.base import ProviderQuery, ProviderResponse
 from spirosearch.providers.cache import JSONLProviderCache
-from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider
+from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.providers.local import LocalMoleculePropertyProvider
 from spirosearch.providers.pubchem import PubChemPUGRestProvider
 
@@ -9,6 +9,7 @@ __all__ = [
     "LocalMoleculePropertyProvider",
     "MaterialsProjectProvider",
     "NOMADElectronicProvider",
+    "PubChemQCProvider",
     "PubChemPUGRestProvider",
     "ProviderQuery",
     "ProviderResponse",
