@@ -40,9 +40,15 @@ def _contains_conclusion_item(key: str, value: Any) -> bool:
 
 def _is_conclusion_key(key: str) -> bool:
     normalized = key.casefold().replace("-", "_").replace(" ", "_")
+    if normalized.endswith("_count") or normalized.endswith("_id"):
+        return False
     blocked_tokens = ("conclusion", "recommendation", "recommended_action", "verdict")
-    blocked_exact = {"recommend", "recommended", "decision"}
-    return normalized in blocked_exact or any(token in normalized for token in blocked_tokens)
+    blocked_exact = {"recommend", "recommended", "decision", "score"}
+    return (
+        normalized in blocked_exact
+        or normalized.endswith("_score")
+        or any(token in normalized for token in blocked_tokens)
+    )
 
 
 def _is_free_text_key(key: str) -> bool:
@@ -81,6 +87,8 @@ def _has_conclusion_value(value: Any) -> bool:
         return bool(value.strip())
     if isinstance(value, bool):
         return value
+    if isinstance(value, int | float):
+        return True
     if isinstance(value, Mapping):
         return bool(value)
     if isinstance(value, list | tuple):

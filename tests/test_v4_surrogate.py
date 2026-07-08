@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import unittest
 
 from spirosearch.surrogate import (
@@ -72,6 +73,53 @@ class SurrogateTests(unittest.TestCase):
 
         self.assertLess(ucb_score, 99.0)
         self.assertGreaterEqual(ei_score, 0.0)
+
+    def test_provider_confidence_feature_does_not_change_surrogate_refit_state(self) -> None:
+        low_confidence = Posterior.empty("bo-v1").with_observation(
+            features={"homo_ev": -5.2, "provider_confidence": 0.1},
+            objectives=_objective(20.0),
+            noise={"pce": 0.2},
+            cost=20.0,
+            failure_labels=(),
+        )
+        high_confidence = Posterior.empty("bo-v1").with_observation(
+            features={"homo_ev": -5.2, "provider_confidence": 0.99},
+            objectives=_objective(20.0),
+            noise={"pce": 0.2},
+            cost=20.0,
+            failure_labels=(),
+        )
+
+        self.assertEqual(
+            low_confidence.surrogate_state.training_set_hash,
+            high_confidence.surrogate_state.training_set_hash,
+        )
+
+    def test_provider_confidence_feature_does_not_change_acquisition_score(self) -> None:
+        posterior = Posterior.empty("bo-v1").with_observation(
+            features={"homo_ev": -5.2},
+            objectives=_objective(20.0),
+            noise={"pce": 0.2},
+            cost=20.0,
+            failure_labels=(),
+        )
+        low_confidence = replace(
+            _candidate("candidate-low", pce=30.0, uncertainty=0.3),
+            features={"homo_ev": -5.2, "provider_confidence": 0.1},
+        )
+        high_confidence = replace(
+            _candidate("candidate-high", pce=30.0, uncertainty=0.3),
+            features={"homo_ev": -5.2, "provider_confidence": 0.99},
+        )
+
+        self.assertEqual(
+            UCBAcquisition(beta=1.0).score(low_confidence, posterior),
+            UCBAcquisition(beta=1.0).score(high_confidence, posterior),
+        )
+        self.assertEqual(
+            EIAcquisition(xi=0.0).score(low_confidence, posterior),
+            EIAcquisition(xi=0.0).score(high_confidence, posterior),
+        )
 
     def test_successful_experiment_refits_surrogate_and_increments_posterior_version(self) -> None:
         posterior = Posterior.empty("bo-v1").with_observation(

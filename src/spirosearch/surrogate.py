@@ -25,6 +25,35 @@ class UnsupportedSurrogateError(SurrogateError):
     """Raised when a placeholder surrogate is used before integration."""
 
 
+SURROGATE_EXCLUDED_FEATURE_KEYS = frozenset(
+    {
+        "confidence",
+        "provider_confidence",
+        "source_confidence",
+        "claim_confidence",
+        "extraction_confidence",
+        "provider_confidence_score",
+    }
+)
+
+
+def surrogate_feature_row(row: Mapping[str, float]) -> dict[str, float]:
+    """Return model-safe features with provider confidence signals removed.
+
+    Provider and extractor confidence are governance signals for cache ordering,
+    conflict priority, and human review routing. They must not become surrogate
+    inputs because that would let source confidence alter posterior state or
+    acquisition ranking.
+    """
+    cleaned: dict[str, float] = {}
+    for key, value in row.items():
+        normalized = str(key).casefold().replace("-", "_").replace(" ", "_")
+        if normalized in SURROGATE_EXCLUDED_FEATURE_KEYS or normalized.endswith("_confidence"):
+            continue
+        cleaned[str(key)] = float(value)
+    return cleaned
+
+
 class FitStatus(str, Enum):
     """Fit lifecycle state for a surrogate model."""
 
@@ -325,7 +354,7 @@ class HeuristicSurrogate(SurrogateModel):
         Returns:
             Fit result with incremented posterior version.
         """
-        rows = tuple(dict(row) for row in X)
+        rows = tuple(surrogate_feature_row(row) for row in X)
         targets = tuple(float(value) for value in y)
         self._X = rows
         self._y = targets
@@ -355,7 +384,7 @@ class HeuristicSurrogate(SurrogateModel):
         """
         if not self._X or not self._y:
             raise SurrogateNotFittedError("HeuristicSurrogate must be fitted before predict()")
-        return tuple(self._nearest_prediction(dict(row)) for row in X)
+        return tuple(self._nearest_prediction(surrogate_feature_row(row)) for row in X)
 
     def uncertainty(self, X: Sequence[Mapping[str, float]]) -> tuple[float, ...]:
         """Estimate uncertainty from distance to nearest observation.
@@ -368,7 +397,7 @@ class HeuristicSurrogate(SurrogateModel):
         """
         if not self._X or not self._y:
             raise SurrogateNotFittedError("HeuristicSurrogate must be fitted before uncertainty()")
-        return tuple(max(0.05, self._nearest_distance(dict(row))) for row in X)
+        return tuple(max(0.05, self._nearest_distance(surrogate_feature_row(row))) for row in X)
 
     def acquisition(self, X: Sequence[Mapping[str, float]], strategy: str) -> tuple[float, ...]:
         """Score rows with a basic acquisition rule.
@@ -687,7 +716,7 @@ def training_hash(X: Sequence[Mapping[str, float]], y: Sequence[float]) -> str:
     Returns:
         Stable hash.
     """
-    return stable_hash({"X": [dict(row) for row in X], "y": [float(value) for value in y]})
+    return stable_hash({"X": [surrogate_feature_row(row) for row in X], "y": [float(value) for value in y]})
 
 
 def observed_objective_hash(X: Sequence[Mapping[str, float]], objectives: Sequence[Any]) -> str:
@@ -702,7 +731,7 @@ def observed_objective_hash(X: Sequence[Mapping[str, float]], objectives: Sequen
     """
     return stable_hash(
         {
-            "X": [dict(row) for row in X],
+            "X": [surrogate_feature_row(row) for row in X],
             "y": [_objective_to_dict(objective) for objective in objectives],
         }
     )

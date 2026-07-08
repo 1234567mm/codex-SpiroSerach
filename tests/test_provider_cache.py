@@ -102,6 +102,21 @@ class ProviderCacheTests(unittest.TestCase):
                 confidence=0.5,
             )
 
+    def test_score_like_fields_are_rejected_from_provider_results(self):
+        for field_name in ("score", "final_score", "decision_score"):
+            with self.subTest(field_name=field_name):
+                with self.assertRaisesRegex(ValueError, "scientific conclusions"):
+                    ProviderResponse.from_payload(
+                        provider="openalex",
+                        query="Spiro-OMeTAD",
+                        normalized_result={"doi": "10.000/example", field_name: 0.98},
+                        source_url="https://openalex.org/W123",
+                        retrieved_at="2026-07-07T05:00:00Z",
+                        license_hint="OpenAlex license",
+                        raw_payload={"doi": "10.000/example", field_name: 0.98},
+                        confidence=0.5,
+                    )
+
     def test_non_text_recommendation_like_metadata_field_is_allowed_by_contract(self):
         response = ProviderResponse.from_payload(
             provider="fixture",
