@@ -22,6 +22,7 @@ from spirosearch.providers.base import ProviderResponse
 from spirosearch.providers.cache import JSONLProviderCache
 from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.providers.pubchem import PubChemPUGRestProvider
+from spirosearch.review_runtime import ReviewQueueFinalizer
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
 
@@ -84,6 +85,7 @@ def run_enrichment(
 
     energy_agent = EnergyLevelCompletenessAgent()
     structure_agent = StructureDisambiguationAgent()
+    review_finalizer = ReviewQueueFinalizer()
     for candidate in candidates:
         provider_refs: list[dict[str, Any]] = []
         candidate_review_queue: list[dict[str, Any]] = []
@@ -152,7 +154,7 @@ def run_enrichment(
         )
         for item in assessment.review_queue:
             candidate_review_queue.append(dict(item))
-        candidate_review_queue = [_finalize_review_item(item) for item in candidate_review_queue]
+        candidate_review_queue = review_finalizer.finalize_items(candidate_review_queue)
         review_queue.extend(candidate_review_queue)
 
         records.append(_enrichment_record(candidate, responses, assessment, provider_refs, candidate_review_queue))
@@ -168,10 +170,7 @@ def run_enrichment(
             "live_providers": [source.provider for source in live_sources],
         }
     )
-    trace_events.extend(
-        _review_trace_event(item)
-        for item in review_queue
-    )
+    trace_events.extend(review_finalizer.review_trace_events(review_queue))
 
     results_payload = {
         "schema_version": ENRICHMENT_SCHEMA_VERSION,
@@ -211,7 +210,7 @@ def run_enrichment(
             "records": records,
         }
     )[:16]
-    providers_failed = _providers_failed(review_queue)
+    providers_failed = review_finalizer.providers_failed(review_queue)
     providers_succeeded = sorted(
         {
             entry["provider"]
@@ -237,7 +236,7 @@ def run_enrichment(
         generated_at=generated_at,
         producer_version=PRODUCER_VERSION,
     )
-    trace_events = _decorate_trace_events(trace_events, run_id=run_id, generated_at=generated_at)
+    trace_events = review_finalizer.decorate_trace_events(trace_events, run_id=run_id, generated_at=generated_at)
     artifacts: list[RunArtifact] = [
         write_json_artifact(
             output,
@@ -864,20 +863,6 @@ def _provider_review_item(
     return item
 
 
-def _providers_failed(review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    counts: dict[tuple[str, str], int] = {}
-    for item in review_queue:
-        reason = str(item.get("reason", ""))
-        provider = str(item.get("provider", ""))
-        if provider and reason.startswith("provider_"):
-            key = (provider, reason)
-            counts[key] = counts.get(key, 0) + 1
-    return [
-        {"provider": provider, "reason": reason, "count": count}
-        for (provider, reason), count in sorted(counts.items())
-    ]
-
-
 def _lookup_id(candidate: CandidateMaterial, provider: str, query: str) -> str:
     return stable_hash(
         {
@@ -922,53 +907,6 @@ def _review_item_with_response_metadata(item: dict[str, Any], response: Provider
     item.setdefault("lookup_id", getattr(response, "_lookup_id", ""))
     item.setdefault("trace_event_id", getattr(response, "_trace_event_id", ""))
     return item
-
-
-def _finalize_review_item(item: dict[str, Any]) -> dict[str, Any]:
-    finalized = dict(item)
-    finalized.setdefault("review_item_id", stable_hash(_review_identity(finalized))[:16])
-    return finalized
-
-
-def _review_identity(item: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "target_type": item.get("target_type", ""),
-        "target_id": item.get("target_id", ""),
-        "reason": item.get("reason", ""),
-        "provider": item.get("provider", ""),
-        "query": item.get("query", ""),
-        "field": item.get("field", ""),
-        "lookup_id": item.get("lookup_id", ""),
-    }
-
-
-def _review_trace_event(item: dict[str, Any]) -> dict[str, Any]:
-    event = {
-        "event_type": "review_queue",
-        "actor": _review_actor(item),
-        **item,
-    }
-    event["event_id"] = stable_hash(
-        {
-            "event_type": "review_queue",
-            "review_item_id": item.get("review_item_id", ""),
-            "trace_event_id": item.get("trace_event_id", ""),
-            "lookup_id": item.get("lookup_id", ""),
-            "response_id": item.get("response_id", ""),
-        }
-    )[:16]
-    return event
-
-
-def _review_actor(item: dict[str, Any]) -> str:
-    reason = str(item.get("reason", ""))
-    if reason.startswith("pubchem_structure_"):
-        return "StructureDisambiguationAgent"
-    if reason.startswith("provider_"):
-        return "EnrichmentRuntime"
-    if reason == "energy_levels_missing":
-        return "EnergyLevelCompletenessAgent"
-    return "EnrichmentRuntime"
 
 
 def _trace_provider_lookup(
@@ -1024,22 +962,6 @@ def _trace_identity(event: dict[str, Any]) -> dict[str, Any]:
         "lookup_id": event.get("lookup_id", ""),
         "outcome": event.get("outcome", ""),
     }
-
-
-def _decorate_trace_events(
-    trace_events: list[dict[str, Any]],
-    *,
-    run_id: str,
-    generated_at: str,
-) -> list[dict[str, Any]]:
-    decorated: list[dict[str, Any]] = []
-    for index, event in enumerate(trace_events):
-        item = dict(event)
-        item.setdefault("event_id", stable_hash({"index": index, **item})[:16])
-        item["run_id"] = run_id
-        item["generated_at"] = generated_at
-        decorated.append(item)
-    return decorated
 
 
 def _sanitize_error(message: str) -> str:
