@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from jsonschema import Draft202012Validator
+
 from spirosearch.v4 import ObjectiveVector, Posterior
 from spirosearch.v4_runtime import posterior_from_dict, posterior_to_dict
 
@@ -40,6 +42,9 @@ class V4RuntimeCliTests(unittest.TestCase):
             posterior = json.loads((round1_dir / "posterior.json").read_text(encoding="utf-8"))
             ledger_lines = (round1_dir / "ledger.jsonl").read_text(encoding="utf-8").splitlines()
             trace_lines = (round1_dir / "agent-trace.jsonl").read_text(encoding="utf-8").splitlines()
+            trace_events = [json.loads(line) for line in trace_lines if line.strip()]
+            trace_schema = json.loads(Path("schemas/agent-trace-event.schema.json").read_text(encoding="utf-8"))
+            trace_validator = Draft202012Validator(trace_schema)
 
             self.assertIn("V4 autonomous screening round", completed.stdout)
             self.assertEqual(recommendations["schema_version"], "v4-runtime-recommendations-v1")
@@ -85,7 +90,12 @@ class V4RuntimeCliTests(unittest.TestCase):
             self.assertIn("event_id", trace_artifact["join_keys"])
             self.assertEqual(posterior["model_version"], "bo-v1")
             self.assertEqual(len(ledger_lines), 2)
-            self.assertTrue(trace_lines)
+            self.assertTrue(trace_events)
+            for event in trace_events:
+                trace_validator.validate(event)
+                self.assertEqual(event["run_id"], manifest["run_id"])
+                self.assertEqual(event["generated_at"], manifest["generated_at"])
+            self.assertEqual(len({event["event_id"] for event in trace_events}), len(trace_events))
 
             failed_request = recommendations["requests"][0]
             observations_path = root / "observations.json"
