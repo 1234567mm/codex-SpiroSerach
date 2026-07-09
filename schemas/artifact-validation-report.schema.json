@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/artifact-validation-report.schema.json",
+  "title": "ArtifactValidationReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "severity",
+    "run_id",
+    "summary",
+    "manifest",
+    "artifacts",
+    "optional_artifacts",
+    "join_diagnostics",
+    "panels"
+  ],
+  "properties": {
+    "schema_version": { "const": "v11.artifact_validation.v1" },
+    "status": { "enum": ["valid", "degraded", "invalid", "unavailable"] },
+    "severity": { "enum": ["info", "warning", "error", "critical"] },
+    "run_id": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 },
+      "required": [
+        "artifact_count",
+        "available_artifact_count",
+        "valid_artifact_count",
+        "invalid_artifact_count",
+        "unavailable_artifact_count",
+        "optional_unavailable_count",
+        "run_unavailable_count",
+        "warning_count",
+        "error_count"
+      ]
+    },
+    "manifest": { "$ref": "#/$defs/manifest_validation" },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact_validation" }
+    },
+    "optional_artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact_validation" }
+    },
+    "join_diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/join_diagnostic" }
+    },
+    "panels": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/panel_validation" }
+    }
+  },
+  "$defs": {
+    "manifest_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "available", "path", "schema_ref", "run_id", "artifact_count", "unavailable"],
+      "properties": {
+        "status": { "enum": ["valid", "unavailable"] },
+        "available": { "type": "boolean" },
+        "path": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "schema_ref": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "run_id": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "artifact_count": { "type": "integer", "minimum": 0 },
+        "unavailable": {
+          "anyOf": [
+            { "type": "object" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "artifact_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "status",
+        "available",
+        "path",
+        "format",
+        "schema_ref",
+        "required",
+        "panel_id",
+        "panel",
+        "join_keys",
+        "depends_on",
+        "metadata",
+        "unavailable",
+        "checks"
+      ],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["valid", "invalid", "unavailable"] },
+        "available": { "type": "boolean" },
+        "path": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "format": {
+          "anyOf": [
+            { "enum": ["json", "jsonl"] },
+            { "type": "null" }
+          ]
+        },
+        "schema_ref": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "required": { "type": "boolean" },
+        "panel_id": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "join_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "metadata": {
+          "anyOf": [
+            { "type": "object" },
+            { "type": "null" }
+          ]
+        },
+        "unavailable": {
+          "anyOf": [
+            { "type": "object" },
+            { "type": "null" }
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/check" }
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "severity", "message", "detail"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["pass", "fail", "skip", "unavailable"] },
+        "severity": { "enum": ["info", "warning", "error"] },
+        "message": { "type": "string" },
+        "detail": { "type": "object" }
+      }
+    },
+    "join_diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "status",
+        "severity",
+        "declared_keys",
+        "observed_payload_keys",
+        "missing_payload_keys",
+        "notes"
+      ],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "path": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "status": { "enum": ["pass", "informational", "warning", "unavailable"] },
+        "severity": { "enum": ["info", "warning"] },
+        "declared_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "observed_payload_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "missing_payload_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "panel_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "panel_id",
+        "label",
+        "status",
+        "severity",
+        "required_kinds",
+        "optional_kinds",
+        "available_kinds",
+        "unavailable_kinds",
+        "unavailable"
+      ],
+      "properties": {
+        "panel_id": { "type": "string", "minLength": 1 },
+        "label": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "status": { "enum": ["valid", "degraded", "invalid", "unavailable"] },
+        "severity": { "enum": ["info", "warning", "error", "critical"] },
+        "required_kinds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "optional_kinds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "available_kinds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "unavailable_kinds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "unavailable": { "type": "object" }
+      }
+    }
+  }
+}
