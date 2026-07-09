@@ -34,6 +34,37 @@ def material(**overrides):
     return CandidateMaterial.from_dict(data)
 
 
+def scoring_view(*facts):
+    return {
+        "schema_version": "v10.scoring_view.v1",
+        "energy_facts": list(facts),
+    }
+
+
+def energy_fact(property_name, value_ev, *, material_id="fixture"):
+    return {
+        "evidence_id": f"energy:{material_id}:{property_name}",
+        "material_id": material_id,
+        "use_instance_id": f"use:{material_id}",
+        "property_name": property_name,
+        "value_ev": value_ev,
+        "unit": "eV",
+        "method": "reported",
+        "reference_scale": "vacuum",
+        "computed": False,
+        "quality": {
+            "evidence_id": f"energy:{material_id}:{property_name}",
+            "evidence_type": "energy_evidence",
+            "trust_level": "T4_literature_curated",
+            "curation_status": "curated",
+            "quality_score": 0.85,
+            "eligible_for_scoring": True,
+            "blocking_review_count": 0,
+            "blocking_review_ids": [],
+        },
+    }
+
+
 class HTLScoringTests(unittest.TestCase):
     def test_stable_energy_matched_candidate_scores_with_priority_components(self):
         result = score_spiro_htl_candidate(material(), conventional_nip_spiro_profile())
@@ -49,6 +80,21 @@ class HTLScoringTests(unittest.TestCase):
         self.assertFalse(result.passed_hard_filters)
         self.assertIn("ENERGY_ALIGNMENT_MISMATCH", result.filter_codes)
         self.assertEqual(result.recommended_action, "reject")
+
+    def test_scoring_view_energy_facts_drive_htl_energy_alignment(self):
+        result = score_spiro_htl_candidate(
+            material(homo_ev=-6.05, lumo_ev=-3.5),
+            conventional_nip_spiro_profile(),
+            scoring_view=scoring_view(
+                energy_fact("homo_ev", -5.2),
+                energy_fact("lumo_ev", -2.1),
+            ),
+        )
+
+        self.assertTrue(result.passed_hard_filters)
+        self.assertNotIn("ENERGY_ALIGNMENT_MISMATCH", result.filter_codes)
+        self.assertNotIn("ELECTRON_BLOCKING_LEVEL_UNCERTAIN", result.filter_codes)
+        self.assertEqual(result.recommended_action, "film_screen")
 
     def test_doped_low_stability_spiro_comparator_is_not_recommended_as_replacement(self):
         result = score_spiro_htl_candidate(

@@ -1,7 +1,11 @@
+import copy
+import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from spirosearch.models import CandidateMaterial, EvidenceRecord
-from spirosearch.scoring import evaluate_candidate, pareto_frontier
+from spirosearch.scoring import evaluate_candidate, evaluate_with_pareto, pareto_frontier
 
 
 def evidence(source="doi:10.1126/science.aef1620", level="peer_reviewed"):
@@ -40,6 +44,37 @@ def candidate(**overrides):
     }
     values.update(overrides)
     return CandidateMaterial(**values)
+
+
+def scoring_view(*facts):
+    return {
+        "schema_version": "v10.scoring_view.v1",
+        "energy_facts": list(facts),
+    }
+
+
+def energy_fact(property_name, value_ev, *, material_id="p3ht", quality_score=0.85, trust_level="T4_literature_curated"):
+    return {
+        "evidence_id": f"energy:{material_id}:{property_name}",
+        "material_id": material_id,
+        "use_instance_id": f"use:{material_id}",
+        "property_name": property_name,
+        "value_ev": value_ev,
+        "unit": "eV",
+        "method": "reported",
+        "reference_scale": "vacuum",
+        "computed": False,
+        "quality": {
+            "evidence_id": f"energy:{material_id}:{property_name}",
+            "evidence_type": "energy_evidence",
+            "trust_level": trust_level,
+            "curation_status": "curated",
+            "quality_score": quality_score,
+            "eligible_for_scoring": True,
+            "blocking_review_count": 0,
+            "blocking_review_ids": [],
+        },
+    }
 
 
 class ScoringTests(unittest.TestCase):
@@ -83,6 +118,84 @@ class ScoringTests(unittest.TestCase):
         self.assertNotIn("LUMO_ELECTRON_BLOCKING_RISK", result.filter_codes)
         self.assertEqual(result.filter_failures, [])
         self.assertGreater(result.score.uncertainty, evaluate_candidate(candidate()).score.uncertainty)
+
+    def test_scoring_view_energy_facts_override_candidate_energy_inputs(self):
+        result = evaluate_candidate(
+            candidate(homo_ev=-6.1, lumo_ev=-3.4),
+            scoring_view=scoring_view(
+                energy_fact("homo_ev", -5.2),
+                energy_fact("lumo_ev", -2.1),
+            ),
+        )
+
+        self.assertTrue(result.passed_hard_filters)
+        self.assertEqual(result.candidate.homo_ev, -5.2)
+        self.assertEqual(result.candidate.lumo_ev, -2.1)
+        self.assertNotIn("HOMO_MISMATCH", result.filter_codes)
+        self.assertNotIn("LUMO_ELECTRON_BLOCKING_RISK", result.filter_codes)
+
+    def test_scoring_view_json_path_can_drive_candidate_energy_inputs(self):
+        with TemporaryDirectory() as temp_dir:
+            scoring_view_path = Path(temp_dir) / "scoring-view.json"
+            scoring_view_path.write_text(
+                json.dumps(
+                    scoring_view(
+                        energy_fact("homo_ev", -5.2),
+                        energy_fact("lumo_ev", -2.1),
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            result = evaluate_candidate(
+                candidate(homo_ev=-6.1, lumo_ev=-3.4),
+                scoring_view=scoring_view_path,
+            )
+
+        self.assertTrue(result.passed_hard_filters)
+        self.assertEqual(result.candidate.homo_ev, -5.2)
+        self.assertEqual(result.candidate.lumo_ev, -2.1)
+
+    def test_scoring_view_missing_fact_does_not_fall_back_to_candidate_energy(self):
+        result = evaluate_candidate(
+            candidate(lumo_ev=-2.1),
+            scoring_view=scoring_view(energy_fact("homo_ev", -5.2)),
+        )
+
+        self.assertTrue(result.passed_hard_filters)
+        self.assertEqual(result.candidate.homo_ev, -5.2)
+        self.assertIsNone(result.candidate.lumo_ev)
+        self.assertIn("LUMO_NOT_YET_RESOLVED", result.filter_codes)
+
+    def test_scoring_view_quality_score_does_not_directly_change_scoring_score(self):
+        base = scoring_view(
+            energy_fact("homo_ev", -5.2, quality_score=0.45, trust_level="T2_computed_db"),
+            energy_fact("lumo_ev", -2.1, quality_score=0.45, trust_level="T2_computed_db"),
+        )
+        higher_quality = copy.deepcopy(base)
+        for fact in higher_quality["energy_facts"]:
+            fact["quality"]["trust_level"] = "T5_experimental_device"
+            fact["quality"]["quality_score"] = 0.95
+
+        low_quality_result = evaluate_candidate(candidate(), scoring_view=base)
+        high_quality_result = evaluate_candidate(candidate(), scoring_view=higher_quality)
+
+        self.assertEqual(low_quality_result.score.total, high_quality_result.score.total)
+        self.assertEqual(low_quality_result.score.components, high_quality_result.score.components)
+
+    def test_batch_scoring_accepts_scoring_view_energy_inputs(self):
+        result = evaluate_with_pareto(
+            [candidate(material_id="batch_htl", homo_ev=-6.1, lumo_ev=-3.4)],
+            scoring_view=scoring_view(
+                energy_fact("homo_ev", -5.2, material_id="batch_htl"),
+                energy_fact("lumo_ev", -2.1, material_id="batch_htl"),
+            ),
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertTrue(result[0].passed_hard_filters)
+        self.assertEqual(result[0].candidate.homo_ev, -5.2)
+        self.assertEqual(result[0].candidate.lumo_ev, -2.1)
 
     def test_out_of_window_homo_lumo_still_hard_fail_after_resolution(self):
         result = evaluate_candidate(candidate(material_id="bad_energy", homo_ev=-6.1, lumo_ev=-3.4))

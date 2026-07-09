@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from spirosearch.models import CandidateMaterial
+from spirosearch.scoring_view_adapter import ScoringViewAdapter, ScoringViewInput
 
 
 @dataclass(frozen=True)
@@ -71,8 +72,11 @@ def conventional_nip_spiro_profile() -> HTLTargetProfile:
 def score_spiro_htl_candidate(
     material: CandidateMaterial,
     profile: HTLTargetProfile | None = None,
+    *,
+    scoring_view: ScoringViewInput = None,
 ) -> HTLScreeningResult:
     target = profile or conventional_nip_spiro_profile()
+    material = ScoringViewAdapter().apply_to_candidate(material, scoring_view)
     components = {
         "stability": _stability_score(material, target),
         "energy_alignment": _energy_alignment_score(material, target),

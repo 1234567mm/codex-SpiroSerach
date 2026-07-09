@@ -8,7 +8,7 @@
 - Upstream: `origin/main`
 - V10 baseline document: `plans/v10-loop-driven-productionization-and-visualization-plan.md`
 - Current phase: Phase 0 / Phase 1 boundary
-- Current selected slice: `v10-scoring-view-artifact`
+- Current selected slice: `v10-scoring-view-runtime`
 - Current selected slice status: implemented and verified in worktree
 - Human gate: required before merge, push, deleting worktrees, or changing scoring policy.
 
@@ -22,26 +22,26 @@
 ## Next Slice
 
 ```text
-Slice: v10-scoring-view-artifact
-Goal: runtime emits scoring-view.json and lists it in run-manifest.json.
+Slice: v10-scoring-view-runtime
+Goal: scoring and HTL runtime can consume scoring-view.json as the policy-filtered energy read model.
 Stop condition:
-  - scoring-view.json validates against schema.
-  - manifest includes scoring_view artifact with hash/bytes/schema metadata.
-  - blocking review items and missing reference_scale facts are excluded.
-  - provider confidence is absent from scoring-view.json.
+  - scoring-view energy facts override candidate HOMO/LUMO inputs.
+  - missing scoring-view energy facts remain unresolved and do not fall back to stale candidate values.
+  - scoring-view quality/trust metadata does not directly change score components or totals.
+  - legacy candidate-only scoring calls remain compatible.
   - targeted tests pass.
 ```
 
 ## Suggested Worktree
 
 ```powershell
-git worktree add D:\tmp\spiro-v10-scoring-view-artifact -b codex/v10-scoring-view-artifact main
+git worktree add D:\tmp\spiro-v10-scoring-view-runtime -b codex/v10-scoring-view-runtime main
 ```
 
 ## Targeted Tests
 
 ```powershell
-$env:PYTHONPATH='src'; uv run python -m unittest tests.test_scoring_view tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_cache -v
+$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_scoring tests.test_htl_scoring -v
 ```
 
 ## Full Gate
@@ -52,9 +52,8 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 
 ## Open Questions
 
-- Should `canonical-evidence.json` remain the source for Phase 1 scoring view, or should Phase 1 introduce `evidence-snapshot.json` first?
 - Should review queue output both `reason` and `reason_code` for one migration phase?
-- Should frontend support `scoring_view` in the existing static viewer before any runtime scoring refactor?
+- Should the next review-router slice accept fixture review events by CLI only, or also by function argument?
 
 ## Latest Execution
 
@@ -73,11 +72,35 @@ Verification:
   - targeted artifact/schema/runtime/viewer suite: 32 tests OK
   - scoring/provider regression suite: 37 tests OK
   - full suite: 178 tests OK
+  - post-merge main full suite: 178 tests OK
 Generated files:
   - uv.lock was generated and removed
 Next:
+  - landed on main as a8ed858 and pushed to origin/main
+  - start v10-scoring-view-runtime
+```
+
+```text
+Worktree: D:\tmp\spiro-v10-scoring-view-runtime
+Branch: codex/v10-scoring-view-runtime
+Slice: v10-scoring-view-runtime
+Implemented:
+  - ScoringViewAdapter for dict/path scoring-view inputs
+  - evaluate_candidate optional scoring_view input path
+  - evaluate_with_pareto and pareto_frontier optional scoring_view input path
+  - score_spiro_htl_candidate optional scoring_view input path
+  - no fallback from scoring-view gaps to stale candidate HOMO/LUMO values
+  - scoring quality/trust metadata remains excluded from direct score math
+Verification:
+  - baseline full suite in worktree: 178 tests OK
+  - red test confirmed before implementation: scoring/HTL rejected scoring_view keyword
+  - targeted scoring/HTL suite after implementation: 15 tests OK
+  - full suite after implementation: 184 tests OK
+Generated files:
+  - uv.lock absent after final gate
+Next:
   - review diff
-  - optional commit/merge after human approval
+  - commit/merge/push after verification
 ```
 
 ## Loop Caps
