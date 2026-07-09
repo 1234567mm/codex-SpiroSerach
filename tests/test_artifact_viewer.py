@@ -20,6 +20,8 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="canonicalEvidenceCount"', html)
         self.assertIn('id="scoringViewList"', html)
         self.assertIn('id="scoringFactCount"', html)
+        self.assertIn('id="reviewClosureList"', html)
+        self.assertIn('id="reviewClosureCount"', html)
         self.assertIn('id="reviewQueueList"', html)
         self.assertIn('id="cacheSummary"', html)
         self.assertIn('id="errorState"', html)
@@ -35,11 +37,15 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("function renderEnrichmentFlow", script)
         self.assertIn("function renderCanonicalEvidence", script)
         self.assertIn("function renderScoringView", script)
+        self.assertIn("function renderReviewClosure", script)
         self.assertIn("function getArtifact", script)
         self.assertIn("enrichment-results.json", script)
         self.assertIn("canonical-evidence.json", script)
         self.assertIn("provider-cache-index.json", script)
         self.assertIn("review-queue.jsonl", script)
+        self.assertIn("review-events.jsonl", script)
+        self.assertIn("review-summary.json", script)
+        self.assertIn("recompute-markers.jsonl", script)
         self.assertIn("candidate_id", script)
         self.assertIn("cache_status", script)
         self.assertIn("review_item_id", script)
@@ -478,6 +484,136 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(rendered["unmatchedCount"], "0 facts")
         self.assertIn("No scoring view loaded", rendered["unmatchedHtml"])
         self.assertNotIn("wrong", rendered["unmatchedHtml"])
+
+    def test_viewer_renders_review_closure_artifacts_from_manifest_paths(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+
+const context = {
+  console,
+  Map,
+  Number,
+  String,
+  JSON,
+  document: {
+    getElementById: element,
+  },
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+vm.runInContext(`
+state.manifest = {
+  artifacts: [
+    {kind: "review_events", path: "review/run-events.jsonl"},
+    {kind: "review_summary", path: "review/summary.json"},
+    {kind: "recompute_markers", path: "review/recompute.jsonl"}
+  ]
+};
+state.artifacts.clear();
+state.artifacts.set("review-events.jsonl", [{event_id: "wrong-event"}]);
+state.artifacts.set("review-summary.json", {review_count: 99});
+state.artifacts.set("recompute-markers.jsonl", [{marker_id: "wrong-marker"}]);
+state.artifacts.set("review/run-events.jsonl", [{
+  event_id: "event-reject-homo-abcdef",
+  event_type: "review_rejected",
+  review_item_id: "review-homo-abcdef",
+  target_type: "energy_evidence",
+  target_id: "energy:c1:homo_ev",
+  reviewer: "curator_1",
+  decision: "reject",
+  resolution_status: "rejected",
+  reason: "<unsafe reason>",
+  recompute_marker_ids: ["marker-recompute-abcdef"]
+}]);
+state.artifacts.set("review/summary.json", {
+  run_id: "run-review-closure-abcdef",
+  generated_at: "2026-07-09T00:00:00+00:00",
+  review_count: 2,
+  event_count: 1,
+  applied_event_count: 1,
+  open_blocking_count: 0,
+  resolved_count: 0,
+  rejected_count: 1,
+  by_resolution_status: {rejected: 1, open: 1},
+  by_reason_code: {energy_levels_missing: 1, "reference scale": 1},
+  by_assigned_queue: {energy: 2},
+  by_severity: {high: 1, medium: 1},
+  review_item_ids: ["review-homo-abcdef"],
+  review_event_ids: ["event-reject-homo-abcdef"],
+  recompute_marker_ids: ["marker-recompute-abcdef"]
+});
+state.artifacts.set("review/recompute.jsonl", [{
+  marker_id: "marker-recompute-abcdef",
+  review_event_id: "event-reject-homo-abcdef",
+  review_item_id: "review-homo-abcdef",
+  candidate_id: "c1",
+  target_type: "energy_evidence",
+  target_id: "energy:c1:homo_ev",
+  affected_artifacts: ["canonical-evidence.json", "scoring-view.json"],
+  reason: "review closure",
+  status: "pending"
+}]);
+renderKnownArtifacts();
+`, context);
+
+process.stdout.write(JSON.stringify({
+  count: element("reviewClosureCount").textContent,
+  html: element("reviewClosureList").innerHTML,
+  emailReviewerLabel: vm.runInContext('reviewerLabel("curator@example")', context),
+  userReviewerLabel: vm.runInContext('reviewerLabel("curator_1")', context),
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        rendered = json.loads(result.stdout)
+        self.assertEqual(rendered["count"], "1 events / 1 markers")
+        self.assertIn("run run-review-c", rendered["html"])
+        self.assertIn("generated 2026-07-09T00:00:00+00:00", rendered["html"])
+        self.assertIn("review_count 2", rendered["html"])
+        self.assertIn("open_blocking 0", rendered["html"])
+        self.assertIn("rejected 1", rendered["html"])
+        self.assertIn("event-reject", rendered["html"])
+        self.assertIn("reviewer human reviewer", rendered["html"])
+        self.assertNotIn("curator@example", rendered["html"])
+        self.assertNotIn("curator_1", rendered["html"])
+        self.assertEqual(rendered["emailReviewerLabel"], "human reviewer")
+        self.assertEqual(rendered["userReviewerLabel"], "human reviewer")
+        self.assertIn("review review-homo", rendered["html"])
+        self.assertIn("marker-recom", rendered["html"])
+        self.assertIn("canonical-evidence.json", rendered["html"])
+        self.assertIn("scoring-view.json", rendered["html"])
+        self.assertIn("&lt;unsafe reason&gt;", rendered["html"])
+        self.assertNotIn("<unsafe reason>", rendered["html"])
+        self.assertNotIn("wrong-event", rendered["html"])
+        self.assertNotIn("wrong-marker", rendered["html"])
 
 
 if __name__ == "__main__":

@@ -4,11 +4,11 @@
 
 ## Current Status
 
-- Branch: `codex/v10-human-review-router`
+- Branch: `codex/v10-review-closure-viewer`
 - Upstream: `origin/main`
 - V10 baseline document: `plans/v10-loop-driven-productionization-and-visualization-plan.md`
-- Current phase: Phase 1 review closure
-- Current selected slice: `v10-human-review-router`
+- Current phase: Phase 1 review closure visualization
+- Current selected slice: `v10-review-closure-viewer`
 - Current selected slice status: implemented and verified in worktree
 - Human gate: required before merge, push, deleting worktrees, or changing scoring policy.
 
@@ -22,27 +22,25 @@
 ## Next Slice
 
 ```text
-Slice: v10-human-review-router
-Goal: apply fixture review events to canonical evidence and emit review closure artifacts before scoring-view generation.
+Slice: v10-review-closure-viewer
+Goal: visualize review closure artifacts in the static artifact viewer without hard-coded default-path assumptions.
 Stop condition:
-  - review-events.jsonl, review-summary.json, and recompute-markers.jsonl have schemas and manifest entries.
-  - review-queue.jsonl remains an immutable queue log.
-  - canonical review_items receive resolution_status and review_event_id writeback.
-  - accepted/rejected evidence decisions update curation_status only, not numeric facts.
-  - scoring-view emission runs after review writeback.
-  - targeted tests pass.
+  - review-events.jsonl, review-summary.json, and recompute-markers.jsonl are discovered from manifest paths.
+  - Review Closure panel shows summary counts, event decisions, recompute markers, and join keys.
+  - panel escapes untrusted text and avoids scientific conclusion inference.
+  - artifact viewer tests pass.
 ```
 
 ## Suggested Worktree
 
 ```powershell
-git worktree add D:\tmp\spiro-v10-human-review-router -b codex/v10-human-review-router main
+git worktree add D:\tmp\spiro-v10-review-closure-viewer -b codex/v10-review-closure-viewer main
 ```
 
 ## Targeted Tests
 
 ```powershell
-$env:PYTHONPATH='src'; uv run python -m unittest tests.test_review_runtime tests.test_enrichment_runtime_cli tests.test_run_artifacts tests.test_provider_schemas -v
+$env:PYTHONPATH='src'; uv run python -m unittest tests.test_artifact_viewer -v
 ```
 
 ## Full Gate
@@ -57,6 +55,30 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 - Should the next review-router slice accept fixture review events by CLI only, or also by function argument?
 
 ## Latest Execution
+
+```text
+Worktree: D:\tmp\spiro-v10-review-closure-viewer
+Branch: codex/v10-review-closure-viewer
+Slice: v10-review-closure-viewer
+Implemented:
+  - Review Closure artifact viewer panel
+  - manifest-path discovery for review_events, review_summary, and recompute_markers
+  - summary/event/marker rendering with review_item_id, review_event_id, marker_id, target_id, and affected_artifacts join keys
+  - escaping coverage for review-event reason text
+  - reviewer identity redaction in review closure event rendering
+Verification:
+  - baseline artifact viewer suite: 6 tests OK
+  - red viewer tests confirmed missing panel/renderer before implementation
+  - targeted artifact viewer suite after implementation: 7 tests OK
+  - targeted artifact viewer suite after reviewer redaction fix: 7 tests OK
+  - full suite in worktree after reviewer redaction fix: 193 tests OK
+Generated files:
+  - .venv was created by uv in the temporary worktree
+  - uv.lock was generated and removed
+Next:
+  - merge to main after review-ship pass
+  - run post-merge main full suite before push
+```
 
 ```text
 Worktree: D:\tmp\spiro-v10-human-review-router
