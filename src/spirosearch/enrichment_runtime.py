@@ -52,7 +52,7 @@ def run_enrichment(
     provider_sources: Iterable[LiveProviderSource] | None = None,
     review_events_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    output = Path(output_dir)
+    output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
 
     generated_at = datetime.now(UTC).isoformat()

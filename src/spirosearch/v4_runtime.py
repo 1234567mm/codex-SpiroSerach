@@ -182,6 +182,7 @@ def run_v4_round(
             "payload_hash": stable_hash(recommendations_payload),
         }
     ] + review_events
+    trace_events = _decorate_trace_events(trace_events, run_id=run_id, generated_at=generated_at)
     artifacts.append(
         write_jsonl_artifact(
             output,
@@ -385,6 +386,36 @@ def _energy_review_events(candidates: list[Any]) -> list[dict[str, Any]]:
             event.update(item)
             events.append(event)
     return events
+
+
+def _decorate_trace_events(
+    events: list[dict[str, Any]],
+    *,
+    run_id: str,
+    generated_at: str,
+) -> list[dict[str, Any]]:
+    decorated: list[dict[str, Any]] = []
+    for index, event in enumerate(events):
+        payload = dict(event)
+        payload["run_id"] = run_id
+        payload["generated_at"] = generated_at
+        payload.setdefault("event_id", _trace_event_id(run_id, index, payload))
+        decorated.append(payload)
+    return decorated
+
+
+def _trace_event_id(run_id: str, index: int, event: Mapping[str, Any]) -> str:
+    seed = {
+        "run_id": run_id,
+        "index": index,
+        "event_type": event.get("event_type"),
+        "actor": event.get("actor"),
+        "candidate_id": event.get("candidate_id"),
+        "review_item_id": event.get("review_item_id"),
+        "target_id": event.get("target_id"),
+        "payload_hash": event.get("payload_hash"),
+    }
+    return f"trace-{stable_hash(seed)[:16]}"
 
 
 def _local_energy_response(candidate_id: str, normalized_result: dict[str, Any]) -> Any:

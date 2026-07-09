@@ -78,6 +78,10 @@ Read:
 - `review-summary.json`
 - `review-events.jsonl`
 - `recompute-markers.jsonl`
+- `provider-cache-index.json`
+- `provider-cache.jsonl`
+- `agent-trace.jsonl`
+- V4 runtime artifacts when repository/API work consumes recommendations, ledger, posterior, model updates, or trace data
 - relevant schemas
 
 Write:
@@ -87,8 +91,14 @@ Write:
 Verification:
 
 - manifest entries include hash, bytes, schema refs, record counts, and join keys
+- manifest paths are safe relative paths and are the only artifact discovery source
+- every non-null `schema_ref` validates the JSON document or every JSONL row it declares
+- JSON artifacts keep `record_count = null`; JSONL artifacts use non-empty line counts
 - scoring view validates and excludes blocked facts, missing reference scale facts, and provider confidence
 - review summary and recompute markers agree on affected candidate/evidence IDs
+- `review-events.jsonl` line order is preserved because closure semantics are order-dependent
+- `scoring-view.json` facts do not promise `candidate_id`; consumers join candidate context through manifest keys and `canonical-evidence.json`
+- `recompute-markers.jsonl` `affected_artifacts` values are artifact filenames, not manifest paths
 
 Stop:
 

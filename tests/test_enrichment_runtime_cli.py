@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -383,6 +384,40 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertNotIn(
                 "energy:cli_reviewed_htl:homo_ev",
                 [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
+            )
+
+    def test_enrich_relative_output_dir_keeps_manifest_paths_loadable(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="relative_output_htl", name="Relative Output HTL")]),
+                encoding="utf-8",
+            )
+
+            current_dir = Path.cwd()
+            try:
+                os.chdir(root)
+                run_enrichment(
+                    candidates_path="candidates.json",
+                    output_dir="relative-enrich",
+                    source_registry_path=current_dir / "data" / "source_registry.json",
+                )
+            finally:
+                os.chdir(current_dir)
+
+            output_dir = root / "relative-enrich"
+            manifest = json.loads((output_dir / "run-manifest.json").read_text(encoding="utf-8"))
+            provider_cache_artifact = next(
+                artifact for artifact in manifest["artifacts"] if artifact["kind"] == "provider_cache"
+            )
+            provider_cache_path = output_dir / provider_cache_artifact["path"]
+            self.assertEqual(provider_cache_artifact["path"], "provider-cache.jsonl")
+            self.assertTrue(provider_cache_path.exists())
+            self.assertEqual(provider_cache_artifact["bytes"], provider_cache_path.stat().st_size)
+            self.assertEqual(
+                provider_cache_artifact["sha256"],
+                hashlib.sha256(provider_cache_path.read_bytes()).hexdigest(),
             )
 
     def test_review_events_contribute_to_run_identity(self):
