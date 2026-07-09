@@ -23,6 +23,7 @@ from spirosearch.providers.cache import JSONLProviderCache
 from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.providers.pubchem import PubChemPUGRestProvider
 from spirosearch.review_runtime import ReviewQueueFinalizer
+from spirosearch.scoring_view_artifacts import ScoringViewArtifactEmitter
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
 
@@ -185,6 +186,7 @@ def run_enrichment(
         "records": records,
     }
     canonical_payload = CanonicalEvidenceEmitter().build_payload(candidates)
+    scoring_payload = ScoringViewArtifactEmitter().build_payload(canonical_payload)
     cache_index_payload = {
         "schema_version": PROVIDER_CACHE_INDEX_SCHEMA_VERSION,
         "cache_path": _safe_path_label(cache_path, output),
@@ -253,6 +255,16 @@ def run_enrichment(
             "canonical-evidence.json",
             canonical_payload,
             kind="canonical_evidence",
+            run_id=run_id,
+            input_hash=input_hash,
+            generated_at=generated_at,
+            producer_version=PRODUCER_VERSION,
+        ),
+        write_json_artifact(
+            output,
+            "scoring-view.json",
+            scoring_payload,
+            kind="scoring_view",
             run_id=run_id,
             input_hash=input_hash,
             generated_at=generated_at,

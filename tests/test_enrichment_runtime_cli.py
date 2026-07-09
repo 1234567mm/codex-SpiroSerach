@@ -69,6 +69,7 @@ def schema_registry():
         load_schema("provider-cache.schema.json"),
         load_schema("provider-response.schema.json"),
         load_schema("review-queue-item.schema.json"),
+        load_schema("scoring-view.schema.json"),
     ]
     return Registry().with_resources(
         (schema["$id"], Resource.from_contents(schema))
@@ -121,6 +122,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
 
             results = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
             canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
+            scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
             review_queue = [
                 json.loads(line)
                 for line in (output_dir / "review-queue.jsonl").read_text(encoding="utf-8").splitlines()
@@ -164,6 +166,18 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertTrue(
                 all(item["eligible_for_scoring"] for item in canonical_records["complete_htl"]["energy_evidence"])
             )
+            self.assertEqual(scoring_view["schema_version"], "v10.scoring_view.v1")
+            self.assertEqual(
+                [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
+                [
+                    "energy:complete_htl:homo_ev",
+                    "energy:complete_htl:lumo_ev",
+                    "energy:missing_gap_htl:homo_ev",
+                    "energy:missing_gap_htl:lumo_ev",
+                ],
+            )
+            self.assertNotIn("confidence", json.dumps(scoring_view))
+            self.assertNotIn("provider_confidence", json.dumps(scoring_view))
 
             self.assertEqual(len(review_queue), 1)
             self.assertEqual(review_queue[0]["target_id"], "missing_gap_htl")
@@ -186,8 +200,11 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                     "provider_cache_index",
                     "provider_cache",
                     "agent_trace",
+                    "scoring_view",
                 },
             )
+            scoring_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "scoring_view")
+            self.assertEqual(scoring_artifact["path"], "scoring-view.json")
 
     def test_enrichment_artifacts_satisfy_declared_traceability_schemas(self):
         with TemporaryDirectory() as temp_dir:
@@ -207,12 +224,14 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
 
             enrichment_schema = load_schema("enrichment-results.schema.json")
             canonical_schema = load_schema("canonical-evidence.schema.json")
+            scoring_schema = load_schema("scoring-view.schema.json")
             cache_index_schema = load_schema("provider-cache-index.schema.json")
             review_schema = load_schema("review-queue-item.schema.json")
             trace_schema = load_schema("agent-trace-event.schema.json")
             provider_cache_schema = load_schema("provider-cache.schema.json")
             enrichment = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
             canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
+            scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
             cache_index = json.loads((output_dir / "provider-cache-index.json").read_text(encoding="utf-8"))
             review_queue = [
                 json.loads(line)
@@ -232,6 +251,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
 
             assert_schema_valid(self, enrichment, enrichment_schema, "enrichment-results")
             assert_schema_valid(self, canonical, canonical_schema, "canonical-evidence")
+            assert_schema_valid(self, scoring_view, scoring_schema, "scoring-view")
             assert_schema_valid(self, cache_index, cache_index_schema, "provider-cache-index")
             for index, item in enumerate(review_queue):
                 assert_schema_valid(self, item, review_schema, f"review-queue[{index}]")
