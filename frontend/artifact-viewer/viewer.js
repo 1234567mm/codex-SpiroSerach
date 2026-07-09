@@ -11,6 +11,9 @@ const ARTIFACT_REGISTRY = {
   provider_cache_index: { legacyFileName: "provider-cache-index.json" },
   review_queue: { legacyFileName: "review-queue.jsonl" },
   scoring_view: { legacyFileName: "" },
+  review_events: { legacyFileName: "review-events.jsonl" },
+  review_summary: { legacyFileName: "review-summary.json" },
+  recompute_markers: { legacyFileName: "recompute-markers.jsonl" },
 };
 
 document.getElementById("manifestFile").addEventListener("change", async (event) => {
@@ -106,6 +109,9 @@ function renderKnownArtifacts() {
   const enrichment = getKnownArtifact("enrichment_results");
   const canonicalEvidence = getKnownArtifact("canonical_evidence");
   const scoringView = getKnownArtifact("scoring_view");
+  const reviewEvents = getKnownArtifact("review_events") || [];
+  const reviewSummary = getKnownArtifact("review_summary");
+  const recomputeMarkers = getKnownArtifact("recompute_markers") || [];
   const cacheIndex = getKnownArtifact("provider_cache_index");
   const reviewQueue = getKnownArtifact("review_queue") || [];
   if (state.manifest) {
@@ -116,6 +122,7 @@ function renderKnownArtifacts() {
   renderEnrichmentFlow(enrichment, cacheIndex, reviewQueue, trace);
   renderCanonicalEvidence(canonicalEvidence);
   renderScoringView(scoringView);
+  renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
   renderReviewQueue(reviewQueue);
 }
 
@@ -346,6 +353,107 @@ function renderScoringView(scoringView) {
     .join("");
 }
 
+function renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers) {
+  const list = document.getElementById("reviewClosureList");
+  const events = reviewEvents || [];
+  const markers = recomputeMarkers || [];
+  document.getElementById("reviewClosureCount").textContent = `${events.length} events / ${markers.length} markers`;
+  if (!events.length && !markers.length && !reviewSummary) {
+    list.innerHTML = `<div class="empty">No review closure loaded</div>`;
+    return;
+  }
+
+  const markerIdsByEvent = groupBy(markers, (marker) => marker.review_event_id);
+  const summaryHtml = reviewSummary ? renderReviewSummary(reviewSummary) : "";
+  const eventHtml = events.map((event) => renderReviewEvent(event, markerIdsByEvent.get(event.event_id) || [])).join("");
+  const markerHtml = markers.map(renderRecomputeMarker).join("");
+  list.innerHTML = [summaryHtml, eventHtml, markerHtml].filter(Boolean).join("");
+}
+
+function renderReviewSummary(summary) {
+  const resolutionCounts = summary.by_resolution_status || {};
+  const reasonCounts = summary.by_reason_code || {};
+  const queueCounts = summary.by_assigned_queue || {};
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>review summary</span>
+      <span class="status">${escapeHtml(safeCount(summary.applied_event_count))} applied</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["run", shortId(summary.run_id)],
+        ["generated", summary.generated_at],
+        ["review_count", summary.review_count],
+        ["event_count", summary.event_count],
+        ["open_blocking", summary.open_blocking_count],
+        ["resolved", summary.resolved_count],
+        ["rejected", summary.rejected_count],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${renderCountMapChips("status", resolutionCounts)}
+      ${renderCountMapChips("reason", reasonCounts)}
+      ${renderCountMapChips("queue", queueCounts)}
+    </div>
+  </section>`;
+}
+
+function renderReviewEvent(event, markers) {
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(event.event_type || "review event")}</span>
+      <span class="status">${escapeHtml(event.resolution_status || "-")}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["event", shortId(event.event_id)],
+        ["review", shortId(event.review_item_id)],
+        ["target_type", event.target_type],
+        ["target_id", event.target_id],
+        ["reviewer", reviewerLabel(event.reviewer)],
+        ["decision", event.decision],
+        ["reason", event.reason],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${(markers.length ? markers : event.recompute_marker_ids || [])
+        .map((marker) => `<span class="chip review-chip">marker ${escapeHtml(shortId(marker.marker_id || marker))}</span>`)
+        .join("") || `<span class="chip muted">no recompute marker</span>`}
+    </div>
+  </section>`;
+}
+
+function renderRecomputeMarker(marker) {
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>recompute marker</span>
+      <span class="status">${escapeHtml(marker.status || "-")}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["marker", shortId(marker.marker_id)],
+        ["event", shortId(marker.review_event_id)],
+        ["review", shortId(marker.review_item_id)],
+        ["candidate", marker.candidate_id],
+        ["target_type", marker.target_type],
+        ["target_id", marker.target_id],
+        ["reason", marker.reason],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${(marker.affected_artifacts || [])
+        .map((artifact) => `<span class="chip">${escapeHtml(artifact)}</span>`)
+        .join("") || `<span class="chip muted">no affected artifacts</span>`}
+    </div>
+  </section>`;
+}
+
+function renderCountMapChips(label, counts) {
+  return Object.entries(counts || {})
+    .map(([key, value]) => `<span class="chip">${escapeHtml(label)} ${escapeHtml(key)} ${escapeHtml(value)}</span>`)
+    .join("");
+}
+
 function renderScoringQualityChip(fact) {
   const quality = fact.quality || {};
   const blocked = quality.eligible_for_scoring === false || Number(quality.blocking_review_count || 0) > 0;
@@ -432,6 +540,11 @@ function formatNumber(value) {
   return number.toFixed(3).replace(/\.?0+$/, "");
 }
 
+function reviewerLabel(value) {
+  if (!value) return "";
+  return "human reviewer";
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -464,4 +577,5 @@ renderTimeline([]);
 renderEnrichmentFlow(null, null, [], []);
 renderCanonicalEvidence(null);
 renderScoringView(null);
+renderReviewClosure([], null, []);
 renderReviewQueue([]);
