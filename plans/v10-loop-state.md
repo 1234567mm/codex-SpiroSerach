@@ -4,12 +4,12 @@
 
 ## Current Status
 
-- Branch: `main`
+- Branch: `codex/v10-human-review-router`
 - Upstream: `origin/main`
 - V10 baseline document: `plans/v10-loop-driven-productionization-and-visualization-plan.md`
 - Current phase: Phase 1 review closure
 - Current selected slice: `v10-human-review-router`
-- Current selected slice status: queued
+- Current selected slice status: implemented and verified in worktree
 - Human gate: required before merge, push, deleting worktrees, or changing scoring policy.
 
 ## Current Known Dirty State
@@ -57,6 +57,29 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 - Should the next review-router slice accept fixture review events by CLI only, or also by function argument?
 
 ## Latest Execution
+
+```text
+Worktree: D:\tmp\spiro-v10-human-review-router
+Branch: codex/v10-human-review-router
+Slice: v10-human-review-router
+Implemented:
+  - fixture-first HumanReviewRouter
+  - CLI --review-events input
+  - review-events.jsonl, review-summary.json, and recompute-markers.jsonl artifacts
+  - schemas for review events, review summary, and recompute markers
+  - canonical evidence writeback before scoring-view generation
+  - manifest discovery for review closure artifacts
+Verification:
+  - red targeted suite confirmed missing router/runtime/CLI/artifact contracts before implementation
+  - red review runtime regression confirmed recompute/curation hardening before implementation
+  - targeted review/runtime/schema/enrichment suite: 38 tests OK
+  - full suite in worktree: 192 tests OK
+Generated files:
+  - uv.lock was generated and removed
+Next:
+  - merge to main after review-ship pass
+  - run full suite again on main before push
+```
 
 ```text
 Worktree: D:\tmp\spiro-v10-scoring-view-artifact

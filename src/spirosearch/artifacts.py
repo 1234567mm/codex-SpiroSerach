@@ -21,6 +21,9 @@ V4_ARTIFACT_KINDS = {
     "enrichment_results",
     "canonical_evidence",
     "scoring_view",
+    "review_events",
+    "review_summary",
+    "recompute_markers",
 }
 
 
