@@ -9,6 +9,38 @@ class ProviderSchemaTests(unittest.TestCase):
     def _schema(self, name):
         return json.loads(Path(f"schemas/{name}").read_text(encoding="utf-8"))
 
+    def test_run_artifact_and_manifest_schemas_define_frontend_metadata_contract(self):
+        artifact = self._schema("run-artifact.schema.json")
+        manifest = self._schema("run-manifest.schema.json")
+
+        self.assertEqual(artifact["properties"]["schema_version"]["const"], "v6.run_artifact.v1")
+        self.assertEqual(manifest["properties"]["schema_version"]["const"], "v6.run_manifest.v1")
+        self.assertTrue(
+            {
+                "schema_version",
+                "run_id",
+                "input_hash",
+                "generated_at",
+                "producer_version",
+                "path",
+                "kind",
+                "format",
+                "schema_ref",
+                "sha256",
+                "bytes",
+                "record_count",
+                "join_keys",
+                "depends_on",
+            }.issubset(set(artifact["required"]))
+        )
+        self.assertEqual(set(artifact["properties"]["format"]["enum"]), {"json", "jsonl"})
+        self.assertEqual(artifact["properties"]["schema_ref"]["anyOf"][1]["type"], "null")
+        self.assertEqual(artifact["properties"]["record_count"]["anyOf"][1]["type"], "null")
+        self.assertEqual(artifact["properties"]["join_keys"]["items"]["type"], "string")
+        self.assertEqual(artifact["properties"]["depends_on"]["items"]["type"], "string")
+        self.assertIn("artifacts", manifest["required"])
+        self.assertEqual(manifest["properties"]["artifacts"]["items"]["$ref"], "run-artifact.schema.json")
+
     def test_provider_response_schema_versions_trust_level_and_confidence(self):
         schema = self._schema("provider-response.schema.json")
 

@@ -26,6 +26,79 @@ V4_ARTIFACT_KINDS = {
     "recompute_markers",
 }
 
+ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
+    "recommendations": {
+        "schema_ref": None,
+        "join_keys": ("candidate_id", "request_id"),
+        "depends_on": ("ledger", "posterior"),
+    },
+    "agent_trace": {
+        "schema_ref": "schemas/agent-trace-event.schema.json",
+        "join_keys": ("event_id", "candidate_id", "review_item_id", "lookup_id", "cache_key", "response_id"),
+        "depends_on": (),
+    },
+    "ledger": {
+        "schema_ref": None,
+        "join_keys": ("candidate_id", "request_id"),
+        "depends_on": (),
+    },
+    "posterior": {
+        "schema_ref": None,
+        "join_keys": ("candidate_id",),
+        "depends_on": ("ledger",),
+    },
+    "model_updates": {
+        "schema_ref": None,
+        "join_keys": ("candidate_id", "request_id", "experiment_id"),
+        "depends_on": ("ledger", "posterior"),
+    },
+    "review_queue": {
+        "schema_ref": "schemas/review-queue-item.schema.json",
+        "join_keys": ("review_item_id", "candidate_id", "target_id", "trace_event_id"),
+        "depends_on": ("enrichment_results", "canonical_evidence", "agent_trace"),
+    },
+    "provider_cache_index": {
+        "schema_ref": "schemas/provider-cache-index.schema.json",
+        "join_keys": ("candidate_id", "provider", "lookup_id", "cache_key", "response_id", "trace_event_id"),
+        "depends_on": ("provider_cache",),
+    },
+    "provider_cache": {
+        "schema_ref": "schemas/provider-cache.schema.json",
+        "join_keys": ("cache_key", "response_id", "lookup_id", "provider"),
+        "depends_on": (),
+    },
+    "enrichment_results": {
+        "schema_ref": "schemas/enrichment-results.schema.json",
+        "join_keys": ("candidate_id", "review_item_id", "lookup_id", "cache_key", "response_id"),
+        "depends_on": ("provider_cache_index",),
+    },
+    "canonical_evidence": {
+        "schema_ref": "schemas/canonical-evidence.schema.json",
+        "join_keys": ("candidate_id", "material_id", "use_instance_id", "energy_evidence_id", "review_item_id"),
+        "depends_on": ("enrichment_results", "review_events"),
+    },
+    "scoring_view": {
+        "schema_ref": "schemas/scoring-view.schema.json",
+        "join_keys": ("candidate_id", "material_id", "evidence_id"),
+        "depends_on": ("canonical_evidence", "review_queue"),
+    },
+    "review_events": {
+        "schema_ref": "schemas/review-event.schema.json",
+        "join_keys": ("review_item_id", "event_id", "target_id"),
+        "depends_on": ("review_queue",),
+    },
+    "review_summary": {
+        "schema_ref": "schemas/review-summary.schema.json",
+        "join_keys": ("review_item_id", "event_id", "marker_id"),
+        "depends_on": ("review_queue", "review_events", "recompute_markers"),
+    },
+    "recompute_markers": {
+        "schema_ref": "schemas/recompute-marker.schema.json",
+        "join_keys": ("marker_id", "review_event_id", "review_item_id", "candidate_id", "target_id"),
+        "depends_on": ("review_events", "canonical_evidence", "scoring_view"),
+    },
+}
+
 
 @dataclass(frozen=True)
 class RunArtifact:
@@ -36,8 +109,13 @@ class RunArtifact:
     producer_version: str
     path: str
     kind: str
+    format: str
+    schema_ref: str | None
     sha256: str
     bytes: int
+    record_count: int | None
+    join_keys: tuple[str, ...]
+    depends_on: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,8 +126,13 @@ class RunArtifact:
             "producer_version": self.producer_version,
             "path": self.path,
             "kind": self.kind,
+            "format": self.format,
+            "schema_ref": self.schema_ref,
             "sha256": self.sha256,
             "bytes": self.bytes,
+            "record_count": self.record_count,
+            "join_keys": list(self.join_keys),
+            "depends_on": list(self.depends_on),
         }
 
 
@@ -118,6 +201,8 @@ def write_json_artifact(
         output_path,
         path=path,
         kind=kind,
+        artifact_format="json",
+        record_count=None,
         run_id=run_id,
         input_hash=input_hash,
         generated_at=generated_at,
@@ -140,14 +225,18 @@ def write_jsonl_artifact(
 ) -> RunArtifact:
     output_path = Path(output_dir) / path
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    record_count = 0
     with output_path.open("w", encoding="utf-8", newline="\n") as artifact_file:
         for record in records:
             artifact_file.write(json.dumps(record, sort_keys=True, separators=(",", ":")))
             artifact_file.write("\n")
+            record_count += 1
     return _artifact_for_file(
         output_path,
         path=path,
         kind=kind,
+        artifact_format="jsonl",
+        record_count=record_count,
         run_id=run_id,
         input_hash=input_hash,
         generated_at=generated_at,
@@ -169,10 +258,13 @@ def record_existing_artifact(
 ) -> RunArtifact:
     artifact_path = Path(path)
     output_path = artifact_path if artifact_path.is_absolute() else Path(output_dir) / artifact_path
+    artifact_format = _format_for_path(artifact_path)
     return _artifact_for_file(
         output_path,
         path=artifact_path,
         kind=kind,
+        artifact_format=artifact_format,
+        record_count=_record_count_for_existing_file(output_path, artifact_format),
         run_id=run_id,
         input_hash=input_hash,
         generated_at=generated_at,
@@ -186,6 +278,8 @@ def _artifact_for_file(
     *,
     path: str | Path,
     kind: str,
+    artifact_format: str,
+    record_count: int | None,
     run_id: str,
     input_hash: str,
     generated_at: str,
@@ -193,6 +287,7 @@ def _artifact_for_file(
     schema_version: str,
 ) -> RunArtifact:
     _validate_kind(kind)
+    metadata = ARTIFACT_KIND_METADATA[kind]
     digest, byte_count = _hash_file(output_path)
     return RunArtifact(
         schema_version=schema_version,
@@ -202,8 +297,13 @@ def _artifact_for_file(
         producer_version=producer_version,
         path=Path(path).as_posix(),
         kind=kind,
+        format=artifact_format,
+        schema_ref=metadata["schema_ref"],
         sha256=digest,
         bytes=byte_count,
+        record_count=record_count,
+        join_keys=metadata["join_keys"],
+        depends_on=metadata["depends_on"],
     )
 
 
@@ -221,6 +321,17 @@ def _hash_file(path: Path) -> tuple[str, int]:
             byte_count += len(chunk)
             digest.update(chunk)
     return digest.hexdigest(), byte_count
+
+
+def _format_for_path(path: Path) -> str:
+    return "jsonl" if path.suffix.casefold() == ".jsonl" else "json"
+
+
+def _record_count_for_existing_file(path: Path, artifact_format: str) -> int | None:
+    if artifact_format != "jsonl":
+        return None
+    with path.open("r", encoding="utf-8") as artifact_file:
+        return sum(1 for line in artifact_file if line.strip())
 
 
 def _stable_json(data: Any) -> str:

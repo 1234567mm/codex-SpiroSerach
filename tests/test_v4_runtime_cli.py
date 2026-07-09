@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 import sys
@@ -46,11 +47,42 @@ class V4RuntimeCliTests(unittest.TestCase):
             self.assertEqual(manifest["schema_version"], "v6.run_manifest.v1")
             self.assertTrue(
                 all(
-                    {"schema_version", "run_id", "input_hash", "generated_at", "producer_version", "path", "kind", "sha256", "bytes"}
+                    {
+                        "schema_version",
+                        "run_id",
+                        "input_hash",
+                        "generated_at",
+                        "producer_version",
+                        "path",
+                        "kind",
+                        "format",
+                        "schema_ref",
+                        "sha256",
+                        "bytes",
+                        "record_count",
+                        "join_keys",
+                        "depends_on",
+                    }
                     <= set(artifact)
                     for artifact in manifest["artifacts"]
                 )
             )
+            for artifact in manifest["artifacts"]:
+                artifact_path = round1_dir / artifact["path"]
+                self.assertTrue(artifact_path.exists(), artifact)
+                self.assertEqual(artifact["bytes"], artifact_path.stat().st_size)
+                self.assertEqual(artifact["sha256"], hashlib.sha256(artifact_path.read_bytes()).hexdigest())
+                if artifact["format"] == "jsonl":
+                    line_count = len([line for line in artifact_path.read_text(encoding="utf-8").splitlines() if line.strip()])
+                    self.assertEqual(artifact["record_count"], line_count, artifact)
+                else:
+                    self.assertIsNone(artifact["record_count"], artifact)
+            ledger_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "ledger")
+            self.assertEqual(ledger_artifact["record_count"], 2)
+            self.assertEqual(ledger_artifact["join_keys"], ["candidate_id", "request_id"])
+            trace_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "agent_trace")
+            self.assertEqual(trace_artifact["schema_ref"], "schemas/agent-trace-event.schema.json")
+            self.assertIn("event_id", trace_artifact["join_keys"])
             self.assertEqual(posterior["model_version"], "bo-v1")
             self.assertEqual(len(ledger_lines), 2)
             self.assertTrue(trace_lines)

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 import sys
@@ -72,6 +73,8 @@ def schema_registry():
         load_schema("review-event.schema.json"),
         load_schema("review-queue-item.schema.json"),
         load_schema("review-summary.schema.json"),
+        load_schema("run-artifact.schema.json"),
+        load_schema("run-manifest.schema.json"),
         load_schema("scoring-view.schema.json"),
     ]
     return Registry().with_resources(
@@ -211,6 +214,41 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             )
             scoring_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "scoring_view")
             self.assertEqual(scoring_artifact["path"], "scoring-view.json")
+            required_manifest_fields = {
+                "schema_version",
+                "run_id",
+                "input_hash",
+                "generated_at",
+                "producer_version",
+                "path",
+                "kind",
+                "format",
+                "schema_ref",
+                "sha256",
+                "bytes",
+                "record_count",
+                "join_keys",
+                "depends_on",
+            }
+            for artifact in manifest["artifacts"]:
+                self.assertTrue(required_manifest_fields.issubset(set(artifact)), artifact)
+                artifact_path = output_dir / artifact["path"]
+                self.assertTrue(artifact_path.exists(), artifact)
+                self.assertEqual(artifact["bytes"], artifact_path.stat().st_size)
+                self.assertEqual(artifact["sha256"], hashlib.sha256(artifact_path.read_bytes()).hexdigest())
+                if artifact["format"] == "jsonl":
+                    line_count = len([line for line in artifact_path.read_text(encoding="utf-8").splitlines() if line.strip()])
+                    self.assertEqual(artifact["record_count"], line_count, artifact)
+                else:
+                    self.assertIsNone(artifact["record_count"], artifact)
+
+            self.assertEqual(scoring_artifact["schema_ref"], "schemas/scoring-view.schema.json")
+            self.assertEqual(scoring_artifact["format"], "json")
+            self.assertEqual(scoring_artifact["join_keys"], ["candidate_id", "material_id", "evidence_id"])
+            self.assertEqual(scoring_artifact["depends_on"], ["canonical_evidence", "review_queue"])
+            review_events_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "review_events")
+            self.assertEqual(review_events_artifact["record_count"], 0)
+            self.assertEqual(review_events_artifact["join_keys"], ["review_item_id", "event_id", "target_id"])
 
     def test_review_events_apply_before_scoring_view_and_emit_closure_artifacts(self):
         with TemporaryDirectory() as temp_dir:
@@ -414,10 +452,12 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             recompute_marker_schema = load_schema("recompute-marker.schema.json")
             trace_schema = load_schema("agent-trace-event.schema.json")
             provider_cache_schema = load_schema("provider-cache.schema.json")
+            manifest_schema = load_schema("run-manifest.schema.json")
             enrichment = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
             canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
             scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
             cache_index = json.loads((output_dir / "provider-cache-index.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output_dir / "run-manifest.json").read_text(encoding="utf-8"))
             review_queue = [
                 json.loads(line)
                 for line in (output_dir / "review-queue.jsonl").read_text(encoding="utf-8").splitlines()
@@ -449,6 +489,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             assert_schema_valid(self, canonical, canonical_schema, "canonical-evidence")
             assert_schema_valid(self, scoring_view, scoring_schema, "scoring-view")
             assert_schema_valid(self, cache_index, cache_index_schema, "provider-cache-index")
+            assert_schema_valid(self, manifest, manifest_schema, "run-manifest")
             for index, item in enumerate(review_queue):
                 assert_schema_valid(self, item, review_schema, f"review-queue[{index}]")
             for index, item in enumerate(review_events):
@@ -1310,6 +1351,17 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertNotIn(str(root), text)
             self.assertNotIn(str(registry_path), text)
             self.assertNotIn("C:\\secret\\key.txt", text)
+            manifest = json.loads((output_dir / "run-manifest.json").read_text(encoding="utf-8"))
+            provider_cache_artifact = next(
+                artifact for artifact in manifest["artifacts"] if artifact["kind"] == "provider_cache"
+            )
+            self.assertEqual(provider_cache_artifact["path"], "provider-cache.jsonl")
+            self.assertNotEqual(provider_cache_artifact["path"], external_cache_path.name)
+            self.assertTrue((output_dir / provider_cache_artifact["path"]).exists())
+            self.assertEqual(
+                provider_cache_artifact["sha256"],
+                hashlib.sha256((output_dir / provider_cache_artifact["path"]).read_bytes()).hexdigest(),
+            )
 
     def test_live_provider_invalid_response_routes_to_review_without_cache_write(self):
         with TemporaryDirectory() as temp_dir:

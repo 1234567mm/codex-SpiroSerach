@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from spirosearch.artifacts import (
+    ARTIFACT_KIND_METADATA,
     V4_ARTIFACT_KINDS,
     build_run_manifest,
     write_json_artifact,
@@ -35,8 +36,13 @@ class RunArtifactContractTests(unittest.TestCase):
             self.assertEqual(artifact.producer_version, "spirosearch-v6-mvp")
             self.assertEqual(artifact.path, "recommendations.json")
             self.assertEqual(artifact.kind, "recommendations")
+            self.assertEqual(artifact.format, "json")
+            self.assertIsNone(artifact.schema_ref)
             self.assertEqual(artifact.sha256, hashlib.sha256(payload).hexdigest())
             self.assertEqual(artifact.bytes, len(payload))
+            self.assertIsNone(artifact.record_count)
+            self.assertEqual(artifact.join_keys, ("candidate_id", "request_id"))
+            self.assertEqual(artifact.depends_on, ("ledger", "posterior"))
             self.assertEqual(
                 json.loads(payload.decode("utf-8")),
                 {"items": [{"id": "spiro-a", "score": 0.91}]},
@@ -102,12 +108,24 @@ class RunArtifactContractTests(unittest.TestCase):
                     "producer_version",
                     "path",
                     "kind",
+                    "format",
+                    "schema_ref",
                     "sha256",
                     "bytes",
+                    "record_count",
+                    "join_keys",
+                    "depends_on",
                 },
             )
+            trace_entry = manifest_dict["artifacts"][0]
+            self.assertEqual(trace_entry["format"], "jsonl")
+            self.assertEqual(trace_entry["schema_ref"], "schemas/agent-trace-event.schema.json")
+            self.assertEqual(trace_entry["record_count"], 2)
+            self.assertIn("event_id", trace_entry["join_keys"])
+            self.assertEqual(trace_entry["depends_on"], [])
 
     def test_all_v4_artifact_kinds_are_supported_and_unknown_kinds_are_rejected(self):
+        self.assertEqual(set(ARTIFACT_KIND_METADATA), V4_ARTIFACT_KINDS)
         self.assertEqual(
             V4_ARTIFACT_KINDS,
             {

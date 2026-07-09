@@ -4,12 +4,12 @@
 
 ## Current Status
 
-- Branch: `main`
+- Branch: `codex/v10-manifest-contract-freeze`
 - Upstream: `origin/main`
 - V10 baseline document: `plans/v10-loop-driven-productionization-and-visualization-plan.md`
 - Current phase: Phase 0 contract hardening / V11 dependency freeze
 - Current selected slice: `v10-manifest-contract-freeze`
-- Current selected slice status: selected; implementation not started
+- Current selected slice status: implemented and verified in worktree
 - Human gate: required before merge, push, deleting worktrees, or changing scoring policy.
 
 ## Current Known Dirty State
@@ -41,7 +41,7 @@ git worktree add D:\tmp\spiro-v10-manifest-contract-freeze -b codex/v10-manifest
 ## Targeted Tests
 
 ```powershell
-$env:PYTHONPATH='src'; uv run python -m unittest tests.test_run_artifacts tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_artifact_viewer -v
+$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_run_artifacts tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_artifact_viewer tests.test_v4_runtime_cli -v
 ```
 
 ## Full Gate
@@ -54,10 +54,35 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 
 - Should review queue output both `reason` and `reason_code` for one migration phase?
 - Should the next review-router slice accept fixture review events by CLI only, or also by function argument?
-- Should `schema_ref` be required for every artifact kind immediately, or can legacy artifacts use an explicit `null` during one migration slice?
-- Should `join_keys` be derived from a central artifact-kind registry, or passed explicitly by each producer call?
+- Current manifest freeze decision: `schema_ref` is explicit and nullable for legacy artifacts without payload schemas.
+- Current manifest freeze decision: `join_keys` and `depends_on` come from a central artifact-kind registry.
 
 ## Latest Execution
+
+```text
+Worktree: D:\tmp\spiro-v10-manifest-contract-freeze
+Branch: codex/v10-manifest-contract-freeze
+Slice: v10-manifest-contract-freeze
+Implemented:
+  - schemas/run-artifact.schema.json
+  - schemas/run-manifest.schema.json
+  - RunArtifact metadata fields: format, schema_ref, record_count, join_keys, depends_on
+  - centralized artifact-kind metadata registry for schema refs, join keys, and artifact dependencies
+  - JSONL record_count from actual emitted or recorded non-empty lines
+  - external provider cache mirror into output/provider-cache.jsonl for manifest-loadable paths without absolute path leakage
+  - enrichment and V4 runtime manifest contract coverage for paths, hashes, bytes, schema refs, record counts, and join keys
+Verification:
+  - red targeted tests confirmed missing RunArtifact fields, missing run schemas, and missing producer manifest metadata
+  - external provider cache regression confirms manifest path exists under output and does not leak the external cache path
+  - targeted manifest/schema/enrichment/viewer/V4 suite: 42 tests OK
+  - full suite in worktree: 194 tests OK
+Generated files:
+  - .venv was reused from uv setup in the temporary worktree
+  - uv.lock was generated and will be removed before commit
+Next:
+  - merge to main after review-ship pass
+  - run post-merge main full suite before push
+```
 
 ```text
 Worktree: D:\tmp\spiro-v10-review-closure-viewer

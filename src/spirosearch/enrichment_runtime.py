@@ -211,9 +211,10 @@ def run_enrichment(
     )
     canonical_payload = review_closure.canonical_payload
     scoring_payload = ScoringViewArtifactEmitter().build_payload(canonical_payload)
+    manifest_cache_path = _manifest_cache_artifact_path(cache_path, output)
     cache_index_payload = {
         "schema_version": PROVIDER_CACHE_INDEX_SCHEMA_VERSION,
-        "cache_path": _safe_path_label(cache_path, output),
+        "cache_path": _safe_path_label(manifest_cache_path, output),
         "entry_count": len(cache_keys),
         "entries_written": len(cache_keys),
         "entries_read": cache_stats["hit_count"],
@@ -241,8 +242,8 @@ def run_enrichment(
     )
     provider_cache_artifact = _safe_record_existing_artifact(
         output,
-        cache_path,
-        display_path=_safe_path_label(cache_path, output),
+        manifest_cache_path,
+        display_path=_safe_path_label(manifest_cache_path, output),
         kind="provider_cache",
         run_id=run_id,
         input_hash=input_hash,
@@ -356,7 +357,7 @@ def run_enrichment(
             "mode": mode,
             "candidate_count": len(candidates),
             "source_registry_hash": registry_hash,
-            "provider_cache_path": _safe_path_label(cache_path, output),
+            "provider_cache_path": _safe_path_label(manifest_cache_path, output),
             "live_providers": [source.provider for source in live_sources],
             "context": {
                 "execution_mode": mode,
@@ -371,7 +372,7 @@ def run_enrichment(
                 "providers_failed": providers_failed,
                 "provider_outcomes": dict(cache_stats),
                 "provider_cache": {
-                    "path": _safe_path_label(cache_path, output),
+                    "path": _safe_path_label(manifest_cache_path, output),
                     "contract_version": cache.contract_version,
                     "entries_read": cache_stats["hit_count"],
                     "entries_written": len(cache_keys),
@@ -1162,6 +1163,16 @@ def _safe_path_label(path: Path, base: Path) -> str:
         return path.name
 
 
+def _manifest_cache_artifact_path(cache_path: Path, output_dir: Path) -> Path:
+    try:
+        cache_path.resolve().relative_to(output_dir.resolve())
+        return cache_path
+    except ValueError:
+        artifact_path = output_dir / "provider-cache.jsonl"
+        artifact_path.write_bytes(cache_path.read_bytes() if cache_path.exists() else b"")
+        return artifact_path
+
+
 def _safe_record_existing_artifact(
     output_dir: Path,
     path: Path,
@@ -1190,6 +1201,11 @@ def _safe_record_existing_artifact(
         producer_version=artifact.producer_version,
         path=display_path,
         kind=artifact.kind,
+        format=artifact.format,
+        schema_ref=artifact.schema_ref,
         sha256=artifact.sha256,
         bytes=artifact.bytes,
+        record_count=artifact.record_count,
+        join_keys=artifact.join_keys,
+        depends_on=artifact.depends_on,
     )
