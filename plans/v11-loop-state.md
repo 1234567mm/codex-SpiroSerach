@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `codex/v11-artifact-validation-local-loop`
+- Branch: `main`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
-- Current phase: V11 P0 artifact validation loop
-- Current selected slice: `v11-artifact-validation-local-loop`
-- Current selected slice status: full verification passed in worktree; ready for review and merge
+- Current phase: V11 P0 read-only API/MCP inventory
+- Current selected slice: `v11-readonly-api-mcp-inventory`
+- Current selected slice status: ready to start after artifact validation loop landed on main as `99dc396`
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -65,6 +65,7 @@ Implementation fixes from freeze validation:
 ## Current Known Dirty State
 
 - Repository facade tracked changes landed on main as merge commit `613e06b`; feature commit `06e6d19`.
+- Artifact validation tracked changes landed on main as merge commit `99dc396`; feature commit `00b9880`.
 - Generated local files removed before repository facade commit:
   - `uv.lock`
 - Main worktree still has unrelated dirty state: `CLAUDE.md`, `.claude/`, `.codex/`, `.reasonix/`, and `plans/qorder_plan/`.
@@ -152,7 +153,7 @@ Verification evidence:
 
 ## Artifact Validation Local Loop Result
 
-Status: implemented in branch `codex/v11-artifact-validation-local-loop`; not merged yet.
+Status: landed on main as merge commit `99dc396`; feature commit `00b9880`.
 
 Files:
 
@@ -227,15 +228,15 @@ git status --short --branch
    - Output: read-only JSON/JSONL repository facade using manifest-only discovery and structured unavailable results.
 
 3. `v11-artifact-validation-local-loop`
-   - Status: full verification passed in branch `codex/v11-artifact-validation-local-loop`; ready for review, merge, and push.
+   - Status: landed on main as `99dc396`.
    - Output: local artifact validation loop and CLI covering manifest, schema, hash, JSONL, join keys, and optional panel-local unavailable states.
 
 4. `v11-readonly-api-mcp-inventory`
-   - Status: next after artifact validation loop lands on main.
+   - Status: ready to start.
    - Output: read-only manifest, artifact, scoring view, review summary, and provider lineage surface inventory.
 
 5. `v11-visualization-readiness-fixtures`
-   - Status: pending repository facade merge and validation loop.
+   - Status: pending read-only API/MCP inventory and fixture selection.
    - Output: frontend fixture matrix for diagnostic panels.
 
 ## Frontend Readiness Matrix
