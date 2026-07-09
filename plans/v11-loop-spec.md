@@ -118,6 +118,7 @@ Read:
 
 Write:
 
+- frontend-ready validation report with `schema_version`, `status`, `severity`, `summary`, `manifest`, `artifacts`, `optional_artifacts`, `join_diagnostics`, and `panels`
 - validation note in `plans/v11-loop-state.md`
 
 Verification:
@@ -126,11 +127,14 @@ Verification:
 - JSONL parses line by line
 - `sha256` and `bytes` match file content
 - required join keys are present or reported as structured `unavailable`
+- optional artifacts produce panel-local `unavailable` with warning severity, not run-level failure
+- payload join-key diagnostics explain missing payload keys without exposing payload records
+- CLI emits the same JSON report as the Python validation loop
 - no reader guesses artifact filenames outside the manifest
 
 Stop:
 
-- any schema, hash, byte count, JSONL, or join-key mismatch blocks the loop
+- any required schema, hash, byte count, JSONL, or join-key mismatch blocks the loop
 
 ## Loop 4: Review Closure
 

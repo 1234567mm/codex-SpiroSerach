@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from spirosearch.artifact_validation import validate_artifact_run
 from spirosearch.contracts import (
     EXIT_INTERNAL_ERROR,
     EXIT_LOCAL_TRACE_ERROR,
@@ -24,6 +25,8 @@ def main() -> int:
         return _main_v4_round(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "enrich":
         return _main_enrich(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "validate-artifacts":
+        return _main_validate_artifacts(sys.argv[2:])
     return _main_screening()
 
 
@@ -179,6 +182,48 @@ def _main_enrich(argv: list[str]) -> int:
     except Exception:
         print("internal error", file=sys.stderr)
         return EXIT_INTERNAL_ERROR
+
+
+def _main_validate_artifacts(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Validate a manifest-discovered artifact output directory.")
+    parser.add_argument("--output-dir", required=True, help="Directory containing run-manifest.json and artifacts.")
+    parser.add_argument("--output", help="Optional path to write the validation report JSON.")
+    parser.add_argument(
+        "--optional-artifact",
+        action="append",
+        default=[],
+        metavar="KIND[=PANEL]",
+        help="Optional artifact kind that should degrade locally when absent. May be repeated.",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        report = validate_artifact_run(
+            args.output_dir,
+            optional_artifacts=_parse_optional_artifacts(args.optional_artifact),
+        )
+        report_json = json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(report_json, encoding="utf-8")
+        else:
+            print(report_json, end="")
+        return EXIT_SUCCESS if report.status in {"valid", "degraded"} else EXIT_VALIDATION_ERROR
+    except (OSError, ValueError, json.JSONDecodeError):
+        print("input/output path error", file=sys.stderr)
+        return EXIT_PATH_ERROR
+    except Exception:
+        print("internal error", file=sys.stderr)
+        return EXIT_INTERNAL_ERROR
+
+
+def _parse_optional_artifacts(items: list[str]) -> dict[str, str | None]:
+    optional_artifacts: dict[str, str | None] = {}
+    for item in items:
+        kind, separator, panel = item.partition("=")
+        optional_artifacts[kind.strip()] = panel.strip() if separator and panel.strip() else None
+    return optional_artifacts
 
 
 def _error_output_dir(output_dir: str | None, output: str | None) -> Path | None:

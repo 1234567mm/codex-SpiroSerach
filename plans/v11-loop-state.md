@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `main`
+- Branch: `codex/v11-artifact-validation-local-loop`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
 - Current phase: V11 P0 artifact validation loop
 - Current selected slice: `v11-artifact-validation-local-loop`
-- Current selected slice status: ready to start; repository facade landed on main as `613e06b`
+- Current selected slice status: full verification passed in worktree; ready for review and merge
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -150,18 +150,54 @@ Verification evidence:
 - Repository targeted gate after subagent review fixes: `tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v` ran 61 tests OK.
 - Full gate after subagent review fixes: `python -m unittest discover tests -v` ran 213 tests OK.
 
+## Artifact Validation Local Loop Result
+
+Status: implemented in branch `codex/v11-artifact-validation-local-loop`; not merged yet.
+
+Files:
+
+- `src/spirosearch/artifact_validation.py`
+  - Adds `validate_artifact_run(output_dir, optional_artifacts=...)`.
+  - Adds `ArtifactValidationReport`, `ArtifactValidationResult`, and `ValidationCheck`.
+  - Produces a JSON-serializable report with `schema_version`, `status`, `severity`, `run_id`, `summary`, `manifest`, `artifacts`, `optional_artifacts`, `join_diagnostics`, and `panels`.
+  - Aggregates manifest, repository-read, schema, hash/byte, JSON/JSONL, JSONL record count, `schema_ref`, `join_keys`, and `depends_on` checks through `JsonArtifactRepository`.
+  - Rejects duplicate manifest artifact kinds before kind-keyed repository reads, so one manifest row cannot validate another row's payload by collision.
+  - Sanitizes frontend-facing unavailable details to avoid leaking raw schema-validation payload values.
+  - Adds payload join-key diagnostics without exposing payload records; known scoring-view `candidate_id` absence is reported as informational with canonical-evidence join guidance.
+  - Keeps optional artifacts panel-local: missing optional kinds return warning-severity `unavailable` and degrade the report without failing the run.
+- `schemas/artifact-validation-report.schema.json`
+  - Freezes the `v11.artifact_validation.v1` report shape for future API/MCP/frontend consumers.
+- `src/spirosearch/cli.py`
+  - Adds read-only `validate-artifacts --output-dir <dir> [--output <report.json>] [--optional-artifact KIND=Panel]`.
+  - Returns success for `valid` and `degraded`; returns validation error for `invalid` and `unavailable`.
+- `tests/test_artifact_validation.py`
+  - Covers valid frontend-ready report shape, schema validation, hash mismatch, optional panel-local unavailable, join-key metadata mismatch, payload join diagnostics, missing manifest, and CLI exit/output behavior.
+
+Report status contract:
+
+- `valid`: manifest and all declared required artifacts pass validation.
+- `degraded`: only optional artifacts are unavailable.
+- `invalid`: required artifact or metadata checks fail while the manifest is readable.
+- `unavailable`: run-level manifest is missing, unsafe, malformed, or schema-invalid.
+
+Verification evidence:
+
+- Baseline targeted gate before implementation: `tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas -v` ran 34 tests OK.
+- Artifact validation contract gate after security review fixes: `tests.test_artifact_validation -v` ran 9 tests OK.
+- Artifact validation targeted gate after security review fixes: `tests.test_artifact_validation tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v` ran 70 tests OK.
+- Full gate after security review fixes: `python -m unittest discover tests -v` ran 222 tests OK.
+
 ## Next Slice
 
 ```text
-Slice: v11-artifact-validation-local-loop
-Status: ready to start; `v11-repository-facade-json-backend` landed on main as `613e06b`.
-Goal: add a local validation loop over repository-read artifacts so frontend/API/MCP consumers can surface precise panel-level unavailable states.
+Slice: v11-readonly-api-mcp-inventory
+Status: next after `v11-artifact-validation-local-loop` lands on main.
+Goal: inventory read-only API/MCP surfaces over the repository facade and artifact validation report without adding mutation behavior.
 Stop condition:
-  - validation runs through `JsonArtifactRepository`, not hard-coded artifact filenames
-  - manifest, schema_ref, hash/bytes, JSON/JSONL parsing, JSONL record counts, and join-key availability produce structured validation results
-  - optional artifacts produce local unavailable states rather than failing the whole run
-  - output is ready for read-only API/MCP inventory and frontend diagnostic panels
-  - no database, API server, MCP mutation, or scoring policy change is introduced in this slice
+  - inventory names each read-only run/artifact/scoring/review/provider-lineage/validation endpoint or MCP tool candidate
+  - response envelopes reuse repository `unavailable` and validation report status fields
+  - mutation, live provider calls, scoring policy changes, and database requirements remain out of scope
+  - frontend visualization can discover the stable report shapes without hard-coded artifact filenames
 ```
 
 ## Suggested Verification
@@ -169,7 +205,7 @@ Stop condition:
 Use targeted verification from the V11 dependency-freeze worktree.
 
 ```powershell
-$env:PYTHONPATH='src'; uv run python -m unittest tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v
+$env:PYTHONPATH='src'; uv run python -m unittest tests.test_artifact_validation tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v
 ```
 
 Before merge of any V11 implementation slice:
@@ -191,11 +227,11 @@ git status --short --branch
    - Output: read-only JSON/JSONL repository facade using manifest-only discovery and structured unavailable results.
 
 3. `v11-artifact-validation-local-loop`
-   - Status: ready to start.
-   - Output: local artifact validation loop covering manifest, schema, hash, JSONL, and join keys.
+   - Status: full verification passed in branch `codex/v11-artifact-validation-local-loop`; ready for review, merge, and push.
+   - Output: local artifact validation loop and CLI covering manifest, schema, hash, JSONL, join keys, and optional panel-local unavailable states.
 
 4. `v11-readonly-api-mcp-inventory`
-   - Status: pending repository facade merge and validation loop.
+   - Status: next after artifact validation loop lands on main.
    - Output: read-only manifest, artifact, scoring view, review summary, and provider lineage surface inventory.
 
 5. `v11-visualization-readiness-fixtures`
