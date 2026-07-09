@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/recompute-marker.schema.json",
+  "title": "RecomputeMarker",
+  "$comment": "Schema for each line in recompute-markers.jsonl. Markers identify artifacts affected by applied review decisions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "marker_id",
+    "run_id",
+    "generated_at",
+    "review_event_id",
+    "review_item_id",
+    "candidate_id",
+    "target_type",
+    "target_id",
+    "affected_artifacts",
+    "reason",
+    "status"
+  ],
+  "properties": {
+    "schema_version": { "const": "v10.recompute_marker.v1" },
+    "marker_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "review_event_id": { "type": "string", "minLength": 1 },
+    "review_item_id": { "type": "string", "minLength": 1 },
+    "candidate_id": { "type": "string", "minLength": 1 },
+    "target_type": { "type": "string", "minLength": 1 },
+    "target_id": { "type": "string", "minLength": 1 },
+    "affected_artifacts": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "canonical-evidence.json",
+          "scoring-view.json",
+          "review-summary.json"
+        ]
+      },
+      "minItems": 1
+    },
+    "reason": { "type": "string" },
+    "status": { "enum": ["pending", "completed", "skipped"] }
+  }
+}

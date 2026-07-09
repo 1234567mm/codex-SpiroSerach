@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/review-summary.schema.json",
+  "title": "ReviewSummary",
+  "$comment": "Schema for review-summary.json. This summarizes immutable queue items plus applied review events.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "generated_at",
+    "review_count",
+    "event_count",
+    "applied_event_count",
+    "open_blocking_count",
+    "resolved_count",
+    "rejected_count",
+    "by_resolution_status",
+    "by_reason_code",
+    "by_assigned_queue",
+    "by_severity",
+    "review_item_ids",
+    "review_event_ids",
+    "recompute_marker_ids"
+  ],
+  "properties": {
+    "schema_version": { "const": "v10.review_summary.v1" },
+    "run_id": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "review_count": { "type": "integer", "minimum": 0 },
+    "event_count": { "type": "integer", "minimum": 0 },
+    "applied_event_count": { "type": "integer", "minimum": 0 },
+    "open_blocking_count": { "type": "integer", "minimum": 0 },
+    "resolved_count": { "type": "integer", "minimum": 0 },
+    "rejected_count": { "type": "integer", "minimum": 0 },
+    "by_resolution_status": { "$ref": "#/$defs/count_map" },
+    "by_reason_code": { "$ref": "#/$defs/count_map" },
+    "by_assigned_queue": { "$ref": "#/$defs/count_map" },
+    "by_severity": { "$ref": "#/$defs/count_map" },
+    "review_item_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "review_event_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "recompute_marker_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "count_map": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    }
+  }
+}

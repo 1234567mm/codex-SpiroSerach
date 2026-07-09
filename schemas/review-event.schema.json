@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/review-event.schema.json",
+  "title": "ReviewEvent",
+  "$comment": "Schema for each line in review-events.jsonl. This is the fixture-first human review decision log.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "run_id",
+    "generated_at",
+    "review_item_id",
+    "target_type",
+    "target_id",
+    "reviewer",
+    "decision",
+    "resolution_status",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": { "const": "v10.review_event.v1" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "event_type": {
+      "enum": ["review_routed", "review_assigned", "review_resolved", "review_rejected", "review_reopened"]
+    },
+    "run_id": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "review_item_id": { "type": "string", "minLength": 1 },
+    "target_type": { "type": "string", "minLength": 1 },
+    "target_id": { "type": "string", "minLength": 1 },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "decision": { "type": "string", "minLength": 1 },
+    "resolution_status": { "enum": ["open", "assigned", "resolved", "rejected"] },
+    "reason": { "type": "string" },
+    "old_value": true,
+    "new_value": true,
+    "severity": { "type": "string" },
+    "blocking_surface": { "type": "string" },
+    "assigned_queue": { "type": "string" },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "trace_event_id": { "type": "string" },
+    "recompute_marker_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

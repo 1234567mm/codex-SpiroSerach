@@ -186,6 +186,53 @@ class ProviderSchemaTests(unittest.TestCase):
         self.assertNotIn("confidence", json.dumps(schema))
         self.assertNotIn("provider_confidence", json.dumps(schema))
 
+    def test_review_closure_schemas_define_events_summary_and_recompute_markers(self):
+        event = self._schema("review-event.schema.json")
+        summary = self._schema("review-summary.schema.json")
+        marker = self._schema("recompute-marker.schema.json")
+
+        self.assertEqual(event["properties"]["schema_version"]["const"], "v10.review_event.v1")
+        self.assertTrue(
+            {
+                "event_id",
+                "review_item_id",
+                "target_type",
+                "target_id",
+                "reviewer",
+                "decision",
+                "resolution_status",
+                "reason",
+            }.issubset(set(event["required"]))
+        )
+        self.assertEqual(summary["properties"]["schema_version"]["const"], "v10.review_summary.v1")
+        self.assertTrue(
+            {
+                "review_count",
+                "event_count",
+                "applied_event_count",
+                "open_blocking_count",
+                "resolved_count",
+                "rejected_count",
+                "by_resolution_status",
+                "by_reason_code",
+                "by_assigned_queue",
+                "by_severity",
+            }.issubset(set(summary["required"]))
+        )
+        self.assertEqual(marker["properties"]["schema_version"]["const"], "v10.recompute_marker.v1")
+        self.assertTrue(
+            {
+                "marker_id",
+                "review_event_id",
+                "review_item_id",
+                "candidate_id",
+                "target_type",
+                "target_id",
+                "affected_artifacts",
+                "reason",
+            }.issubset(set(marker["required"]))
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

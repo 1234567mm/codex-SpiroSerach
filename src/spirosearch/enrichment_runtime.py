@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,7 +23,7 @@ from spirosearch.providers.base import ProviderResponse
 from spirosearch.providers.cache import JSONLProviderCache
 from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.providers.pubchem import PubChemPUGRestProvider
-from spirosearch.review_runtime import ReviewQueueFinalizer
+from spirosearch.review_runtime import HumanReviewRouter, ReviewQueueFinalizer
 from spirosearch.scoring_view_artifacts import ScoringViewArtifactEmitter
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
@@ -49,6 +50,7 @@ def run_enrichment(
     live: bool = False,
     providers: Iterable[str] | None = None,
     provider_sources: Iterable[LiveProviderSource] | None = None,
+    review_events_path: str | Path | None = None,
 ) -> dict[str, Any]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -185,7 +187,29 @@ def run_enrichment(
         },
         "records": records,
     }
+    review_events = _load_review_events(review_events_path)
+    run_id = stable_hash(
+        {
+            "input_hash": input_hash,
+            "source_registry_hash": registry_hash,
+            "mode": mode,
+            "providers_requested": list(selected_providers),
+            "live_providers": [source.provider for source in live_sources],
+            "provider_outcomes": dict(cache_stats),
+            "review_queue": review_queue,
+            "review_events": review_events,
+            "records": records,
+        }
+    )[:16]
     canonical_payload = CanonicalEvidenceEmitter().build_payload(candidates)
+    review_closure = HumanReviewRouter().apply(
+        canonical_payload=canonical_payload,
+        review_queue=review_queue,
+        review_events=review_events,
+        run_id=run_id,
+        generated_at=generated_at,
+    )
+    canonical_payload = review_closure.canonical_payload
     scoring_payload = ScoringViewArtifactEmitter().build_payload(canonical_payload)
     cache_index_payload = {
         "schema_version": PROVIDER_CACHE_INDEX_SCHEMA_VERSION,
@@ -199,19 +223,6 @@ def run_enrichment(
         "cache_keys": cache_keys,
         "entries": cache_index_entries,
     }
-
-    run_id = stable_hash(
-        {
-            "input_hash": input_hash,
-            "source_registry_hash": registry_hash,
-            "mode": mode,
-            "providers_requested": list(selected_providers),
-            "live_providers": [source.provider for source in live_sources],
-            "provider_outcomes": dict(cache_stats),
-            "review_queue": review_queue,
-            "records": records,
-        }
-    )[:16]
     providers_failed = review_finalizer.providers_failed(review_queue)
     providers_succeeded = sorted(
         {
@@ -280,6 +291,36 @@ def run_enrichment(
             generated_at=generated_at,
             producer_version=PRODUCER_VERSION,
         ),
+        write_jsonl_artifact(
+            output,
+            "review-events.jsonl",
+            review_closure.review_events,
+            kind="review_events",
+            run_id=run_id,
+            input_hash=input_hash,
+            generated_at=generated_at,
+            producer_version=PRODUCER_VERSION,
+        ),
+        write_json_artifact(
+            output,
+            "review-summary.json",
+            review_closure.review_summary,
+            kind="review_summary",
+            run_id=run_id,
+            input_hash=input_hash,
+            generated_at=generated_at,
+            producer_version=PRODUCER_VERSION,
+        ),
+        write_jsonl_artifact(
+            output,
+            "recompute-markers.jsonl",
+            review_closure.recompute_markers,
+            kind="recompute_markers",
+            run_id=run_id,
+            input_hash=input_hash,
+            generated_at=generated_at,
+            producer_version=PRODUCER_VERSION,
+        ),
         provider_cache_artifact,
         write_json_artifact(
             output,
@@ -341,6 +382,20 @@ def run_enrichment(
     )
     (output / "run-manifest.json").write_text(stable_json(manifest) + "\n", encoding="utf-8")
     return manifest
+
+
+def _load_review_events(path: str | Path | None) -> list[dict[str, Any]]:
+    if path is None:
+        return []
+    events: list[dict[str, Any]] = []
+    for line_number, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        event = json.loads(line)
+        if not isinstance(event, dict):
+            raise ValueError(f"review event line {line_number} must be a JSON object")
+        events.append(event)
+    return events
 
 
 def _local_candidate_energy_response(candidate: CandidateMaterial, *, generated_at: str) -> ProviderResponse:

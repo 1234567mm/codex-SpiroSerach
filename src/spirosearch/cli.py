@@ -145,6 +145,10 @@ def _main_enrich(argv: list[str]) -> int:
         "--provider-cache",
         help="Optional provider cache JSONL path. Defaults to output-dir/provider-cache.jsonl.",
     )
+    parser.add_argument(
+        "--review-events",
+        help="Optional review events JSONL fixture path.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -156,6 +160,7 @@ def _main_enrich(argv: list[str]) -> int:
             provider_cache_path=args.provider_cache,
             live=args.mode == "live-cache-first",
             providers=selected_providers,
+            review_events_path=args.review_events,
         )
         display_mode = args.mode if args.mode == "live-cache-first" else "local-first"
         print(

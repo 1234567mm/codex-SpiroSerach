@@ -68,7 +68,10 @@ def schema_registry():
         load_schema("provider-cache-index.schema.json"),
         load_schema("provider-cache.schema.json"),
         load_schema("provider-response.schema.json"),
+        load_schema("recompute-marker.schema.json"),
+        load_schema("review-event.schema.json"),
         load_schema("review-queue-item.schema.json"),
+        load_schema("review-summary.schema.json"),
         load_schema("scoring-view.schema.json"),
     ]
     return Registry().with_resources(
@@ -196,7 +199,10 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 {
                     "canonical_evidence",
                     "enrichment_results",
+                    "review_events",
                     "review_queue",
+                    "review_summary",
+                    "recompute_markers",
                     "provider_cache_index",
                     "provider_cache",
                     "agent_trace",
@@ -205,6 +211,182 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             )
             scoring_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "scoring_view")
             self.assertEqual(scoring_artifact["path"], "scoring-view.json")
+
+    def test_review_events_apply_before_scoring_view_and_emit_closure_artifacts(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            review_events_path = root / "review-events-input.jsonl"
+            output_dir = root / "enrich"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="reviewed_htl", name="Reviewed HTL")]),
+                encoding="utf-8",
+            )
+            review_events_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v10.review_event.v1",
+                        "event_id": "event-reject-reviewed-homo",
+                        "review_item_id": "review-reviewed-homo",
+                        "target_type": "energy_evidence",
+                        "target_id": "energy:reviewed_htl:homo_ev",
+                        "reviewer": "curator@example",
+                        "decision": "reject",
+                        "resolution_status": "rejected",
+                        "reason": "reference scale could not be verified",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            run_enrichment(
+                candidates_path=candidates_path,
+                output_dir=output_dir,
+                source_registry_path="data/source_registry.json",
+                review_events_path=review_events_path,
+            )
+
+            canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
+            scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
+            review_events = [
+                json.loads(line)
+                for line in (output_dir / "review-events.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            recompute_markers = [
+                json.loads(line)
+                for line in (output_dir / "recompute-markers.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            review_summary = json.loads((output_dir / "review-summary.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output_dir / "run-manifest.json").read_text(encoding="utf-8"))
+
+            energy = canonical["records"][0]["energy_evidence"]
+            homo = next(item for item in energy if item["property_name"] == "homo_ev")
+            self.assertEqual(homo["provenance"]["curation_status"], "rejected")
+            self.assertNotIn(
+                "energy:reviewed_htl:homo_ev",
+                [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
+            )
+            self.assertIn(
+                "energy:reviewed_htl:lumo_ev",
+                [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
+            )
+            self.assertEqual(review_events[0]["event_id"], "event-reject-reviewed-homo")
+            self.assertEqual(review_summary["applied_event_count"], 1)
+            self.assertEqual(review_summary["rejected_count"], 1)
+            self.assertEqual(recompute_markers[0]["candidate_id"], "reviewed_htl")
+            self.assertEqual(
+                set(recompute_markers[0]["affected_artifacts"]),
+                {"canonical-evidence.json", "scoring-view.json"},
+            )
+            self.assertTrue(
+                {
+                    "review_events",
+                    "review_summary",
+                    "recompute_markers",
+                }.issubset({artifact["kind"] for artifact in manifest["artifacts"]})
+            )
+
+    def test_cli_enrich_accepts_review_events_fixture(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            review_events_path = root / "review-events-input.jsonl"
+            output_dir = root / "enrich"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="cli_reviewed_htl", name="CLI Reviewed HTL")]),
+                encoding="utf-8",
+            )
+            review_events_path.write_text(
+                json.dumps(
+                    {
+                        "event_id": "event-cli-reject-homo",
+                        "review_item_id": "review-cli-homo",
+                        "target_type": "energy_evidence",
+                        "target_id": "energy:cli_reviewed_htl:homo_ev",
+                        "reviewer": "curator@example",
+                        "decision": "reject",
+                        "resolution_status": "rejected",
+                        "reason": "fixture review rejection",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "spirosearch.cli",
+                    "enrich",
+                    "--candidates",
+                    str(candidates_path),
+                    "--output-dir",
+                    str(output_dir),
+                    "--source-registry",
+                    "data/source_registry.json",
+                    "--review-events",
+                    str(review_events_path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertIn("local-first enrichment", completed.stdout)
+            review_summary = json.loads((output_dir / "review-summary.json").read_text(encoding="utf-8"))
+            scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
+            self.assertEqual(review_summary["applied_event_count"], 1)
+            self.assertNotIn(
+                "energy:cli_reviewed_htl:homo_ev",
+                [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
+            )
+
+    def test_review_events_contribute_to_run_identity(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            review_events_path = root / "review-events-input.jsonl"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="identity_reviewed_htl", name="Identity Reviewed HTL")]),
+                encoding="utf-8",
+            )
+            review_events_path.write_text(
+                json.dumps(
+                    {
+                        "event_id": "event-identity-reject-homo",
+                        "review_item_id": "review-identity-homo",
+                        "target_type": "energy_evidence",
+                        "target_id": "energy:identity_reviewed_htl:homo_ev",
+                        "reviewer": "curator@example",
+                        "decision": "reject",
+                        "resolution_status": "rejected",
+                        "reason": "fixture review rejection",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            without_review = run_enrichment(
+                candidates_path=candidates_path,
+                output_dir=root / "without-review",
+                source_registry_path="data/source_registry.json",
+            )
+            with_review = run_enrichment(
+                candidates_path=candidates_path,
+                output_dir=root / "with-review",
+                source_registry_path="data/source_registry.json",
+                review_events_path=review_events_path,
+            )
+
+            self.assertNotEqual(without_review["run_id"], with_review["run_id"])
 
     def test_enrichment_artifacts_satisfy_declared_traceability_schemas(self):
         with TemporaryDirectory() as temp_dir:
@@ -227,6 +409,9 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             scoring_schema = load_schema("scoring-view.schema.json")
             cache_index_schema = load_schema("provider-cache-index.schema.json")
             review_schema = load_schema("review-queue-item.schema.json")
+            review_event_schema = load_schema("review-event.schema.json")
+            review_summary_schema = load_schema("review-summary.schema.json")
+            recompute_marker_schema = load_schema("recompute-marker.schema.json")
             trace_schema = load_schema("agent-trace-event.schema.json")
             provider_cache_schema = load_schema("provider-cache.schema.json")
             enrichment = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
@@ -236,6 +421,17 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             review_queue = [
                 json.loads(line)
                 for line in (output_dir / "review-queue.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            review_events = [
+                json.loads(line)
+                for line in (output_dir / "review-events.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            review_summary = json.loads((output_dir / "review-summary.json").read_text(encoding="utf-8"))
+            recompute_markers = [
+                json.loads(line)
+                for line in (output_dir / "recompute-markers.jsonl").read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
             trace_events = [
@@ -255,6 +451,11 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             assert_schema_valid(self, cache_index, cache_index_schema, "provider-cache-index")
             for index, item in enumerate(review_queue):
                 assert_schema_valid(self, item, review_schema, f"review-queue[{index}]")
+            for index, item in enumerate(review_events):
+                assert_schema_valid(self, item, review_event_schema, f"review-events[{index}]")
+            assert_schema_valid(self, review_summary, review_summary_schema, "review-summary")
+            for index, item in enumerate(recompute_markers):
+                assert_schema_valid(self, item, recompute_marker_schema, f"recompute-markers[{index}]")
             for index, event in enumerate(trace_events):
                 assert_schema_valid(self, event, trace_schema, f"agent-trace[{index}]")
             for index, entry in enumerate(provider_cache):
