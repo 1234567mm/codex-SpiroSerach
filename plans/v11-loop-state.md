@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `codex/v11-repository-facade-json-backend`
+- Branch: `main`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
-- Current phase: V11 P0 repository facade
-- Current selected slice: `v11-repository-facade-json-backend`
-- Current selected slice status: verified in worktree; ready for review and merge
+- Current phase: V11 P0 artifact validation loop
+- Current selected slice: `v11-artifact-validation-local-loop`
+- Current selected slice status: ready to start; repository facade landed on main as `613e06b`
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -64,13 +64,8 @@ Implementation fixes from freeze validation:
 
 ## Current Known Dirty State
 
-- Intended branch changes:
-  - `src/spirosearch/artifact_repository.py`
-  - `tests/test_artifact_repository.py`
-  - `pyproject.toml`
-  - `plans/v11-loop-spec.md`
-  - `plans/v11-loop-state.md`
-- Generated local files removed before commit:
+- Repository facade tracked changes landed on main as merge commit `613e06b`; feature commit `06e6d19`.
+- Generated local files removed before repository facade commit:
   - `uv.lock`
 - Main worktree still has unrelated dirty state: `CLAUDE.md`, `.claude/`, `.codex/`, `.reasonix/`, and `plans/qorder_plan/`.
 - Do not use `git add -A`.
@@ -111,7 +106,7 @@ Implementation fixes from freeze validation:
 
 ## Repository Facade Result
 
-Status: implemented in branch `codex/v11-repository-facade-json-backend`; not merged yet.
+Status: landed on main as merge commit `613e06b`; feature commit `06e6d19`.
 
 Files:
 
@@ -159,7 +154,7 @@ Verification evidence:
 
 ```text
 Slice: v11-artifact-validation-local-loop
-Status: next after `v11-repository-facade-json-backend` lands on main.
+Status: ready to start; `v11-repository-facade-json-backend` landed on main as `613e06b`.
 Goal: add a local validation loop over repository-read artifacts so frontend/API/MCP consumers can surface precise panel-level unavailable states.
 Stop condition:
   - validation runs through `JsonArtifactRepository`, not hard-coded artifact filenames
@@ -192,11 +187,11 @@ git status --short --branch
    - Output: dependency matrix with verified artifact names, schema refs, hashes, and join keys.
 
 2. `v11-repository-facade-json-backend`
-   - Status: implemented in branch `codex/v11-repository-facade-json-backend`; ready for final verification, merge, and push.
+   - Status: landed on main as `613e06b`.
    - Output: read-only JSON/JSONL repository facade using manifest-only discovery and structured unavailable results.
 
 3. `v11-artifact-validation-local-loop`
-   - Status: next after repository facade lands on main.
+   - Status: ready to start.
    - Output: local artifact validation loop covering manifest, schema, hash, JSONL, and join keys.
 
 4. `v11-readonly-api-mcp-inventory`
