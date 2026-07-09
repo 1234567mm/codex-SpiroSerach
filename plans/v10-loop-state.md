@@ -4,12 +4,12 @@
 
 ## Current Status
 
-- Branch: `codex/v10-manifest-contract-freeze`
+- Branch: `main`
 - Upstream: `origin/main`
 - V10 baseline document: `plans/v10-loop-driven-productionization-and-visualization-plan.md`
-- Current phase: Phase 0 contract hardening / V11 dependency freeze
+- Current phase: Phase 0 contract hardening complete / V11 dependency freeze ready
 - Current selected slice: `v10-manifest-contract-freeze`
-- Current selected slice status: implemented and verified in worktree
+- Current selected slice status: landed on main; V11 dependency-freeze unblocked
 - Human gate: required before merge, push, deleting worktrees, or changing scoring policy.
 
 ## Current Known Dirty State
@@ -22,26 +22,25 @@
 ## Next Slice
 
 ```text
-Slice: v10-manifest-contract-freeze
-Goal: freeze run artifact and manifest metadata for V11 repository/API/frontend consumers.
+Slice: v11-dependency-freeze
+Goal: verify the V10 artifact baseline that V11 repository/API/frontend consumers will use.
 Stop condition:
-  - schemas/run-artifact.schema.json and schemas/run-manifest.schema.json exist and are covered by tests.
-  - manifest artifact entries expose format, schema_ref, sha256, bytes, record_count, join_keys, and depends_on.
-  - JSONL record_count is computed from actual records and JSON record_count remains explicit or null by contract.
-  - artifact kind join_keys are centralized and stable for scoring/review/frontend panels.
-  - existing runtime producers and viewer tests still discover artifacts by manifest path.
+  - enrichment and V4 runtime sample manifests validate against schemas/run-manifest.schema.json.
+  - manifest paths exist relative to output directories and hashes/bytes/record_count match files.
+  - scoring-view, review closure, provider lineage, and agent trace join keys are listed for V11 Repository/API/frontend use.
+  - any remaining blockers are written to plans/v11-loop-state.md before V11 implementation starts.
 ```
 
 ## Suggested Worktree
 
 ```powershell
-git worktree add D:\tmp\spiro-v10-manifest-contract-freeze -b codex/v10-manifest-contract-freeze main
+git worktree add D:\tmp\spiro-v11-dependency-freeze -b codex/v11-dependency-freeze main
 ```
 
 ## Targeted Tests
 
 ```powershell
-$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_run_artifacts tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_artifact_viewer tests.test_v4_runtime_cli -v
+$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_run_artifacts tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_artifact_viewer tests.test_v4_runtime_cli tests.test_scoring_view tests.test_review_runtime -v
 ```
 
 ## Full Gate
@@ -80,8 +79,8 @@ Generated files:
   - .venv was reused from uv setup in the temporary worktree
   - uv.lock was generated and will be removed before commit
 Next:
-  - merge to main after review-ship pass
-  - run post-merge main full suite before push
+  - landed on main as a4b11ad after post-merge full suite
+  - start v11-dependency-freeze
 ```
 
 ```text
