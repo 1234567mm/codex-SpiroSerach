@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/run-artifact.schema.json",
+  "title": "RunArtifact",
+  "$comment": "Metadata contract for one artifact entry in run-manifest.json. Payload schemas are referenced by schema_ref when available.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "input_hash",
+    "generated_at",
+    "producer_version",
+    "path",
+    "kind",
+    "format",
+    "schema_ref",
+    "sha256",
+    "bytes",
+    "record_count",
+    "join_keys",
+    "depends_on"
+  ],
+  "properties": {
+    "schema_version": { "const": "v6.run_artifact.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "input_hash": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "producer_version": { "type": "string", "minLength": 1 },
+    "path": { "type": "string", "minLength": 1 },
+    "kind": {
+      "enum": [
+        "agent_trace",
+        "canonical_evidence",
+        "enrichment_results",
+        "ledger",
+        "model_updates",
+        "posterior",
+        "provider_cache",
+        "provider_cache_index",
+        "recommendations",
+        "recompute_markers",
+        "review_events",
+        "review_queue",
+        "review_summary",
+        "scoring_view"
+      ]
+    },
+    "format": { "enum": ["json", "jsonl"] },
+    "schema_ref": {
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "bytes": { "type": "integer", "minimum": 0 },
+    "record_count": {
+      "anyOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "null" }
+      ]
+    },
+    "join_keys": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  }
+}
