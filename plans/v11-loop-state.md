@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `main`
+- Branch: `codex/v11-repository-facade-json-backend`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
 - Current phase: V11 P0 repository facade
 - Current selected slice: `v11-repository-facade-json-backend`
-- Current selected slice status: ready to start; dependency freeze landed on main
+- Current selected slice status: verified in worktree; ready for review and merge
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -64,11 +64,15 @@ Implementation fixes from freeze validation:
 
 ## Current Known Dirty State
 
-- `CLAUDE.md` has pre-existing modifications.
-- `.claude/`, `.codex/`, `.reasonix/`, and `plans/qorder_plan/` are currently untracked.
-- V11 dependency-freeze generated files were removed before commit:
-  - `.v11-samples/`
+- Intended branch changes:
+  - `src/spirosearch/artifact_repository.py`
+  - `tests/test_artifact_repository.py`
+  - `pyproject.toml`
+  - `plans/v11-loop-spec.md`
+  - `plans/v11-loop-state.md`
+- Generated local files removed before commit:
   - `uv.lock`
+- Main worktree still has unrelated dirty state: `CLAUDE.md`, `.claude/`, `.codex/`, `.reasonix/`, and `plans/qorder_plan/`.
 - Do not use `git add -A`.
 - Keep generated outputs and agent configuration out of the commit.
 
@@ -105,16 +109,63 @@ Implementation fixes from freeze validation:
 - `recompute-markers.jsonl` `affected_artifacts` values are filenames, not artifact kinds or manifest paths.
 - Missing optional conflict/performance artifacts should produce local `unavailable` state for that panel only, not fail the whole run view.
 
+## Repository Facade Result
+
+Status: implemented in branch `codex/v11-repository-facade-json-backend`; not merged yet.
+
+Files:
+
+- `src/spirosearch/artifact_repository.py`
+  - Adds `JsonArtifactRepository`, a read-only JSON/JSONL repository facade over `run-manifest.json`.
+  - Adds `ArtifactReadResult` with `available`, `payload`, `records`, `metadata`, `schema_validation`, and structured `unavailable` envelope.
+  - Enforces safe relative manifest/artifact paths under the output directory.
+  - Enforces frozen artifact-kind `schema_ref` metadata so manifests cannot disable or swap payload validation for schema-backed artifacts.
+- `tests/test_artifact_repository.py`
+  - Covers manifest-only discovery, relative path safety, run-level manifest unavailable, missing artifact, byte/hash mismatch, payload schema failure, JSONL parse/schema line numbers, record-count mismatch, canonical `schema_ref`, `schema_ref = null`, scoring view, review summary, and provider lineage read models.
+- `pyproject.toml`
+  - Pins the dependency boundary for repository validation APIs: `jsonschema>=4.18` and direct `referencing>=0.30`.
+
+Repository interface frozen in this slice:
+
+- `JsonArtifactRepository.from_output_dir(output_dir)`
+- `manifest()`
+- `manifest_status()`
+- `list_artifacts()`
+- `find_artifact(kind)`
+- `artifact_metadata(kind)`
+- `read_json(kind)`
+- `read_jsonl(kind)`
+- `scoring_view()`
+- `review_summary()`
+- `provider_lineage()`
+
+Unavailable envelope:
+
+- Shape: `status`, `code`, `reason`, `kind`, `path`, `format`, `schema_ref`, `message`, `scope`, `recoverable`, `detail`.
+- Run-level unavailable is used for missing/invalid manifest.
+- Artifact-level unavailable is used for undeclared artifact, unsafe path, missing file, byte/hash mismatch, JSON/JSONL parse failure, record count mismatch, schema missing, and schema validation failure.
+- JSONL parse/schema failures include 1-based `line_number` in `detail` when applicable.
+- Manifest `schema_ref` must match `ARTIFACT_KIND_METADATA`; `schema_ref = null` returns `schema_validation.status = not_applicable` only for artifact kinds whose frozen metadata allows null, while still enforcing manifest metadata, path safety, hash/bytes, record count, and parse checks.
+- `find_artifact(kind)` returns `None` for absent kinds; `artifact_metadata(kind)` remains a strict accessor and raises `KeyError`; `read_json(kind)` and `read_jsonl(kind)` return structured unavailable for absent kinds.
+
+Verification evidence:
+
+- Baseline targeted gate before implementation: `tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v` ran 43 tests OK.
+- Repository contract gate after subagent review fixes: `tests.test_artifact_repository -v` ran 18 tests OK.
+- Repository targeted gate after subagent review fixes: `tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v` ran 61 tests OK.
+- Full gate after subagent review fixes: `python -m unittest discover tests -v` ran 213 tests OK.
+
 ## Next Slice
 
 ```text
-Slice: v11-repository-facade-json-backend
-Goal: introduce the read-only repository boundary over frozen JSON/JSONL artifacts without changing external artifact contracts.
+Slice: v11-artifact-validation-local-loop
+Status: next after `v11-repository-facade-json-backend` lands on main.
+Goal: add a local validation loop over repository-read artifacts so frontend/API/MCP consumers can surface precise panel-level unavailable states.
 Stop condition:
-  - repository reads run-manifest.json as the only discovery source
-  - repository resolves artifact paths relative to the manifest output directory
-  - missing artifacts return a structured unavailable state, not raw filesystem exceptions
-  - repository exposes stable read models for manifest, artifact metadata, scoring view, review summary, and provider lineage
+  - validation runs through `JsonArtifactRepository`, not hard-coded artifact filenames
+  - manifest, schema_ref, hash/bytes, JSON/JSONL parsing, JSONL record counts, and join-key availability produce structured validation results
+  - optional artifacts produce local unavailable states rather than failing the whole run
+  - output is ready for read-only API/MCP inventory and frontend diagnostic panels
   - no database, API server, MCP mutation, or scoring policy change is introduced in this slice
 ```
 
@@ -123,7 +174,7 @@ Stop condition:
 Use targeted verification from the V11 dependency-freeze worktree.
 
 ```powershell
-$env:PYTHONPATH='src'; uv run python -m unittest tests.test_scoring_view tests.test_run_artifacts tests.test_artifact_viewer tests.test_review_runtime -v
+$env:PYTHONPATH='src'; uv run python -m unittest tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v
 ```
 
 Before merge of any V11 implementation slice:
@@ -141,19 +192,19 @@ git status --short --branch
    - Output: dependency matrix with verified artifact names, schema refs, hashes, and join keys.
 
 2. `v11-repository-facade-json-backend`
-   - Status: ready to start.
-   - Output: repository boundary plan or implementation slice using existing JSON/JSONL artifacts.
+   - Status: implemented in branch `codex/v11-repository-facade-json-backend`; ready for final verification, merge, and push.
+   - Output: read-only JSON/JSONL repository facade using manifest-only discovery and structured unavailable results.
 
 3. `v11-artifact-validation-local-loop`
-   - Status: pending dependency freeze.
+   - Status: next after repository facade lands on main.
    - Output: local artifact validation loop covering manifest, schema, hash, JSONL, and join keys.
 
 4. `v11-readonly-api-mcp-inventory`
-   - Status: pending repository facade.
+   - Status: pending repository facade merge and validation loop.
    - Output: read-only manifest, artifact, scoring view, review summary, and provider lineage surface inventory.
 
 5. `v11-visualization-readiness-fixtures`
-   - Status: pending dependency freeze.
+   - Status: pending repository facade merge and validation loop.
    - Output: frontend fixture matrix for diagnostic panels.
 
 ## Frontend Readiness Matrix

@@ -181,7 +181,12 @@ Write:
 Verification:
 
 - JSON/JSONL backend preserves current artifact semantics
-- missing artifacts return structured `unavailable`
+- repository reads artifacts only through `run-manifest.json`
+- artifact paths are safe relative paths resolved under the manifest output directory
+- missing artifacts, unsafe paths, hash/byte mismatches, parse errors, record-count mismatches, and schema failures return structured `unavailable`
+- manifest `schema_ref` must match frozen artifact-kind metadata; `schema_ref = null` is accepted as payload-schema validation not applicable only for artifact kinds whose frozen metadata allows it
+- JSONL parse or schema failures preserve 1-based physical line numbers
+- scoring view, review summary, and provider lineage are exposed as read models without changing artifact payloads
 - runtime, API, MCP, and viewer do not hard-code artifact filenames
 
 Stop:
