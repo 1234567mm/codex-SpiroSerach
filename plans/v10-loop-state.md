@@ -4,12 +4,12 @@
 
 ## Current Status
 
-- Branch: `codex/v10-review-closure-viewer`
+- Branch: `main`
 - Upstream: `origin/main`
 - V10 baseline document: `plans/v10-loop-driven-productionization-and-visualization-plan.md`
-- Current phase: Phase 1 review closure visualization
-- Current selected slice: `v10-review-closure-viewer`
-- Current selected slice status: implemented and verified in worktree
+- Current phase: Phase 0 contract hardening / V11 dependency freeze
+- Current selected slice: `v10-manifest-contract-freeze`
+- Current selected slice status: selected; implementation not started
 - Human gate: required before merge, push, deleting worktrees, or changing scoring policy.
 
 ## Current Known Dirty State
@@ -22,25 +22,26 @@
 ## Next Slice
 
 ```text
-Slice: v10-review-closure-viewer
-Goal: visualize review closure artifacts in the static artifact viewer without hard-coded default-path assumptions.
+Slice: v10-manifest-contract-freeze
+Goal: freeze run artifact and manifest metadata for V11 repository/API/frontend consumers.
 Stop condition:
-  - review-events.jsonl, review-summary.json, and recompute-markers.jsonl are discovered from manifest paths.
-  - Review Closure panel shows summary counts, event decisions, recompute markers, and join keys.
-  - panel escapes untrusted text and avoids scientific conclusion inference.
-  - artifact viewer tests pass.
+  - schemas/run-artifact.schema.json and schemas/run-manifest.schema.json exist and are covered by tests.
+  - manifest artifact entries expose format, schema_ref, sha256, bytes, record_count, join_keys, and depends_on.
+  - JSONL record_count is computed from actual records and JSON record_count remains explicit or null by contract.
+  - artifact kind join_keys are centralized and stable for scoring/review/frontend panels.
+  - existing runtime producers and viewer tests still discover artifacts by manifest path.
 ```
 
 ## Suggested Worktree
 
 ```powershell
-git worktree add D:\tmp\spiro-v10-review-closure-viewer -b codex/v10-review-closure-viewer main
+git worktree add D:\tmp\spiro-v10-manifest-contract-freeze -b codex/v10-manifest-contract-freeze main
 ```
 
 ## Targeted Tests
 
 ```powershell
-$env:PYTHONPATH='src'; uv run python -m unittest tests.test_artifact_viewer -v
+$env:PYTHONPATH='src'; uv run python -m unittest tests.test_run_artifacts tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_artifact_viewer -v
 ```
 
 ## Full Gate
@@ -53,6 +54,8 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 
 - Should review queue output both `reason` and `reason_code` for one migration phase?
 - Should the next review-router slice accept fixture review events by CLI only, or also by function argument?
+- Should `schema_ref` be required for every artifact kind immediately, or can legacy artifacts use an explicit `null` during one migration slice?
+- Should `join_keys` be derived from a central artifact-kind registry, or passed explicitly by each producer call?
 
 ## Latest Execution
 
@@ -76,8 +79,9 @@ Generated files:
   - .venv was created by uv in the temporary worktree
   - uv.lock was generated and removed
 Next:
-  - merge to main after review-ship pass
-  - run post-merge main full suite before push
+  - landed on main as e76cfba and pushed to origin/main
+  - worktree and local feature branch removed
+  - start v10-manifest-contract-freeze
 ```
 
 ```text

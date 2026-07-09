@@ -15,18 +15,18 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Dependency State
 
-V11 assumes V10 scoring/review closure will complete. The scoring-view artifact and scoring runtime path have landed, but implementation remains blocked until review closure and manifest hardening are verified from artifacts and tests.
+V11 assumes V10 scoring/review closure has landed. The scoring-view artifact, scoring runtime path, review closure artifacts, and review closure viewer have landed, but implementation remains blocked until manifest metadata/schema hardening is verified from artifacts and tests.
 
 | Dependency | Required for V11 | Current V11 stance |
 |---|---|---|
-| V10 manifest schema and artifact metadata | Repository facade, API/MCP, frontend discovery | Still required before implementation |
+| V10 manifest schema and artifact metadata | Repository facade, API/MCP, frontend discovery | Still required before implementation; next V10 slice is `v10-manifest-contract-freeze` |
 | `scoring-view.json` manifest-discovered and schema-valid | Scoring runtime, scoring eligibility UI | Artifact and runtime landed; freeze still must verify manifest metadata |
 | Provider confidence excluded from scoring effects | Scoring and provider lineage safety | Verified for scoring-view/runtime; keep as dependency-freeze assertion |
-| Blocking review and missing reference scale excluded from scoring view | Scoring eligibility and review worklist | Scoring-view policy exists; review closure still required |
-| `review-events.jsonl`, `review-summary.json`, `recompute-markers.jsonl` | Review closure and recomputation flow | Required before implementation |
-| Resolved review writes curation status | Review closure and recomputation flow | Required before implementation |
+| Blocking review and missing reference scale excluded from scoring view | Scoring eligibility and review worklist | Scoring-view policy and review closure landed; freeze still must verify manifest metadata |
+| `review-events.jsonl`, `review-summary.json`, `recompute-markers.jsonl` | Review closure and recomputation flow | Landed in V10; dependency freeze still must verify schema refs, hashes, record counts, and join keys |
+| Resolved review writes curation status | Review closure and recomputation flow | Fixture-first path landed; dependency freeze still must verify recompute marker and canonical joins |
 | Stable join keys in manifest | Future frontend visualization | Required before implementation |
-| V10 loop state records selected slice, tests, blockers | V11 morning triage | Available; current V10 next slice is `v10-human-review-router` |
+| V10 loop state records selected slice, tests, blockers | V11 morning triage | Available; current V10 next slice is `v10-manifest-contract-freeze` |
 
 ## Current Known Dirty State
 
@@ -71,7 +71,7 @@ git status --short --branch
 ## Loop Queue
 
 1. `v11-dependency-freeze`
-   - Status: blocked until V10 scoring/review closure is available.
+   - Status: blocked until V10 manifest contract freeze lands.
    - Output: dependency matrix with verified artifact names, schema refs, hashes, and join keys.
 
 2. `v11-repository-facade-json-backend`
