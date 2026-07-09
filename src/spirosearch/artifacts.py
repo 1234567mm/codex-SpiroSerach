@@ -20,6 +20,7 @@ V4_ARTIFACT_KINDS = {
     "provider_cache",
     "enrichment_results",
     "canonical_evidence",
+    "scoring_view",
 }
 
 

@@ -18,6 +18,8 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="candidateFlow"', html)
         self.assertIn('id="canonicalEvidenceList"', html)
         self.assertIn('id="canonicalEvidenceCount"', html)
+        self.assertIn('id="scoringViewList"', html)
+        self.assertIn('id="scoringFactCount"', html)
         self.assertIn('id="reviewQueueList"', html)
         self.assertIn('id="cacheSummary"', html)
         self.assertIn('id="errorState"', html)
@@ -32,6 +34,7 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("function renderTimeline", script)
         self.assertIn("function renderEnrichmentFlow", script)
         self.assertIn("function renderCanonicalEvidence", script)
+        self.assertIn("function renderScoringView", script)
         self.assertIn("function getArtifact", script)
         self.assertIn("enrichment-results.json", script)
         self.assertIn("canonical-evidence.json", script)
@@ -46,6 +49,7 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("outcome", script)
         self.assertIn("energy_evidence", script)
         self.assertIn("eligible_for_scoring", script)
+        self.assertIn("scoring_view", script)
         self.assertIn("safeCount(event.candidate_count)", script)
         self.assertIn("function safeCount", script)
         self.assertIn("function showError", script)
@@ -370,6 +374,110 @@ process.stdout.write(JSON.stringify({
         self.assertIn("eligible", rendered["html"])
         self.assertIn("legacy_candidate", rendered["html"])
         self.assertIn("energy_levels_missing", rendered["html"])
+
+    def test_viewer_renders_scoring_view_from_manifest_path_without_default_filename_guess(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+
+const context = {
+  console,
+  Map,
+  Number,
+  String,
+  JSON,
+  document: {
+    getElementById: element,
+  },
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+vm.runInContext(`
+state.manifest = {
+  artifacts: [{kind: "scoring_view", path: "nested/custom-score-payload.json"}]
+};
+state.artifacts.clear();
+state.artifacts.set("scoring-view.json", {energy_facts: [{material_id: "wrong"}]});
+state.artifacts.set("nested/custom-score-payload.json", {
+  schema_version: "v10.scoring_view.v1",
+  energy_facts: [{
+    evidence_id: "energy:c1:homo_ev",
+    material_id: "c1",
+    use_instance_id: "c1:HTL",
+    property_name: "homo_ev",
+    value_ev: -5.2,
+    unit: "eV",
+    method: "reported",
+    reference_scale: "vacuum",
+    computed: false,
+    quality: {
+      quality_score: 0.85,
+      trust_level: "T4_literature_curated",
+      curation_status: "curated",
+      eligible_for_scoring: true,
+      blocking_review_count: 0,
+      blocking_review_ids: [],
+    },
+  }],
+});
+renderKnownArtifacts();
+`, context);
+const matchedHtml = element("scoringViewList").innerHTML;
+const matchedCount = element("scoringFactCount").textContent;
+
+vm.runInContext(`
+state.artifacts.clear();
+state.artifacts.set("scoring-view.json", {energy_facts: [{material_id: "wrong"}]});
+renderKnownArtifacts();
+`, context);
+const unmatchedHtml = element("scoringViewList").innerHTML;
+const unmatchedCount = element("scoringFactCount").textContent;
+
+process.stdout.write(JSON.stringify({
+  matchedHtml,
+  matchedCount,
+  unmatchedHtml,
+  unmatchedCount,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        rendered = json.loads(result.stdout)
+        self.assertEqual(rendered["matchedCount"], "1 facts")
+        self.assertIn("c1", rendered["matchedHtml"])
+        self.assertIn("homo_ev -5.2 eV", rendered["matchedHtml"])
+        self.assertIn("quality 0.85", rendered["matchedHtml"])
+        self.assertNotIn("wrong", rendered["matchedHtml"])
+        self.assertEqual(rendered["unmatchedCount"], "0 facts")
+        self.assertIn("No scoring view loaded", rendered["unmatchedHtml"])
+        self.assertNotIn("wrong", rendered["unmatchedHtml"])
 
 
 if __name__ == "__main__":

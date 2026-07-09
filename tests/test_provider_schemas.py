@@ -155,6 +155,37 @@ class ProviderSchemaTests(unittest.TestCase):
         self.assertEqual(review_queue["properties"]["trace_event_id"]["type"], "string")
         self.assertEqual(trace_event["properties"]["lookup_id"]["type"], "string")
 
+    def test_scoring_view_schema_defines_policy_filtered_energy_facts(self):
+        schema = self._schema("scoring-view.schema.json")
+
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "v10.scoring_view.v1")
+        self.assertIn("energy_facts", schema["required"])
+        fact = schema["$defs"]["energy_fact"]
+        quality = schema["$defs"]["quality"]
+        self.assertTrue(
+            {
+                "evidence_id",
+                "material_id",
+                "property_name",
+                "value_ev",
+                "unit",
+                "quality",
+            }.issubset(set(fact["required"]))
+        )
+        self.assertTrue(
+            {
+                "evidence_id",
+                "trust_level",
+                "curation_status",
+                "quality_score",
+                "eligible_for_scoring",
+                "blocking_review_count",
+                "blocking_review_ids",
+            }.issubset(set(quality["required"]))
+        )
+        self.assertNotIn("confidence", json.dumps(schema))
+        self.assertNotIn("provider_confidence", json.dumps(schema))
+
 
 if __name__ == "__main__":
     unittest.main()

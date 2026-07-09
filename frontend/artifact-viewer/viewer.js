@@ -3,6 +3,16 @@ const state = {
   artifacts: new Map(),
 };
 
+const ARTIFACT_REGISTRY = {
+  recommendations: { legacyFileName: "recommendations.json" },
+  agent_trace: { legacyFileName: "agent-trace.jsonl" },
+  enrichment_results: { legacyFileName: "enrichment-results.json" },
+  canonical_evidence: { legacyFileName: "canonical-evidence.json" },
+  provider_cache_index: { legacyFileName: "provider-cache-index.json" },
+  review_queue: { legacyFileName: "review-queue.jsonl" },
+  scoring_view: { legacyFileName: "" },
+};
+
 document.getElementById("manifestFile").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -91,12 +101,13 @@ function renderManifest(manifest) {
 }
 
 function renderKnownArtifacts() {
-  const recommendations = getArtifact("recommendations.json", "recommendations");
-  const trace = getArtifact("agent-trace.jsonl", "agent_trace") || [];
-  const enrichment = getArtifact("enrichment-results.json", "enrichment_results");
-  const canonicalEvidence = getArtifact("canonical-evidence.json", "canonical_evidence");
-  const cacheIndex = getArtifact("provider-cache-index.json", "provider_cache_index");
-  const reviewQueue = getArtifact("review-queue.jsonl", "review_queue") || [];
+  const recommendations = getKnownArtifact("recommendations");
+  const trace = getKnownArtifact("agent_trace") || [];
+  const enrichment = getKnownArtifact("enrichment_results");
+  const canonicalEvidence = getKnownArtifact("canonical_evidence");
+  const scoringView = getKnownArtifact("scoring_view");
+  const cacheIndex = getKnownArtifact("provider_cache_index");
+  const reviewQueue = getKnownArtifact("review_queue") || [];
   if (state.manifest) {
     renderManifest(state.manifest);
   }
@@ -104,7 +115,12 @@ function renderKnownArtifacts() {
   renderTimeline(trace);
   renderEnrichmentFlow(enrichment, cacheIndex, reviewQueue, trace);
   renderCanonicalEvidence(canonicalEvidence);
+  renderScoringView(scoringView);
   renderReviewQueue(reviewQueue);
+}
+
+function getKnownArtifact(kind) {
+  return getArtifact(ARTIFACT_REGISTRY[kind]?.legacyFileName || "", kind);
 }
 
 function getArtifact(fileName, kind) {
@@ -297,6 +313,54 @@ function renderCanonicalEvidence(canonicalEvidence) {
     .join("");
 }
 
+function renderScoringView(scoringView) {
+  const list = document.getElementById("scoringViewList");
+  const facts = scoringView?.energy_facts || [];
+  document.getElementById("scoringFactCount").textContent = `${facts.length} facts`;
+  if (!facts.length) {
+    list.innerHTML = `<div class="empty">No scoring view loaded</div>`;
+    return;
+  }
+  list.innerHTML = facts
+    .map((fact) => {
+      const quality = fact.quality || {};
+      return `<section class="flow-item">
+        <div class="item-title">
+          <span>${escapeHtml(fact.material_id || "-")}</span>
+          <span class="status">${escapeHtml(fact.property_name || "-")} ${escapeHtml(formatNumber(fact.value_ev))} ${escapeHtml(fact.unit || "")}</span>
+        </div>
+        <div class="item-meta">
+          ${compactMeta([
+            ["use", fact.use_instance_id],
+            ["method", fact.method],
+            ["scale", fact.reference_scale],
+            ["computed", fact.computed],
+          ])}
+        </div>
+        <div class="chip-row">
+          ${renderScoringQualityChip(fact)}
+          <span class="chip" title="${escapeHtml(fact.evidence_id || "")}">evidence ${escapeHtml(shortId(fact.evidence_id))}</span>
+        </div>
+      </section>`;
+    })
+    .join("");
+}
+
+function renderScoringQualityChip(fact) {
+  const quality = fact.quality || {};
+  const blocked = quality.eligible_for_scoring === false || Number(quality.blocking_review_count || 0) > 0;
+  const className = blocked ? "chip review-chip" : "chip";
+  return `<span class="${className}">
+    quality ${escapeHtml(formatNumber(quality.quality_score))}
+    <small>${compactMeta([
+      ["trust", quality.trust_level],
+      ["curation", quality.curation_status],
+      ["eligible", quality.eligible_for_scoring],
+      ["blocks", quality.blocking_review_count],
+    ])}</small>
+  </span>`;
+}
+
 function renderEnergyEvidenceChip(item) {
   const provenance = item.provenance || {};
   const eligibility = item.eligible_for_scoring ? "eligible" : "not eligible";
@@ -399,4 +463,5 @@ renderRecommendations(null);
 renderTimeline([]);
 renderEnrichmentFlow(null, null, [], []);
 renderCanonicalEvidence(null);
+renderScoringView(null);
 renderReviewQueue([]);

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/scoring-view.schema.json",
+  "title": "ScoringViewArtifact",
+  "$comment": "Schema for scoring-view.json. This is the V10 policy-filtered read model exposed to scoring and frontend consumers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "energy_facts"],
+  "properties": {
+    "schema_version": { "const": "v10.scoring_view.v1" },
+    "energy_facts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/energy_fact" }
+    }
+  },
+  "$defs": {
+    "energy_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "material_id",
+        "use_instance_id",
+        "property_name",
+        "value_ev",
+        "unit",
+        "method",
+        "reference_scale",
+        "computed",
+        "quality"
+      ],
+      "properties": {
+        "evidence_id": { "type": "string", "minLength": 1 },
+        "material_id": { "type": "string", "minLength": 1 },
+        "use_instance_id": { "type": ["string", "null"] },
+        "property_name": { "enum": ["homo_ev", "lumo_ev", "band_gap_ev", "vbm_ev", "cbm_ev"] },
+        "value_ev": { "type": "number" },
+        "unit": { "const": "eV" },
+        "method": { "type": "string", "minLength": 1 },
+        "reference_scale": { "type": ["string", "null"] },
+        "computed": { "type": "boolean" },
+        "quality": { "$ref": "#/$defs/quality" }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "evidence_type",
+        "trust_level",
+        "curation_status",
+        "quality_score",
+        "eligible_for_scoring",
+        "blocking_review_count",
+        "blocking_review_ids"
+      ],
+      "properties": {
+        "evidence_id": { "type": "string", "minLength": 1 },
+        "evidence_type": { "const": "energy_evidence" },
+        "trust_level": {
+          "enum": [
+            "T0_missing",
+            "T1_calculated",
+            "T2_computed_db",
+            "T3_literature_machine",
+            "T4_literature_curated",
+            "T5_experimental_device"
+          ]
+        },
+        "curation_status": {
+          "enum": ["raw", "machine_extracted", "needs_review", "curated", "rejected"]
+        },
+        "quality_score": { "type": "number", "minimum": 0 },
+        "eligible_for_scoring": { "type": "boolean" },
+        "blocking_review_count": { "type": "integer", "minimum": 0 },
+        "blocking_review_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
