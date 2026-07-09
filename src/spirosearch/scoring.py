@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from spirosearch.models import CandidateEvaluation, CandidateMaterial, ScoreBreakdown
+from spirosearch.scoring_view_adapter import ScoringViewAdapter, ScoringViewInput
 
 FORMULA_VERSION = "spiro_replacement_score_v1"
 HARD_FILTER_VERSION = "spiro_replacement_hard_filters_v1"
@@ -23,7 +24,12 @@ ALLOWED_ROLES = {
 }
 
 
-def evaluate_candidate(candidate: CandidateMaterial) -> CandidateEvaluation:
+def evaluate_candidate(
+    candidate: CandidateMaterial,
+    *,
+    scoring_view: ScoringViewInput = None,
+) -> CandidateEvaluation:
+    candidate = ScoringViewAdapter().apply_to_candidate(candidate, scoring_view)
     failures, codes = hard_filter(candidate)
     components = {key: _bounded_score(candidate.scores.get(key, 0.0)) for key in WEIGHTS}
     total = sum(components[key] * weight for key, weight in WEIGHTS.items())
@@ -89,8 +95,12 @@ def hard_filter(candidate: CandidateMaterial) -> tuple[list[str], list[str]]:
     return failures, codes
 
 
-def pareto_frontier(candidates: list[CandidateMaterial]) -> list[CandidateEvaluation]:
-    evaluations = [evaluate_candidate(candidate) for candidate in candidates]
+def pareto_frontier(
+    candidates: list[CandidateMaterial],
+    *,
+    scoring_view: ScoringViewInput = None,
+) -> list[CandidateEvaluation]:
+    evaluations = [evaluate_candidate(candidate, scoring_view=scoring_view) for candidate in candidates]
     viable = [item for item in evaluations if item.passed_hard_filters]
     result: list[CandidateEvaluation] = []
     for evaluation in viable:
@@ -105,8 +115,12 @@ def pareto_frontier(candidates: list[CandidateMaterial]) -> list[CandidateEvalua
     return result
 
 
-def evaluate_with_pareto(candidates: list[CandidateMaterial]) -> list[CandidateEvaluation]:
-    evaluations = [evaluate_candidate(candidate) for candidate in candidates]
+def evaluate_with_pareto(
+    candidates: list[CandidateMaterial],
+    *,
+    scoring_view: ScoringViewInput = None,
+) -> list[CandidateEvaluation]:
+    evaluations = [evaluate_candidate(candidate, scoring_view=scoring_view) for candidate in candidates]
     viable = [item for item in evaluations if item.passed_hard_filters]
     frontier_ids = {
         item.candidate.material_id
