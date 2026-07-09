@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `codex/v11-dependency-freeze`
+- Branch: `main`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
-- Current phase: V11 P0 dependency freeze
-- Current selected slice: `v11-dependency-freeze`
-- Current selected slice status: verified in worktree; ready for review and merge
+- Current phase: V11 P0 repository facade
+- Current selected slice: `v11-repository-facade-json-backend`
+- Current selected slice status: ready to start; dependency freeze landed on main
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -30,7 +30,7 @@ V11 assumes V10 scoring/review/manifest closure has landed. The next step is a r
 
 ## Dependency Freeze Result
 
-Status: implemented in branch `codex/v11-dependency-freeze`; not merged yet.
+Status: landed on main as merge `c16f6a2`.
 
 Verified sample bundles:
 
@@ -64,14 +64,9 @@ Implementation fixes from freeze validation:
 
 ## Current Known Dirty State
 
-- Intended branch changes:
-  - `src/spirosearch/enrichment_runtime.py`
-  - `src/spirosearch/v4_runtime.py`
-  - `tests/test_enrichment_runtime_cli.py`
-  - `tests/test_v4_runtime_cli.py`
-  - `plans/v11-loop-spec.md`
-  - `plans/v11-loop-state.md`
-- Generated local files removed before commit:
+- `CLAUDE.md` has pre-existing modifications.
+- `.claude/`, `.codex/`, `.reasonix/`, and `plans/qorder_plan/` are currently untracked.
+- V11 dependency-freeze generated files were removed before commit:
   - `.v11-samples/`
   - `uv.lock`
 - Do not use `git add -A`.
@@ -113,15 +108,14 @@ Implementation fixes from freeze validation:
 ## Next Slice
 
 ```text
-Slice: v11-dependency-freeze
-Goal: verify the V10 artifact baseline V11 will consume.
+Slice: v11-repository-facade-json-backend
+Goal: introduce the read-only repository boundary over frozen JSON/JSONL artifacts without changing external artifact contracts.
 Stop condition:
-  - manifest artifact entries include path/schema_ref/sha256/bytes/record_count/join_keys
-  - scoring-view.json validates from manifest discovery
-  - provider confidence is absent from scoring-effect inputs
-  - unresolved blocking review and missing reference_scale facts are excluded from scoring view
-  - review summary and recompute markers exist and agree on affected candidate/evidence IDs
-  - blockers are written here before any V11 implementation slice starts
+  - repository reads run-manifest.json as the only discovery source
+  - repository resolves artifact paths relative to the manifest output directory
+  - missing artifacts return a structured unavailable state, not raw filesystem exceptions
+  - repository exposes stable read models for manifest, artifact metadata, scoring view, review summary, and provider lineage
+  - no database, API server, MCP mutation, or scoring policy change is introduced in this slice
 ```
 
 ## Suggested Verification
@@ -143,11 +137,11 @@ git status --short --branch
 ## Loop Queue
 
 1. `v11-dependency-freeze`
-   - Status: ready to start.
+   - Status: landed on main as `c16f6a2`.
    - Output: dependency matrix with verified artifact names, schema refs, hashes, and join keys.
 
 2. `v11-repository-facade-json-backend`
-   - Status: pending dependency freeze.
+   - Status: ready to start.
    - Output: repository boundary plan or implementation slice using existing JSON/JSONL artifacts.
 
 3. `v11-artifact-validation-local-loop`
@@ -166,11 +160,11 @@ git status --short --branch
 
 | Panel | Required artifacts | V11 blocker |
 |---|---|---|
-| Run Overview | `run-manifest.json` | Needs dependency-freeze sample manifest |
-| Candidate Flow | candidate pool, enrichment results, canonical evidence, scoring view | Needs dependency-freeze join-key matrix |
-| Scoring Eligibility | `scoring-view.json`, review queue/summary | Needs dependency-freeze sample artifact bundle |
-| Review Worklist | review queue, review events, review summary | Needs dependency-freeze review closure sample |
-| Provider Lineage | provider cache index, agent trace, provenance/raw hash | Provider lineage shape not frozen |
+| Run Overview | `run-manifest.json` | Dependency-freeze sample manifest verified |
+| Candidate Flow | candidate pool, enrichment results, canonical evidence, scoring view | Join-key matrix frozen |
+| Scoring Eligibility | `scoring-view.json`, review queue/summary | Dependency-freeze sample artifact bundle verified |
+| Review Worklist | review queue, review events, review summary | Review closure sample verified |
+| Provider Lineage | provider cache index, agent trace, provenance/raw hash | Provider cache index and trace shape frozen for JSON/JSONL repository |
 | Conflict Panel | conflict events, canonical evidence | Conflict artifacts optional; UI must degrade |
 | Performance/Error Timeline | benchmark notes, trace/error artifacts | Benchmark artifact shape not selected |
 
