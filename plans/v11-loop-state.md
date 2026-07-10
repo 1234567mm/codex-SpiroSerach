@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `codex/v11-visualization-readiness-fixtures`
+- Branch: `main`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
-- Current phase: V11 P0 visualization readiness fixtures
-- Current selected slice: `v11-visualization-readiness-fixtures`
-- Current selected slice status: implemented in feature worktree; targeted and full gates passed; review/merge pending
+- Current phase: V11 P0 closeout
+- Current selected slice: `v11-closeout`
+- Current selected slice status: V11 P0 complete on local main; visualization readiness fixtures landed as `9b1cb66`; main full gate passed; push/cleanup pending
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -67,7 +67,7 @@ Implementation fixes from freeze validation:
 - Repository facade tracked changes landed on main as merge commit `613e06b`; feature commit `06e6d19`.
 - Artifact validation tracked changes landed on main as merge commit `99dc396`; feature commit `00b9880`.
 - Read-only API/MCP tracked changes landed on main as merge commit `38e1f2e`; feature commit `7dc56f6`.
-- Visualization readiness fixture tracked changes are currently in branch `codex/v11-visualization-readiness-fixtures`; not merged yet.
+- Visualization readiness fixture tracked changes landed on main as merge commit `9b1cb66`; feature commit `16ce16b`.
 - Generated local files removed before repository facade commit:
   - `uv.lock`
 - Main worktree still has unrelated dirty state: `CLAUDE.md`, `.claude/`, `.codex/`, `.reasonix/`, `plans/qorder_plan/`, and `reasonix.toml`.
@@ -225,7 +225,7 @@ Verification evidence:
 
 ## Visualization Readiness Fixture Result
 
-Status: implemented in branch `codex/v11-visualization-readiness-fixtures`; merge pending.
+Status: landed on main as merge commit `9b1cb66`; feature commit `16ce16b`.
 
 Files:
 
@@ -237,6 +237,8 @@ Files:
   - Verifies manifest metadata, hash/bytes, JSONL record counts, frozen `schema_ref`, `join_keys`, `depends_on`, repository reads, validation sidecars, cross-artifact joins, optional degraded panels, and current static viewer rendering.
 - `docs/frontend-artifact-viewer-fixtures.md`
   - Documents the fixture bundle, panel-to-artifact matrix, joins, readiness rules, and optional degraded panel policy.
+- `.gitattributes`
+  - Pins `tests/fixtures/artifact_viewer/v11_diagnostic_run/*` to LF line endings so manifest hashes stay stable on Windows checkouts.
 
 Fixture contract:
 
@@ -256,10 +258,12 @@ Verification evidence:
 - Full gate after implementation: `python -m unittest discover tests -v` ran 232 tests OK.
 - Reviewer blocker fix: `tests.test_artifact_validation tests.test_v11_visualization_fixtures -v` ran 13 tests OK after join diagnostics alias handling and sidecar regeneration.
 - Full gate after reviewer blocker fix: `python -m unittest discover tests -v` ran 232 tests OK.
+- Main merge verification: `tests.test_v11_visualization_fixtures -v` ran 4 tests OK after LF fixture normalization.
+- Main full gate after merge and LF fixture normalization: `python -m unittest discover tests -v` ran 232 tests OK.
 
 ## V11 P0 Boundary Notes
 
-- V11 close scope: after visualization readiness fixtures land and full verification passes, V11 P0 closes. Actual reusable frontend components move to V12/P1.
+- V11 close scope: visualization readiness fixtures are the final V11 P0 slice. Main full gate has passed; after push and temporary worktree cleanup, V11 P0 is closed. Actual reusable frontend components move to V12/P1.
 - First real frontend panel default: Scoring Eligibility is the recommended first P1 component, then Review Worklist. It has the strongest read-model support through `scoring-view.json`, `canonical-evidence.json`, review artifacts, repository validation, and read-only API/MCP envelopes.
 - Shared API/MCP envelope: V11 read-only REST-like surfaces and MCP read tools use `v11.readonly_api.envelope.v1`.
 - Second repository backend: defer final selection to V12/P1. SQLite is the default first candidate for local indexed reads; do not introduce Parquet/Arrow/LanceDB until benchmark data shows join/scoring hot spots.
@@ -269,14 +273,13 @@ Verification evidence:
 ## Next Slice
 
 ```text
-Slice: v11-closeout
-Status: after `v11-visualization-readiness-fixtures` lands on main.
-Goal: mark V11 complete, push, and remove temporary worktrees/branches.
+Slice: v12-p1-scoring-eligibility-panel
+Status: recommended after V11 closeout push and worktree cleanup.
+Goal: implement the first reusable frontend component over the V11 read models and fixture bundle.
 Stop condition:
-  - visualization readiness fixture merge commit is recorded
-  - full test gate passes on main
-  - V11 loop queue item 5 is landed
-  - V11 closeout decisions remain recorded
+  - Scoring Eligibility consumes manifest-discovered artifacts/read-only API envelopes
+  - component has fixture-backed render tests
+  - optional panels remain locally degraded
 ```
 
 ## Suggested Verification
@@ -314,7 +317,7 @@ git status --short --branch
    - Output: read-only manifest, artifact, scoring view, review summary, and provider lineage surface inventory.
 
 5. `v11-visualization-readiness-fixtures`
-   - Status: implemented in branch `codex/v11-visualization-readiness-fixtures`; merge pending.
+   - Status: landed on main as `9b1cb66`.
    - Output: frontend fixture matrix and diagnostic fixture bundle for Run Overview, Candidate Flow, Scoring Eligibility, Review Worklist, Provider Lineage, and optional degraded panels.
 
 ## Frontend Readiness Matrix
