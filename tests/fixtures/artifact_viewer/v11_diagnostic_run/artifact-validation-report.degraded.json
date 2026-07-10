@@ -1,0 +1,1961 @@
+{
+  "artifacts": [
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "agent_trace"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/agent-trace-event.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/agent-trace-event.schema.json",
+            "expected": "schemas/agent-trace-event.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "event_id",
+              "candidate_id",
+              "review_item_id",
+              "lookup_id",
+              "cache_key",
+              "response_id"
+            ],
+            "expected": [
+              "event_id",
+              "candidate_id",
+              "review_item_id",
+              "lookup_id",
+              "cache_key",
+              "response_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [],
+            "expected": []
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [],
+      "format": "jsonl",
+      "join_keys": [
+        "event_id",
+        "candidate_id",
+        "review_item_id",
+        "lookup_id",
+        "cache_key",
+        "response_id"
+      ],
+      "kind": "agent_trace",
+      "metadata": {
+        "bytes": 1700,
+        "depends_on": [],
+        "format": "jsonl",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "event_id",
+          "candidate_id",
+          "review_item_id",
+          "lookup_id",
+          "cache_key",
+          "response_id"
+        ],
+        "kind": "agent_trace",
+        "path": "agent-trace.jsonl",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": 3,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/agent-trace-event.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "487db37e183544a6929018e4f49b5ee3d9b527ccbc23c00b0793c1ecb644a350"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "agent-trace.jsonl",
+      "required": true,
+      "schema_ref": "schemas/agent-trace-event.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "canonical_evidence"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/canonical-evidence.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/canonical-evidence.schema.json",
+            "expected": "schemas/canonical-evidence.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "candidate_id",
+              "material_id",
+              "use_instance_id",
+              "energy_evidence_id",
+              "review_item_id"
+            ],
+            "expected": [
+              "candidate_id",
+              "material_id",
+              "use_instance_id",
+              "energy_evidence_id",
+              "review_item_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "enrichment_results",
+              "review_events"
+            ],
+            "expected": [
+              "enrichment_results",
+              "review_events"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "enrichment_results",
+        "review_events"
+      ],
+      "format": "json",
+      "join_keys": [
+        "candidate_id",
+        "material_id",
+        "use_instance_id",
+        "energy_evidence_id",
+        "review_item_id"
+      ],
+      "kind": "canonical_evidence",
+      "metadata": {
+        "bytes": 7027,
+        "depends_on": [
+          "enrichment_results",
+          "review_events"
+        ],
+        "format": "json",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "candidate_id",
+          "material_id",
+          "use_instance_id",
+          "energy_evidence_id",
+          "review_item_id"
+        ],
+        "kind": "canonical_evidence",
+        "path": "canonical-evidence.json",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": null,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/canonical-evidence.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "60069f0b8f7d6449fa681adf779776c2c40c8c59e8086cc690a9216a72210345"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "canonical-evidence.json",
+      "required": true,
+      "schema_ref": "schemas/canonical-evidence.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "enrichment_results"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/enrichment-results.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/enrichment-results.schema.json",
+            "expected": "schemas/enrichment-results.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "candidate_id",
+              "review_item_id",
+              "lookup_id",
+              "cache_key",
+              "response_id"
+            ],
+            "expected": [
+              "candidate_id",
+              "review_item_id",
+              "lookup_id",
+              "cache_key",
+              "response_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "provider_cache_index"
+            ],
+            "expected": [
+              "provider_cache_index"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "provider_cache_index"
+      ],
+      "format": "json",
+      "join_keys": [
+        "candidate_id",
+        "review_item_id",
+        "lookup_id",
+        "cache_key",
+        "response_id"
+      ],
+      "kind": "enrichment_results",
+      "metadata": {
+        "bytes": 2765,
+        "depends_on": [
+          "provider_cache_index"
+        ],
+        "format": "json",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "candidate_id",
+          "review_item_id",
+          "lookup_id",
+          "cache_key",
+          "response_id"
+        ],
+        "kind": "enrichment_results",
+        "path": "enrichment-results.json",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": null,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/enrichment-results.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "29d61f4f31df4109214f8104e4d5bffe2a1e29b334f23a6d36a7c40ecdaf65a5"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "enrichment-results.json",
+      "required": true,
+      "schema_ref": "schemas/enrichment-results.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "provider_cache"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/provider-cache.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/provider-cache.schema.json",
+            "expected": "schemas/provider-cache.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "cache_key",
+              "response_id",
+              "lookup_id",
+              "provider"
+            ],
+            "expected": [
+              "cache_key",
+              "response_id",
+              "lookup_id",
+              "provider"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [],
+            "expected": []
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [],
+      "format": "jsonl",
+      "join_keys": [
+        "cache_key",
+        "response_id",
+        "lookup_id",
+        "provider"
+      ],
+      "kind": "provider_cache",
+      "metadata": {
+        "bytes": 1297,
+        "depends_on": [],
+        "format": "jsonl",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "cache_key",
+          "response_id",
+          "lookup_id",
+          "provider"
+        ],
+        "kind": "provider_cache",
+        "path": "provider-cache.jsonl",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": 2,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/provider-cache.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "1f0d83f63866096cd6cb43fcfe84464ceadecc3c92224581c7909ba047720eab"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "provider-cache.jsonl",
+      "required": true,
+      "schema_ref": "schemas/provider-cache.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "provider_cache_index"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/provider-cache-index.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/provider-cache-index.schema.json",
+            "expected": "schemas/provider-cache-index.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "candidate_id",
+              "provider",
+              "lookup_id",
+              "cache_key",
+              "response_id",
+              "trace_event_id"
+            ],
+            "expected": [
+              "candidate_id",
+              "provider",
+              "lookup_id",
+              "cache_key",
+              "response_id",
+              "trace_event_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "provider_cache"
+            ],
+            "expected": [
+              "provider_cache"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "provider_cache"
+      ],
+      "format": "json",
+      "join_keys": [
+        "candidate_id",
+        "provider",
+        "lookup_id",
+        "cache_key",
+        "response_id",
+        "trace_event_id"
+      ],
+      "kind": "provider_cache_index",
+      "metadata": {
+        "bytes": 1693,
+        "depends_on": [
+          "provider_cache"
+        ],
+        "format": "json",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "candidate_id",
+          "provider",
+          "lookup_id",
+          "cache_key",
+          "response_id",
+          "trace_event_id"
+        ],
+        "kind": "provider_cache_index",
+        "path": "provider-cache-index.json",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": null,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/provider-cache-index.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "446fa5d1dcc8787b8d16f09f2a1c831e1b9f0e4a3faa1c2d9d00c113e9939129"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "provider-cache-index.json",
+      "required": true,
+      "schema_ref": "schemas/provider-cache-index.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "recommendations"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": null,
+            "status": "not_applicable"
+          },
+          "message": "Payload schema validation status is not_applicable.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": null,
+            "expected": null
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "candidate_id",
+              "request_id"
+            ],
+            "expected": [
+              "candidate_id",
+              "request_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "ledger",
+              "posterior"
+            ],
+            "expected": [
+              "ledger",
+              "posterior"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "ledger",
+        "posterior"
+      ],
+      "format": "json",
+      "join_keys": [
+        "candidate_id",
+        "request_id"
+      ],
+      "kind": "recommendations",
+      "metadata": {
+        "bytes": 419,
+        "depends_on": [
+          "ledger",
+          "posterior"
+        ],
+        "format": "json",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "candidate_id",
+          "request_id"
+        ],
+        "kind": "recommendations",
+        "path": "recommendations.json",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": null,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": null,
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "8b3c7df50e363c01d4e107cb95e4dbdcc70112d7279aa08f7389371112859954"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "recommendations.json",
+      "required": true,
+      "schema_ref": null,
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "recompute_markers"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/recompute-marker.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/recompute-marker.schema.json",
+            "expected": "schemas/recompute-marker.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "marker_id",
+              "review_event_id",
+              "review_item_id",
+              "candidate_id",
+              "target_id"
+            ],
+            "expected": [
+              "marker_id",
+              "review_event_id",
+              "review_item_id",
+              "candidate_id",
+              "target_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "review_events",
+              "canonical_evidence",
+              "scoring_view"
+            ],
+            "expected": [
+              "review_events",
+              "canonical_evidence",
+              "scoring_view"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "review_events",
+        "canonical_evidence",
+        "scoring_view"
+      ],
+      "format": "jsonl",
+      "join_keys": [
+        "marker_id",
+        "review_event_id",
+        "review_item_id",
+        "candidate_id",
+        "target_id"
+      ],
+      "kind": "recompute_markers",
+      "metadata": {
+        "bytes": 543,
+        "depends_on": [
+          "review_events",
+          "canonical_evidence",
+          "scoring_view"
+        ],
+        "format": "jsonl",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "marker_id",
+          "review_event_id",
+          "review_item_id",
+          "candidate_id",
+          "target_id"
+        ],
+        "kind": "recompute_markers",
+        "path": "recompute-markers.jsonl",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": 1,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/recompute-marker.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "6d4354f5c5f1941769463a840a1e59726408e3f11741051b6c33e65b16e9e5b7"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "recompute-markers.jsonl",
+      "required": true,
+      "schema_ref": "schemas/recompute-marker.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "review_events"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/review-event.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/review-event.schema.json",
+            "expected": "schemas/review-event.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "review_item_id",
+              "event_id",
+              "target_id"
+            ],
+            "expected": [
+              "review_item_id",
+              "event_id",
+              "target_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "review_queue"
+            ],
+            "expected": [
+              "review_queue"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "review_queue"
+      ],
+      "format": "jsonl",
+      "join_keys": [
+        "review_item_id",
+        "event_id",
+        "target_id"
+      ],
+      "kind": "review_events",
+      "metadata": {
+        "bytes": 697,
+        "depends_on": [
+          "review_queue"
+        ],
+        "format": "jsonl",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "review_item_id",
+          "event_id",
+          "target_id"
+        ],
+        "kind": "review_events",
+        "path": "review-events.jsonl",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": 1,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/review-event.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "6db3f51eaa3c06f3a17bd48391b6c2ef9eac8fb408f691a9f8f8bee57e982036"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "review-events.jsonl",
+      "required": true,
+      "schema_ref": "schemas/review-event.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "review_queue"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/review-queue-item.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/review-queue-item.schema.json",
+            "expected": "schemas/review-queue-item.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "review_item_id",
+              "candidate_id",
+              "target_id",
+              "trace_event_id"
+            ],
+            "expected": [
+              "review_item_id",
+              "candidate_id",
+              "target_id",
+              "trace_event_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "enrichment_results",
+              "canonical_evidence",
+              "agent_trace"
+            ],
+            "expected": [
+              "enrichment_results",
+              "canonical_evidence",
+              "agent_trace"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "enrichment_results",
+        "canonical_evidence",
+        "agent_trace"
+      ],
+      "format": "jsonl",
+      "join_keys": [
+        "review_item_id",
+        "candidate_id",
+        "target_id",
+        "trace_event_id"
+      ],
+      "kind": "review_queue",
+      "metadata": {
+        "bytes": 1336,
+        "depends_on": [
+          "enrichment_results",
+          "canonical_evidence",
+          "agent_trace"
+        ],
+        "format": "jsonl",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "review_item_id",
+          "candidate_id",
+          "target_id",
+          "trace_event_id"
+        ],
+        "kind": "review_queue",
+        "path": "review-queue.jsonl",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": 2,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/review-queue-item.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "51e835ad296a161bb7d17d36e455a9cbdf2b2b710643041751fce60635258566"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "review-queue.jsonl",
+      "required": true,
+      "schema_ref": "schemas/review-queue-item.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "review_summary"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/review-summary.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/review-summary.schema.json",
+            "expected": "schemas/review-summary.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "review_item_id",
+              "event_id",
+              "marker_id"
+            ],
+            "expected": [
+              "review_item_id",
+              "event_id",
+              "marker_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "review_queue",
+              "review_events",
+              "recompute_markers"
+            ],
+            "expected": [
+              "review_queue",
+              "review_events",
+              "recompute_markers"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "review_queue",
+        "review_events",
+        "recompute_markers"
+      ],
+      "format": "json",
+      "join_keys": [
+        "review_item_id",
+        "event_id",
+        "marker_id"
+      ],
+      "kind": "review_summary",
+      "metadata": {
+        "bytes": 797,
+        "depends_on": [
+          "review_queue",
+          "review_events",
+          "recompute_markers"
+        ],
+        "format": "json",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "review_item_id",
+          "event_id",
+          "marker_id"
+        ],
+        "kind": "review_summary",
+        "path": "review-summary.json",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": null,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/review-summary.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "426f853f0b0ccfab7a252b69979c368ca8d9f8c56ba176ad5731a04e641afb6e"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "review-summary.json",
+      "required": true,
+      "schema_ref": "schemas/review-summary.schema.json",
+      "status": "valid",
+      "unavailable": null
+    },
+    {
+      "available": true,
+      "checks": [
+        {
+          "detail": {
+            "kind": "scoring_view"
+          },
+          "message": "Manifest artifact kind is unique within the run.",
+          "name": "manifest_kind_unique",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {},
+          "message": "Artifact was read through the repository facade.",
+          "name": "repository_read",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "schema_ref": "schemas/scoring-view.schema.json",
+            "status": "valid"
+          },
+          "message": "Payload schema validation status is valid.",
+          "name": "schema_validation",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": "schemas/scoring-view.schema.json",
+            "expected": "schemas/scoring-view.schema.json"
+          },
+          "message": "Manifest schema_ref matches frozen artifact-kind metadata.",
+          "name": "schema_ref",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "candidate_id",
+              "material_id",
+              "evidence_id"
+            ],
+            "expected": [
+              "candidate_id",
+              "material_id",
+              "evidence_id"
+            ]
+          },
+          "message": "Manifest join_keys match frozen artifact-kind metadata.",
+          "name": "join_keys",
+          "severity": "info",
+          "status": "pass"
+        },
+        {
+          "detail": {
+            "actual": [
+              "canonical_evidence",
+              "review_queue"
+            ],
+            "expected": [
+              "canonical_evidence",
+              "review_queue"
+            ]
+          },
+          "message": "Manifest depends_on matches frozen artifact-kind metadata.",
+          "name": "depends_on",
+          "severity": "info",
+          "status": "pass"
+        }
+      ],
+      "depends_on": [
+        "canonical_evidence",
+        "review_queue"
+      ],
+      "format": "json",
+      "join_keys": [
+        "candidate_id",
+        "material_id",
+        "evidence_id"
+      ],
+      "kind": "scoring_view",
+      "metadata": {
+        "bytes": 1451,
+        "depends_on": [
+          "canonical_evidence",
+          "review_queue"
+        ],
+        "format": "json",
+        "generated_at": "2026-07-10T00:00:00+00:00",
+        "input_hash": "sha256:v11-diagnostic-fixture-input",
+        "join_keys": [
+          "candidate_id",
+          "material_id",
+          "evidence_id"
+        ],
+        "kind": "scoring_view",
+        "path": "scoring-view.json",
+        "producer_version": "spirosearch-v11-fixture",
+        "record_count": null,
+        "run_id": "v11-diagnostic-run-001",
+        "schema_ref": "schemas/scoring-view.schema.json",
+        "schema_version": "v6.run_artifact.v1",
+        "sha256": "b17bca4613e9e3aac6d509f57ed9969422e3d2f471c5ad09f74a9b607d5ac75b"
+      },
+      "panel": null,
+      "panel_id": null,
+      "path": "scoring-view.json",
+      "required": true,
+      "schema_ref": "schemas/scoring-view.schema.json",
+      "status": "valid",
+      "unavailable": null
+    }
+  ],
+  "join_diagnostics": [
+    {
+      "declared_keys": [
+        "event_id",
+        "candidate_id",
+        "review_item_id",
+        "lookup_id",
+        "cache_key",
+        "response_id"
+      ],
+      "kind": "agent_trace",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "actor",
+        "cache_key",
+        "cache_status",
+        "candidate_count",
+        "candidate_id",
+        "event_id",
+        "event_type",
+        "generated_at",
+        "lookup_id",
+        "observation_count",
+        "outcome",
+        "provider",
+        "query",
+        "raw_hash",
+        "reason",
+        "recommended_count",
+        "response_id",
+        "review_item_id",
+        "run_id",
+        "source_url"
+      ],
+      "path": "agent-trace.jsonl",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "candidate_id",
+        "material_id",
+        "use_instance_id",
+        "energy_evidence_id",
+        "review_item_id"
+      ],
+      "kind": "canonical_evidence",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "assigned_queue",
+        "blocking_surface",
+        "candidate_count",
+        "candidate_id",
+        "composition",
+        "computed",
+        "conditions",
+        "contact_side",
+        "contract_version",
+        "curation_status",
+        "doi",
+        "eligible_for_scoring",
+        "energy_evidence",
+        "energy_evidence_id",
+        "form_factor",
+        "formula",
+        "grade_or_batch",
+        "license",
+        "material",
+        "material_class",
+        "material_id",
+        "material_kind",
+        "method",
+        "molecule_id",
+        "process_window",
+        "profile",
+        "property_name",
+        "provenance",
+        "provider_name",
+        "provider_response_id",
+        "raw_hash",
+        "reason_code",
+        "records",
+        "reference_scale",
+        "replacement_mode",
+        "required_evidence_types",
+        "resolution_status",
+        "retrieved_at",
+        "review_event_id",
+        "review_item_id",
+        "review_items",
+        "role",
+        "safety_flags",
+        "schema_version",
+        "severity",
+        "solvent",
+        "source_id",
+        "source_refs",
+        "status",
+        "suggested_action",
+        "supplier_status",
+        "synthesis_readiness",
+        "target_id",
+        "target_stack",
+        "target_type",
+        "temperature_c",
+        "trust_level",
+        "unit",
+        "url",
+        "use_instance",
+        "use_instance_id",
+        "value_ev"
+      ],
+      "path": "canonical-evidence.json",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "candidate_id",
+        "review_item_id",
+        "lookup_id",
+        "cache_key",
+        "response_id"
+      ],
+      "kind": "enrichment_results",
+      "missing_payload_keys": [
+        "review_item_id"
+      ],
+      "notes": [
+        "enrichment_results uses review_item_ids as the payload field for declared join key review_item_id."
+      ],
+      "observed_payload_keys": [
+        "cache_key",
+        "cache_status",
+        "candidate_count",
+        "candidate_id",
+        "category",
+        "complete_count",
+        "confidence",
+        "contract_version",
+        "energy",
+        "facts",
+        "homo_ev",
+        "identity",
+        "lookup_id",
+        "lumo_ev",
+        "missing_fields",
+        "mode",
+        "name",
+        "needs_review_count",
+        "provider",
+        "provider_refs",
+        "query",
+        "raw_hash",
+        "records",
+        "reference_scale",
+        "registry_providers",
+        "response_id",
+        "retrieved_at",
+        "review_item_ids",
+        "schema_version",
+        "source_registry_hash",
+        "source_url",
+        "status",
+        "summary",
+        "trace_event_id",
+        "trust",
+        "trust_level"
+      ],
+      "path": "enrichment-results.json",
+      "severity": "info",
+      "status": "informational"
+    },
+    {
+      "declared_keys": [
+        "cache_key",
+        "response_id",
+        "lookup_id",
+        "provider"
+      ],
+      "kind": "provider_cache",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "cache_key",
+        "candidate_id",
+        "confidence",
+        "contract_version",
+        "homo_ev",
+        "license_hint",
+        "lookup_id",
+        "lumo_ev",
+        "missing_fields",
+        "normalized_result",
+        "provider",
+        "query",
+        "raw_hash",
+        "reference_scale",
+        "response",
+        "response_id",
+        "retrieved_at",
+        "source_url",
+        "trust_level"
+      ],
+      "path": "provider-cache.jsonl",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "candidate_id",
+        "provider",
+        "lookup_id",
+        "cache_key",
+        "response_id",
+        "trace_event_id"
+      ],
+      "kind": "provider_cache_index",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "cache_key",
+        "cache_keys",
+        "cache_path",
+        "cache_status",
+        "candidate_id",
+        "entries",
+        "entries_read",
+        "entries_written",
+        "entry_count",
+        "failure_count",
+        "hit_count",
+        "lookup_id",
+        "miss_count",
+        "provider",
+        "query",
+        "raw_hash",
+        "read",
+        "reason",
+        "response_id",
+        "retrieved_at",
+        "schema_version",
+        "source_url",
+        "trace_event_id",
+        "ttl_hours",
+        "written"
+      ],
+      "path": "provider-cache-index.json",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "candidate_id",
+        "request_id"
+      ],
+      "kind": "recommendations",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "acquisition_score",
+        "candidate_id",
+        "estimated_cost",
+        "rationale",
+        "request_id",
+        "requests",
+        "run_id",
+        "schema_version",
+        "total_estimated_cost"
+      ],
+      "path": "recommendations.json",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "marker_id",
+        "review_event_id",
+        "review_item_id",
+        "candidate_id",
+        "target_id"
+      ],
+      "kind": "recompute_markers",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "affected_artifacts",
+        "candidate_id",
+        "generated_at",
+        "marker_id",
+        "reason",
+        "review_event_id",
+        "review_item_id",
+        "run_id",
+        "schema_version",
+        "status",
+        "target_id",
+        "target_type"
+      ],
+      "path": "recompute-markers.jsonl",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "review_item_id",
+        "event_id",
+        "target_id"
+      ],
+      "kind": "review_events",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "assigned_queue",
+        "blocking_surface",
+        "decision",
+        "event_id",
+        "event_type",
+        "generated_at",
+        "reason",
+        "recompute_marker_ids",
+        "resolution_status",
+        "review_item_id",
+        "reviewer",
+        "run_id",
+        "schema_version",
+        "severity",
+        "source_refs",
+        "target_id",
+        "target_type",
+        "trace_event_id"
+      ],
+      "path": "review-events.jsonl",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "review_item_id",
+        "candidate_id",
+        "target_id",
+        "trace_event_id"
+      ],
+      "kind": "review_queue",
+      "missing_payload_keys": [],
+      "notes": [],
+      "observed_payload_keys": [
+        "cache_key",
+        "cache_status",
+        "candidate_id",
+        "field",
+        "lookup_id",
+        "missing_fields",
+        "name",
+        "provider",
+        "query",
+        "raw_hash",
+        "reason",
+        "response_id",
+        "review_item_id",
+        "severity",
+        "source_url",
+        "target_id",
+        "target_type",
+        "trace_event_id"
+      ],
+      "path": "review-queue.jsonl",
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "declared_keys": [
+        "review_item_id",
+        "event_id",
+        "marker_id"
+      ],
+      "kind": "review_summary",
+      "missing_payload_keys": [
+        "review_item_id",
+        "event_id",
+        "marker_id"
+      ],
+      "notes": [
+        "review_summary uses review_item_ids as the payload field for declared join key review_item_id.",
+        "review_summary uses review_event_ids as the payload field for declared join key event_id.",
+        "review_summary uses recompute_marker_ids as the payload field for declared join key marker_id."
+      ],
+      "observed_payload_keys": [
+        "applied_event_count",
+        "by_assigned_queue",
+        "by_reason_code",
+        "by_resolution_status",
+        "by_severity",
+        "energy",
+        "energy_levels_missing",
+        "event_count",
+        "generated_at",
+        "high",
+        "medium",
+        "open",
+        "open_blocking_count",
+        "recompute_marker_ids",
+        "reference_scale_reviewed",
+        "rejected_count",
+        "resolved",
+        "resolved_count",
+        "review_count",
+        "review_event_ids",
+        "review_item_ids",
+        "run_id",
+        "schema_version"
+      ],
+      "path": "review-summary.json",
+      "severity": "info",
+      "status": "informational"
+    },
+    {
+      "declared_keys": [
+        "candidate_id",
+        "material_id",
+        "evidence_id"
+      ],
+      "kind": "scoring_view",
+      "missing_payload_keys": [
+        "candidate_id"
+      ],
+      "notes": [
+        "scoring_view energy_facts do not carry candidate_id; join via canonical_evidence."
+      ],
+      "observed_payload_keys": [
+        "blocking_review_count",
+        "blocking_review_ids",
+        "computed",
+        "curation_status",
+        "eligible_for_scoring",
+        "energy_facts",
+        "evidence_id",
+        "evidence_type",
+        "material_id",
+        "method",
+        "property_name",
+        "quality",
+        "quality_score",
+        "reference_scale",
+        "schema_version",
+        "trust_level",
+        "unit",
+        "use_instance_id",
+        "value_ev"
+      ],
+      "path": "scoring-view.json",
+      "severity": "info",
+      "status": "informational"
+    }
+  ],
+  "manifest": {
+    "artifact_count": 11,
+    "available": true,
+    "path": "run-manifest.json",
+    "run_id": "v11-diagnostic-run-001",
+    "schema_ref": "schemas/run-manifest.schema.json",
+    "status": "valid",
+    "unavailable": null
+  },
+  "optional_artifacts": [
+    {
+      "available": false,
+      "checks": [
+        {
+          "detail": {
+            "code": "artifact_not_declared",
+            "detail": {
+              "panel": "Conflict Panel",
+              "panel_id": "conflict_panel"
+            },
+            "format": null,
+            "kind": "conflict_events",
+            "message": "Optional artifact kind is not declared in run-manifest.json.",
+            "path": null,
+            "reason": "artifact_not_declared",
+            "recoverable": true,
+            "schema_ref": null,
+            "scope": "artifact",
+            "status": "unavailable"
+          },
+          "message": "Optional artifact is unavailable for this run.",
+          "name": "optional_presence",
+          "severity": "warning",
+          "status": "unavailable"
+        }
+      ],
+      "depends_on": [],
+      "format": null,
+      "join_keys": [],
+      "kind": "conflict_events",
+      "metadata": null,
+      "panel": "Conflict Panel",
+      "panel_id": "conflict_panel",
+      "path": null,
+      "required": false,
+      "schema_ref": null,
+      "status": "unavailable",
+      "unavailable": {
+        "code": "artifact_not_declared",
+        "detail": {
+          "panel": "Conflict Panel",
+          "panel_id": "conflict_panel"
+        },
+        "format": null,
+        "kind": "conflict_events",
+        "message": "Optional artifact kind is not declared in run-manifest.json.",
+        "path": null,
+        "reason": "artifact_not_declared",
+        "recoverable": true,
+        "schema_ref": null,
+        "scope": "artifact",
+        "status": "unavailable"
+      }
+    },
+    {
+      "available": false,
+      "checks": [
+        {
+          "detail": {
+            "code": "artifact_not_declared",
+            "detail": {
+              "panel": "Performance/Error Timeline",
+              "panel_id": "performance_error_timeline"
+            },
+            "format": null,
+            "kind": "performance_timeline",
+            "message": "Optional artifact kind is not declared in run-manifest.json.",
+            "path": null,
+            "reason": "artifact_not_declared",
+            "recoverable": true,
+            "schema_ref": null,
+            "scope": "artifact",
+            "status": "unavailable"
+          },
+          "message": "Optional artifact is unavailable for this run.",
+          "name": "optional_presence",
+          "severity": "warning",
+          "status": "unavailable"
+        }
+      ],
+      "depends_on": [],
+      "format": null,
+      "join_keys": [],
+      "kind": "performance_timeline",
+      "metadata": null,
+      "panel": "Performance/Error Timeline",
+      "panel_id": "performance_error_timeline",
+      "path": null,
+      "required": false,
+      "schema_ref": null,
+      "status": "unavailable",
+      "unavailable": {
+        "code": "artifact_not_declared",
+        "detail": {
+          "panel": "Performance/Error Timeline",
+          "panel_id": "performance_error_timeline"
+        },
+        "format": null,
+        "kind": "performance_timeline",
+        "message": "Optional artifact kind is not declared in run-manifest.json.",
+        "path": null,
+        "reason": "artifact_not_declared",
+        "recoverable": true,
+        "schema_ref": null,
+        "scope": "artifact",
+        "status": "unavailable"
+      }
+    }
+  ],
+  "panels": [
+    {
+      "available_kinds": [],
+      "label": "Conflict Panel",
+      "optional_kinds": [
+        "conflict_events"
+      ],
+      "panel_id": "conflict_panel",
+      "required_kinds": [],
+      "severity": "warning",
+      "status": "unavailable",
+      "unavailable": {
+        "code": "artifact_not_declared",
+        "detail": {
+          "panel": "Conflict Panel",
+          "panel_id": "conflict_panel"
+        },
+        "format": null,
+        "kind": "conflict_events",
+        "message": "Optional artifact kind is not declared in run-manifest.json.",
+        "path": null,
+        "reason": "artifact_not_declared",
+        "recoverable": true,
+        "schema_ref": null,
+        "scope": "artifact",
+        "status": "unavailable"
+      },
+      "unavailable_kinds": [
+        "conflict_events"
+      ]
+    },
+    {
+      "available_kinds": [],
+      "label": "Performance/Error Timeline",
+      "optional_kinds": [
+        "performance_timeline"
+      ],
+      "panel_id": "performance_error_timeline",
+      "required_kinds": [],
+      "severity": "warning",
+      "status": "unavailable",
+      "unavailable": {
+        "code": "artifact_not_declared",
+        "detail": {
+          "panel": "Performance/Error Timeline",
+          "panel_id": "performance_error_timeline"
+        },
+        "format": null,
+        "kind": "performance_timeline",
+        "message": "Optional artifact kind is not declared in run-manifest.json.",
+        "path": null,
+        "reason": "artifact_not_declared",
+        "recoverable": true,
+        "schema_ref": null,
+        "scope": "artifact",
+        "status": "unavailable"
+      },
+      "unavailable_kinds": [
+        "performance_timeline"
+      ]
+    }
+  ],
+  "run_id": "v11-diagnostic-run-001",
+  "schema_version": "v11.artifact_validation.v1",
+  "severity": "warning",
+  "status": "degraded",
+  "summary": {
+    "artifact_count": 11,
+    "available_artifact_count": 11,
+    "error_count": 0,
+    "invalid_artifact_count": 0,
+    "optional_unavailable_count": 2,
+    "run_unavailable_count": 0,
+    "unavailable_artifact_count": 0,
+    "valid_artifact_count": 11,
+    "warning_count": 2
+  }
+}

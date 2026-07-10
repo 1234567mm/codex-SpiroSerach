@@ -450,10 +450,10 @@ def _payload_join_diagnostic(
     payload = result.records if result.format == "jsonl" else result.payload
     observed_keys = sorted(_payload_keys(payload))
     missing_keys = [key for key in declared_keys if key not in observed_keys]
-    notes = _join_diagnostic_notes(kind, missing_keys)
+    notes, unresolved_missing_keys = _join_diagnostic_notes(kind, missing_keys, observed_keys)
     if missing_keys:
-        status = "informational" if notes else "warning"
-        severity = "info" if notes else "warning"
+        status = "warning" if unresolved_missing_keys else "informational"
+        severity = "warning" if unresolved_missing_keys else "info"
     else:
         status = "pass"
         severity = "info"
@@ -495,10 +495,33 @@ def _payload_keys(value: Any) -> set[str]:
     return keys
 
 
-def _join_diagnostic_notes(kind: str, missing_keys: list[str]) -> list[str]:
+def _join_diagnostic_notes(
+    kind: str,
+    missing_keys: list[str],
+    observed_keys: list[str],
+) -> tuple[list[str], list[str]]:
+    notes: list[str] = []
+    unresolved = list(missing_keys)
     if kind == "scoring_view" and "candidate_id" in missing_keys:
-        return ["scoring_view energy_facts do not carry candidate_id; join via canonical_evidence."]
-    return []
+        notes.append("scoring_view energy_facts do not carry candidate_id; join via canonical_evidence.")
+        unresolved.remove("candidate_id")
+    for missing_key, alias in _join_key_aliases(kind).items():
+        if missing_key in unresolved and alias in observed_keys:
+            notes.append(f"{kind} uses {alias} as the payload field for declared join key {missing_key}.")
+            unresolved.remove(missing_key)
+    return notes, unresolved
+
+
+def _join_key_aliases(kind: str) -> Mapping[str, str]:
+    if kind == "enrichment_results":
+        return {"review_item_id": "review_item_ids"}
+    if kind == "review_summary":
+        return {
+            "review_item_id": "review_item_ids",
+            "event_id": "review_event_ids",
+            "marker_id": "recompute_marker_ids",
+        }
+    return {}
 
 
 def _panel_results(optional_artifacts: tuple[ArtifactValidationResult, ...]) -> tuple[Mapping[str, Any], ...]:

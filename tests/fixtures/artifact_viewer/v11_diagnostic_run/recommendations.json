@@ -1,0 +1,14 @@
+{
+  "requests": [
+    {
+      "acquisition_score": 0.73,
+      "candidate_id": "spiro-ometsad",
+      "estimated_cost": 18.5,
+      "rationale": "Eligible scoring facts and closed review issue make this candidate display-ready.",
+      "request_id": "request-spiro-ometsad-001"
+    }
+  ],
+  "run_id": "v11-diagnostic-run-001",
+  "schema_version": "v4.recommendations.v1",
+  "total_estimated_cost": 18.5
+}

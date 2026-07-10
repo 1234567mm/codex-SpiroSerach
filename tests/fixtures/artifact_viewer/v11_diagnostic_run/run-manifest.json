@@ -1,0 +1,291 @@
+{
+  "artifacts": [
+    {
+      "bytes": 1700,
+      "depends_on": [],
+      "format": "jsonl",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "event_id",
+        "candidate_id",
+        "review_item_id",
+        "lookup_id",
+        "cache_key",
+        "response_id"
+      ],
+      "kind": "agent_trace",
+      "path": "agent-trace.jsonl",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": 3,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/agent-trace-event.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "487db37e183544a6929018e4f49b5ee3d9b527ccbc23c00b0793c1ecb644a350"
+    },
+    {
+      "bytes": 7027,
+      "depends_on": [
+        "enrichment_results",
+        "review_events"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "candidate_id",
+        "material_id",
+        "use_instance_id",
+        "energy_evidence_id",
+        "review_item_id"
+      ],
+      "kind": "canonical_evidence",
+      "path": "canonical-evidence.json",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": null,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/canonical-evidence.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "60069f0b8f7d6449fa681adf779776c2c40c8c59e8086cc690a9216a72210345"
+    },
+    {
+      "bytes": 2765,
+      "depends_on": [
+        "provider_cache_index"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "candidate_id",
+        "review_item_id",
+        "lookup_id",
+        "cache_key",
+        "response_id"
+      ],
+      "kind": "enrichment_results",
+      "path": "enrichment-results.json",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": null,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/enrichment-results.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "29d61f4f31df4109214f8104e4d5bffe2a1e29b334f23a6d36a7c40ecdaf65a5"
+    },
+    {
+      "bytes": 1297,
+      "depends_on": [],
+      "format": "jsonl",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "cache_key",
+        "response_id",
+        "lookup_id",
+        "provider"
+      ],
+      "kind": "provider_cache",
+      "path": "provider-cache.jsonl",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": 2,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/provider-cache.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "1f0d83f63866096cd6cb43fcfe84464ceadecc3c92224581c7909ba047720eab"
+    },
+    {
+      "bytes": 1693,
+      "depends_on": [
+        "provider_cache"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "candidate_id",
+        "provider",
+        "lookup_id",
+        "cache_key",
+        "response_id",
+        "trace_event_id"
+      ],
+      "kind": "provider_cache_index",
+      "path": "provider-cache-index.json",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": null,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/provider-cache-index.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "446fa5d1dcc8787b8d16f09f2a1c831e1b9f0e4a3faa1c2d9d00c113e9939129"
+    },
+    {
+      "bytes": 419,
+      "depends_on": [
+        "ledger",
+        "posterior"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "candidate_id",
+        "request_id"
+      ],
+      "kind": "recommendations",
+      "path": "recommendations.json",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": null,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": null,
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "8b3c7df50e363c01d4e107cb95e4dbdcc70112d7279aa08f7389371112859954"
+    },
+    {
+      "bytes": 543,
+      "depends_on": [
+        "review_events",
+        "canonical_evidence",
+        "scoring_view"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "marker_id",
+        "review_event_id",
+        "review_item_id",
+        "candidate_id",
+        "target_id"
+      ],
+      "kind": "recompute_markers",
+      "path": "recompute-markers.jsonl",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": 1,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/recompute-marker.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "6d4354f5c5f1941769463a840a1e59726408e3f11741051b6c33e65b16e9e5b7"
+    },
+    {
+      "bytes": 697,
+      "depends_on": [
+        "review_queue"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "review_item_id",
+        "event_id",
+        "target_id"
+      ],
+      "kind": "review_events",
+      "path": "review-events.jsonl",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": 1,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/review-event.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "6db3f51eaa3c06f3a17bd48391b6c2ef9eac8fb408f691a9f8f8bee57e982036"
+    },
+    {
+      "bytes": 1336,
+      "depends_on": [
+        "enrichment_results",
+        "canonical_evidence",
+        "agent_trace"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "review_item_id",
+        "candidate_id",
+        "target_id",
+        "trace_event_id"
+      ],
+      "kind": "review_queue",
+      "path": "review-queue.jsonl",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": 2,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/review-queue-item.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "51e835ad296a161bb7d17d36e455a9cbdf2b2b710643041751fce60635258566"
+    },
+    {
+      "bytes": 797,
+      "depends_on": [
+        "review_queue",
+        "review_events",
+        "recompute_markers"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "review_item_id",
+        "event_id",
+        "marker_id"
+      ],
+      "kind": "review_summary",
+      "path": "review-summary.json",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": null,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/review-summary.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "426f853f0b0ccfab7a252b69979c368ca8d9f8c56ba176ad5731a04e641afb6e"
+    },
+    {
+      "bytes": 1451,
+      "depends_on": [
+        "canonical_evidence",
+        "review_queue"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-10T00:00:00+00:00",
+      "input_hash": "sha256:v11-diagnostic-fixture-input",
+      "join_keys": [
+        "candidate_id",
+        "material_id",
+        "evidence_id"
+      ],
+      "kind": "scoring_view",
+      "path": "scoring-view.json",
+      "producer_version": "spirosearch-v11-fixture",
+      "record_count": null,
+      "run_id": "v11-diagnostic-run-001",
+      "schema_ref": "schemas/scoring-view.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "b17bca4613e9e3aac6d509f57ed9969422e3d2f471c5ad09f74a9b607d5ac75b"
+    }
+  ],
+  "candidate_count": 2,
+  "context": {
+    "frontend_readiness": {
+      "optional_panels": [
+        "Conflict Panel",
+        "Performance/Error Timeline"
+      ],
+      "required_panels": [
+        "Run Overview",
+        "Candidate Flow",
+        "Scoring Eligibility",
+        "Review Worklist",
+        "Provider Lineage"
+      ]
+    },
+    "provider_outcomes": {
+      "failure_count": 0,
+      "hit_count": 1,
+      "miss_count": 1
+    }
+  },
+  "dataset_snapshot_id": "fixture-v11-diagnostic-snapshot",
+  "generated_at": "2026-07-10T00:00:00+00:00",
+  "input_hash": "sha256:v11-diagnostic-fixture-input",
+  "producer_version": "spirosearch-v11-fixture",
+  "run_id": "v11-diagnostic-run-001",
+  "schema_version": "v6.run_manifest.v1"
+}

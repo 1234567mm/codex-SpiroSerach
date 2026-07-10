@@ -1,0 +1,87 @@
+{
+  "candidate_count": 2,
+  "mode": "offline_local_first",
+  "records": [
+    {
+      "candidate_id": "spiro-ometsad",
+      "category": "HTL",
+      "facts": {
+        "homo_ev": -5.2,
+        "lumo_ev": -2.3,
+        "reference_scale": "vacuum"
+      },
+      "missing_fields": [],
+      "name": "Spiro-OMeTAD",
+      "provider_refs": [
+        {
+          "cache_key": "cache-local-spiro-ometsad-homo-lumo",
+          "cache_status": "hit",
+          "confidence": 0.97,
+          "contract_version": "provider-response-v1",
+          "lookup_id": "lookup-local-spiro-ometsad-001",
+          "provider": "local_fixture",
+          "query": "Spiro-OMeTAD HOMO LUMO",
+          "raw_hash": "raw-hash-spiro-ometsad-001",
+          "response_id": "response-local-spiro-ometsad-001",
+          "retrieved_at": "2026-07-10T00:00:00+00:00",
+          "source_url": "fixture://providers/spiro-ometsad",
+          "trace_event_id": "trace-ometsad-provider-001",
+          "trust_level": "T4_literature_curated"
+        }
+      ],
+      "review_item_ids": [
+        "review-ometsad-lumo-scale"
+      ],
+      "status": "complete",
+      "trust": {
+        "energy": "T4_literature_curated",
+        "identity": "T4_literature_curated"
+      }
+    },
+    {
+      "candidate_id": "spiro-frontier-review",
+      "category": "HTL",
+      "facts": {
+        "lumo_ev": -2.1
+      },
+      "missing_fields": [
+        "homo_ev"
+      ],
+      "name": "<b>unsafe label</b>",
+      "provider_refs": [
+        {
+          "cache_key": "cache-local-spiro-frontier-review-lumo",
+          "cache_status": "miss",
+          "confidence": 0.61,
+          "contract_version": "provider-response-v1",
+          "lookup_id": "lookup-local-spiro-frontier-review-001",
+          "provider": "local_fixture",
+          "query": "Frontier review candidate HOMO LUMO",
+          "raw_hash": "raw-hash-spiro-frontier-review-001",
+          "response_id": "response-local-spiro-frontier-review-001",
+          "retrieved_at": "2026-07-10T00:00:00+00:00",
+          "source_url": "fixture://providers/spiro-frontier-review",
+          "trace_event_id": "trace-frontier-provider-001",
+          "trust_level": "T3_literature_machine"
+        }
+      ],
+      "review_item_ids": [
+        "review-frontier-homo"
+      ],
+      "status": "needs_review",
+      "trust": {
+        "energy": "T3_literature_machine",
+        "identity": "T3_literature_machine"
+      }
+    }
+  ],
+  "registry_providers": [
+    "local_fixture"
+  ],
+  "schema_version": "v6.enrichment_results.v1",
+  "source_registry_hash": "source-registry-fixture-hash-v11",
+  "summary": {
+    "complete_count": 1,
+    "needs_review_count": 1
+  }
+}
