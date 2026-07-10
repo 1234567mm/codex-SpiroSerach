@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/acquisition-breakdown.schema.json",
+  "title": "AcquisitionBreakdown",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "model_version", "candidates"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "model_version": { "type": "string" },
+    "request_id": { "type": "string" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["candidate_id"],
+        "properties": {
+          "candidate_id": { "type": "string" },
+          "predicted_mean": { "type": "object" },
+          "predicted_std": { "type": "object" },
+          "acquisition_score": { "type": "number" },
+          "selection_status": { "type": "string" }
+        }
+      }
+    }
+  }
+}

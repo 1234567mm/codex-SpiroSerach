@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/screening-input-view.schema.json",
+  "title": "ScreeningInputView",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidates"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "profile_version": { "type": "string" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["candidate_id", "status"],
+        "properties": {
+          "candidate_id": { "type": "string" },
+          "status": { "enum": ["pass", "defer", "reject"] },
+          "codes": { "type": "array", "items": { "type": "string" } },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "utility": { "type": "number" },
+                "quality": { "type": "number" },
+                "observed": { "type": "boolean" },
+                "evidence_ids": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "weighted_utility": { "type": "number" },
+          "coverage": { "type": "number" }
+        }
+      }
+    }
+  }
+}

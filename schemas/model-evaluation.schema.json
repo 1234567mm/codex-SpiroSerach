@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/model-evaluation.schema.json",
+  "title": "ModelEvaluation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "model_version", "activation_status"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "snapshot_id": { "type": "string" },
+    "model_version": { "type": "string" },
+    "fold_id": { "type": "string" },
+    "activation_status": { "enum": ["active", "disabled"] },
+    "activation_reasons": { "type": "array", "items": { "type": "string" } },
+    "surrogate_type": { "type": "string" },
+    "metrics": { "type": "object" },
+    "dummy_baseline": { "type": "object" },
+    "feature_count": { "type": "integer" }
+  }
+}

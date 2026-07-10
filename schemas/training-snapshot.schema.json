@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/training-snapshot.schema.json",
+  "title": "TrainingSnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "row_count", "feature_names", "objective_names"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "snapshot_id": { "type": "string" },
+    "source_run_ids": { "type": "array", "items": { "type": "string" } },
+    "feature_schema_version": { "type": "string" },
+    "objective_schema_version": { "type": "string" },
+    "split_strategy": { "type": "string" },
+    "random_seed": { "type": "integer" },
+    "row_count": { "type": "integer" },
+    "feature_names": { "type": "array", "items": { "type": "string" } },
+    "objective_names": { "type": "array", "items": { "type": "string" } },
+    "fold_count": { "type": "integer" },
+    "content_sha256": { "type": "string" }
+  }
+}
