@@ -11,6 +11,7 @@ from spirosearch.source_registry import ApiKeyManager, SourceRateLimiter, Source
 
 JSONTransport = Callable[[str], Mapping[str, Any]]
 AuthenticatedJSONTransport = Callable[[str, Mapping[str, str]], Mapping[str, Any]]
+JSONPostTransport = Callable[[str, bytes, Mapping[str, str]], Mapping[str, Any]]
 
 
 class PubChemQCProvider:
@@ -103,7 +104,7 @@ class NOMADElectronicProvider:
         self,
         *,
         base_url: str = "https://nomad-lab.eu/prod/v1/api/v1",
-        transport: JSONTransport | None = None,
+        transport: JSONTransport | JSONPostTransport | None = None,
         retrieved_at: str,
         license_hint: str = "NOMAD public data terms",
         registry_entry: SourceRegistryEntry | None = None,
@@ -117,11 +118,13 @@ class NOMADElectronicProvider:
             base_url = registry_entry.base_url
             license_hint = registry_entry.license_hint
         self.base_url = base_url.rstrip("/")
-        self.transport = transport or _urllib_json_transport
+        self._raw_transport = transport
+        self._post_transport: JSONPostTransport = _build_post_transport(transport)
         self.retrieved_at = retrieved_at
         self.license_hint = license_hint
         self.trust_level = registry_entry.trust_level if registry_entry is not None else "T2_computed_db"
         self.allowed_output_fields = registry_entry.allowed_output_fields if registry_entry is not None else None
+        self._live_enabled = registry_entry.live_enabled if registry_entry is not None else True
         self.rate_limiter = (
             rate_limiter or SourceRateLimiter(registry_entry, clock=clock, sleeper=sleeper)
             if registry_entry is not None
@@ -151,16 +154,39 @@ class NOMADElectronicProvider:
         query_value = formula.strip()
         if not query_value:
             raise ValueError("formula query is required")
+        if not self._live_enabled and self._raw_transport is None:
+            raise RuntimeError(
+                "NOMAD provider is quarantined; live calls are disabled."
+                " Use recorded fixtures for testing."
+            )
         if self.rate_limiter is not None:
             self.rate_limiter.wait_for_slot()
-        url = f"{self.base_url}/entries/archive/query?{urlencode({'formula': query_value})}"
-        payload = self._fetch_with_backoff(url)
+        url = f"{self.base_url}/entries/archive/query"
+        body = {
+            "owner": "public",
+            "query": {
+                "results.material.chemical_formula_reduced": query_value,
+            },
+            "pagination": {"page_size": 20},
+            "required": {
+                "metadata": "*",
+                "results": {
+                    "material": "*",
+                    "method": "*",
+                    "properties": {"electronic": "*"},
+                },
+            },
+        }
+        body_bytes = json.dumps(body).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        payload = self._fetch_with_backoff(url, body_bytes, headers)
         normalized, confidence = _normalize_nomad_electronic(payload)
+        source_url = f"{url} (POST body: formula={query_value})"
         return ProviderResponse.from_payload(
             provider=self.provider_name,
             query=f"formula:{query_value}",
             normalized_result=normalized,
-            source_url=url,
+            source_url=source_url,
             retrieved_at=self.retrieved_at,
             license_hint=self.license_hint,
             raw_payload=payload,
@@ -169,15 +195,14 @@ class NOMADElectronicProvider:
             allowed_output_fields=self.allowed_output_fields,
         )
 
-    def _fetch_with_backoff(self, url: str) -> Mapping[str, Any]:
+    def _fetch_with_backoff(self, url: str, body: bytes, headers: Mapping[str, str]) -> Mapping[str, Any]:
         try:
-            return self.transport(url)
+            return self._post_transport(url, body, headers)
         except Exception:
             if self.rate_limiter is None:
                 raise
             self.rate_limiter.wait_for_retry(attempt=1)
-            return self.transport(url)
-
+            return self._post_transport(url, body, headers)
 
 class MaterialsProjectProvider:
     provider_name = "materials_project"
@@ -209,6 +234,7 @@ class MaterialsProjectProvider:
         self.license_hint = license_hint
         self.trust_level = registry_entry.trust_level if registry_entry is not None else "T2_computed_db"
         self.allowed_output_fields = registry_entry.allowed_output_fields if registry_entry is not None else None
+        self._live_enabled = registry_entry.live_enabled if registry_entry is not None else True
         self.rate_limiter = (
             rate_limiter or SourceRateLimiter(registry_entry, clock=clock, sleeper=sleeper)
             if registry_entry is not None
@@ -365,6 +391,27 @@ def _put_optional(target: dict[str, Any], key: str, value: Any, caster: type) ->
         target[key] = caster(value)
 
 
+
+def _build_post_transport(transport):
+    if transport is None:
+        return _urllib_json_post_transport
+    import inspect
+    try:
+        sig = inspect.signature(transport)
+        if len(sig.parameters) == 1:
+            _get = transport
+            def _wrap(url, body, headers):
+                return _get(url)
+            return _wrap
+    except (ValueError, TypeError):
+        pass
+    return transport
+
+
+def _urllib_json_post_transport(url: str, body: bytes, headers: Mapping[str, str]) -> Mapping[str, Any]:
+    request = Request(url, data=body, headers=dict(headers), method="POST")
+    with urlopen(request, timeout=60) as response:
+        return json.loads(response.read().decode("utf-8"))
 def _urllib_json_transport(url: str) -> Mapping[str, Any]:
     with urlopen(url, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
