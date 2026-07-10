@@ -132,6 +132,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "provider_capabilities",
                 "device_evidence",
                 "conflict_report",
+                "screening_input_view",
                 "recommendations",
                 "agent_trace",
                 "ledger",

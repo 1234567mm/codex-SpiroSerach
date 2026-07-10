@@ -13,6 +13,7 @@ V4_ARTIFACT_KINDS = {
     "provider_capabilities",
     "device_evidence",
     "conflict_report",
+    "screening_input_view",
     "recommendations",
     "agent_trace",
     "ledger",
@@ -43,6 +44,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
     "conflict_report": {
         "schema_ref": "schemas/conflict-report.schema.json",
         "join_keys": ("conflict_id", "evidence_id", "review_item_id"),
+        "depends_on": (),
+    },
+    "screening_input_view": {
+        "schema_ref": "schemas/screening-input-view.schema.json",
+        "join_keys": ("candidate_id", "evidence_id", "review_item_id"),
         "depends_on": (),
     },
     "recommendations": {
