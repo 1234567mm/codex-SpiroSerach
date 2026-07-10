@@ -466,35 +466,111 @@ class BotorchSurrogate(SurrogateModel):
 
 
 class SklearnSurrogate(SurrogateModel):
-    """Placeholder for a future scikit-learn GaussianProcessRegressor."""
+    """scikit-learn GaussianProcessRegressor with lazy imports.
+
+    Requires `[ml]` optional dependency group (numpy, scikit-learn).
+    Falls back to HeuristicSurrogate if ml extras are not installed.
+    """
+
+    def __init__(self, random_seed: int = 1729):
+        self._random_seed = random_seed
+        self._model: Any = None
+        self._fitted: bool = False
+        self._feature_names: tuple[str, ...] = ()
+        self._training_hash: str = ""
+
+    def _ensure_ml(self) -> None:
+        try:
+            import numpy as np  # noqa: F401
+            import sklearn.gaussian_process  # noqa: F401
+        except ImportError:
+            raise UnsupportedSurrogateError(
+                "SklearnSurrogate requires scikit-learn integration. "
+                "Install with: pip install spirosearch[ml]"
+            )
 
     def fit(self, X: Sequence[Mapping[str, float]], y: Sequence[float]) -> ModelFitResult:
-        """Fit a scikit-learn GPR.
+        self._ensure_ml()
+        import numpy as np
+        from sklearn.gaussian_process import GaussianProcessRegressor
+        from sklearn.gaussian_process.kernels import ConstantKernel, Matern, WhiteKernel
+        from sklearn.impute import SimpleImputer
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
 
-        TODO: Implement sklearn.gaussian_process.GaussianProcessRegressor fit.
-        """
-        raise UnsupportedSurrogateError("SklearnSurrogate requires scikit-learn integration")
+        if not X:
+            raise ValueError("X must not be empty")
+        self._feature_names = tuple(sorted(X[0].keys()))
+        X_array = np.asarray(
+            [[float(row.get(f, np.nan)) for f in self._feature_names] for row in X],
+            dtype=float,
+        )
+        y_array = np.asarray([float(v) for v in y], dtype=float)
+
+        kernel = (
+            ConstantKernel(1.0, (1e-3, 1e3))
+            * Matern(length_scale=1.0, nu=2.5)
+            + WhiteKernel(noise_level=1e-3, noise_level_bounds=(1e-8, 1e1))
+        )
+        self._model = Pipeline([
+            ("impute", SimpleImputer(strategy="median", add_indicator=True)),
+            ("scale", StandardScaler()),
+            ("gpr", GaussianProcessRegressor(
+                kernel=kernel,
+                normalize_y=True,
+                n_restarts_optimizer=5,
+                random_state=self._random_seed,
+            )),
+        ])
+        self._model.fit(X_array, y_array)
+        self._fitted = True
+
+        import hashlib
+        import json
+        content = json.dumps({"X": [dict(sorted(r.items())) for r in X], "y": list(y)}, sort_keys=True)
+        self._training_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
+
+        return ModelFitResult(
+            state=SurrogateModelState(
+                surrogate_type="SKLEARN_GPR",
+                fit_status=FitStatus.FITTED,
+                training_set_hash=self._training_hash,
+                version=1,
+            ),
+            metrics={"r2_score": float(self._model.score(X_array, y_array))},
+        )
 
     def predict(self, X: Sequence[Mapping[str, float]]) -> tuple[float, ...]:
-        """Predict with scikit-learn GPR.
-
-        TODO: Implement sklearn GPR mean prediction.
-        """
-        raise UnsupportedSurrogateError("SklearnSurrogate requires scikit-learn integration")
+        if not self._fitted or self._model is None:
+            raise ValueError("Model must be fitted before predict")
+        import numpy as np
+        X_array = np.asarray(
+            [[float(row.get(f, np.nan)) for f in self._feature_names] for row in X],
+            dtype=float,
+        )
+        mean, _ = self._model.predict(X_array, return_std=True)
+        return tuple(float(v) for v in mean)
 
     def uncertainty(self, X: Sequence[Mapping[str, float]]) -> tuple[float, ...]:
-        """Estimate uncertainty with scikit-learn GPR.
-
-        TODO: Implement sklearn GPR standard deviation prediction.
-        """
-        raise UnsupportedSurrogateError("SklearnSurrogate requires scikit-learn integration")
+        if not self._fitted or self._model is None:
+            raise ValueError("Model must be fitted before uncertainty")
+        import numpy as np
+        X_array = np.asarray(
+            [[float(row.get(f, np.nan)) for f in self._feature_names] for row in X],
+            dtype=float,
+        )
+        _, std = self._model.predict(X_array, return_std=True)
+        return tuple(float(v) for v in std)
 
     def acquisition(self, X: Sequence[Mapping[str, float]], strategy: str) -> tuple[float, ...]:
-        """Score acquisition with scikit-learn GPR.
-
-        TODO: Implement sklearn-backed EI/UCB acquisition.
-        """
-        raise UnsupportedSurrogateError("SklearnSurrogate requires scikit-learn integration")
+        mean = self.predict(X)
+        std = self.uncertainty(X)
+        beta = 1.0
+        if strategy == "ei":
+            return tuple(m + beta * s for m, s in zip(mean, std))
+        if strategy == "ucb":
+            return tuple(m + 2.0 * s for m, s in zip(mean, std))
+        return tuple(m + s for m, s in zip(mean, std))
 
 
 class AcquisitionStrategy(ABC):
@@ -629,11 +705,21 @@ def select_acquisition_strategy(name: str | None, failure_penalty: float = 1.0) 
         Acquisition strategy.
     """
     normalized = (name or "heuristic").casefold()
+    if normalized == "heuristic":
+        return HeuristicAcquisition(failure_penalty=failure_penalty)
     if normalized == "ucb":
         return UCBAcquisition(failure_penalty=failure_penalty)
     if normalized == "ei":
         return EIAcquisition(failure_penalty=failure_penalty)
-    return HeuristicAcquisition(failure_penalty=failure_penalty)
+    if normalized in ("qnehvi", "qlognehvi"):
+        raise UnsupportedSurrogateError(
+            f"Acquisition strategy '{name}' requires BoTorch integration."
+            " Install with: pip install spirosearch[bo]"
+        )
+    raise UnsupportedSurrogateError(
+        f"Unknown acquisition strategy: '{name}'."
+        f" Supported strategies: heuristic, ucb, ei, qlognehvi."
+    )
 
 
 def root_cause_from_labels(labels: Sequence[str]) -> str:

@@ -14,6 +14,9 @@ V4_ARTIFACT_KINDS = {
     "device_evidence",
     "conflict_report",
     "screening_input_view",
+    "training_snapshot",
+    "model_evaluation",
+    "acquisition_breakdown",
     "recommendations",
     "agent_trace",
     "ledger",
@@ -49,6 +52,21 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
     "screening_input_view": {
         "schema_ref": "schemas/screening-input-view.schema.json",
         "join_keys": ("candidate_id", "evidence_id", "review_item_id"),
+        "depends_on": (),
+    },
+    "training_snapshot": {
+        "schema_ref": "schemas/training-snapshot.schema.json",
+        "join_keys": ("snapshot_id", "candidate_id", "source_run_id"),
+        "depends_on": (),
+    },
+    "model_evaluation": {
+        "schema_ref": "schemas/model-evaluation.schema.json",
+        "join_keys": ("snapshot_id", "model_version", "fold_id"),
+        "depends_on": ("training_snapshot",),
+    },
+    "acquisition_breakdown": {
+        "schema_ref": "schemas/acquisition-breakdown.schema.json",
+        "join_keys": ("candidate_id", "request_id", "model_version"),
         "depends_on": (),
     },
     "recommendations": {
