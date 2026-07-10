@@ -11,6 +11,7 @@ MANIFEST_SCHEMA_VERSION = "v6.run_manifest.v1"
 
 V4_ARTIFACT_KINDS = {
     "provider_capabilities",
+    "device_evidence",
     "recommendations",
     "agent_trace",
     "ledger",
@@ -31,6 +32,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
     "provider_capabilities": {
         "schema_ref": "schemas/provider-capabilities.schema.json",
         "join_keys": ("provider",),
+        "depends_on": (),
+    },
+    "device_evidence": {
+        "schema_ref": "schemas/device-evidence.schema.json",
+        "join_keys": ("device_evidence_id", "use_instance_id", "doi"),
         "depends_on": (),
     },
     "recommendations": {

@@ -1,0 +1,12 @@
+{
+  "dataset_id": "psc-fabrication-fixture-v1",
+  "version": "1.0.0",
+  "source_url": "https://doi.org/10.6084/m9.figshare.25868737",
+  "paper_doi": "10.1038/s41597-025-04566-z",
+  "license": "CC BY 4.0",
+  "retrieved_at": "2026-07-10T00:00:00+00:00",
+  "description": "Fixture dataset for testing perovskite device evidence provider",
+  "record_count": 3,
+  "content_sha256": null,
+  "local_path": "devices.json"
+}

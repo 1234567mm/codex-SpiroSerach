@@ -130,6 +130,7 @@ class RunArtifactContractTests(unittest.TestCase):
             V4_ARTIFACT_KINDS,
             {
                 "provider_capabilities",
+                "device_evidence",
                 "recommendations",
                 "agent_trace",
                 "ledger",

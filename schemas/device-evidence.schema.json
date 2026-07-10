@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/device-evidence.schema.json",
+  "title": "DeviceEvidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "device_evidence_id",
+    "use_instance_id",
+    "architecture",
+    "device_stack",
+    "metrics",
+    "provenance",
+    "curation_status"
+  ],
+  "properties": {
+    "device_evidence_id": { "type": "string", "minLength": 1 },
+    "use_instance_id": { "type": "string", "minLength": 1 },
+    "architecture": { "type": "string", "minLength": 1 },
+    "device_stack": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "htl_process": { "type": ["string", "null"] },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "pce_percent": { "type": "number" },
+        "voc_v": { "type": "number" },
+        "jsc_ma_cm2": { "type": "number" },
+        "fill_factor_pct": { "type": "number" },
+        "active_area_cm2": { "type": "number" }
+      }
+    },
+    "stability_protocol": { "type": ["string", "null"] },
+    "controls": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "replicate_count": { "type": "integer", "minimum": 0 },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source_id", "provider_name", "trust_level", "curation_status"],
+      "properties": {
+        "source_id": { "type": "string" },
+        "provider_name": { "type": "string" },
+        "doi": { "type": ["string", "null"] },
+        "url": { "type": ["string", "null"] },
+        "license": { "type": ["string", "null"] },
+        "trust_level": { "type": "string" },
+        "curation_status": { "type": "string" }
+      }
+    },
+    "curation_status": {
+      "enum": ["raw", "machine_extracted", "needs_review", "curated", "rejected"]
+    }
+  }
+}
