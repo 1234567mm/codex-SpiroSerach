@@ -1,0 +1,36 @@
+{
+  "applied_event_count": 1,
+  "by_assigned_queue": {
+    "energy": 2
+  },
+  "by_reason_code": {
+    "energy_levels_missing": 1,
+    "reference_scale_reviewed": 1
+  },
+  "by_resolution_status": {
+    "open": 1,
+    "resolved": 1
+  },
+  "by_severity": {
+    "high": 1,
+    "medium": 1
+  },
+  "event_count": 1,
+  "generated_at": "2026-07-10T00:00:00+00:00",
+  "open_blocking_count": 1,
+  "recompute_marker_ids": [
+    "marker-recompute-ometsad-lumo"
+  ],
+  "rejected_count": 0,
+  "resolved_count": 1,
+  "review_count": 2,
+  "review_event_ids": [
+    "event-resolve-ometsad-lumo-scale"
+  ],
+  "review_item_ids": [
+    "review-ometsad-lumo-scale",
+    "review-frontier-homo"
+  ],
+  "run_id": "v11-diagnostic-run-001",
+  "schema_version": "v10.review_summary.v1"
+}

@@ -1,0 +1,47 @@
+{
+  "energy_facts": [
+    {
+      "computed": false,
+      "evidence_id": "energy:spiro-ometsad:homo_ev",
+      "material_id": "spiro-ometsad",
+      "method": "reported",
+      "property_name": "homo_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:spiro-ometsad:homo_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.92,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "spiro-ometsad:HTL",
+      "value_ev": -5.2
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:spiro-ometsad:lumo_ev",
+      "material_id": "spiro-ometsad",
+      "method": "reported",
+      "property_name": "lumo_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:spiro-ometsad:lumo_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.88,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "spiro-ometsad:HTL",
+      "value_ev": -2.3
+    }
+  ],
+  "schema_version": "v10.scoring_view.v1"
+}

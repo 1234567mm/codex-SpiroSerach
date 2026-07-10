@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `main`
+- Branch: `codex/v11-visualization-readiness-fixtures`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
 - Current phase: V11 P0 visualization readiness fixtures
 - Current selected slice: `v11-visualization-readiness-fixtures`
-- Current selected slice status: ready after read-only API/MCP inventory verification passes
+- Current selected slice status: implemented in feature worktree; targeted and full gates passed; review/merge pending
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -67,9 +67,10 @@ Implementation fixes from freeze validation:
 - Repository facade tracked changes landed on main as merge commit `613e06b`; feature commit `06e6d19`.
 - Artifact validation tracked changes landed on main as merge commit `99dc396`; feature commit `00b9880`.
 - Read-only API/MCP tracked changes landed on main as merge commit `38e1f2e`; feature commit `7dc56f6`.
+- Visualization readiness fixture tracked changes are currently in branch `codex/v11-visualization-readiness-fixtures`; not merged yet.
 - Generated local files removed before repository facade commit:
   - `uv.lock`
-- Main worktree still has unrelated dirty state: `CLAUDE.md`, `.claude/`, `.codex/`, `.reasonix/`, and `plans/qorder_plan/`.
+- Main worktree still has unrelated dirty state: `CLAUDE.md`, `.claude/`, `.codex/`, `.reasonix/`, `plans/qorder_plan/`, and `reasonix.toml`.
 - Do not use `git add -A`.
 - Keep generated outputs and agent configuration out of the commit.
 
@@ -222,25 +223,68 @@ Verification evidence:
 - Read-only API/MCP targeted gate after review fixes: `tests.test_v4_mcp_tools tests.test_readonly_api tests.test_artifact_repository tests.test_artifact_validation -v` ran 38 tests OK.
 - Full gate after review fixes: `python -m unittest discover tests -v` ran 228 tests OK.
 
+## Visualization Readiness Fixture Result
+
+Status: implemented in branch `codex/v11-visualization-readiness-fixtures`; merge pending.
+
+Files:
+
+- `tests/fixtures/artifact_viewer/v11_diagnostic_run/`
+  - Adds a flat, manifest-discovered diagnostic fixture bundle for future frontend components.
+  - Includes 11 manifest artifacts: `recommendations`, `agent_trace`, `enrichment_results`, `provider_cache_index`, `provider_cache`, `review_queue`, `canonical_evidence`, `scoring_view`, `review_events`, `review_summary`, and `recompute_markers`.
+  - Includes sidecar reports `artifact-validation-report.valid.json` and `artifact-validation-report.degraded.json`; these reports are not listed in `run-manifest.json`.
+- `tests/test_v11_visualization_fixtures.py`
+  - Verifies manifest metadata, hash/bytes, JSONL record counts, frozen `schema_ref`, `join_keys`, `depends_on`, repository reads, validation sidecars, cross-artifact joins, optional degraded panels, and current static viewer rendering.
+- `docs/frontend-artifact-viewer-fixtures.md`
+  - Documents the fixture bundle, panel-to-artifact matrix, joins, readiness rules, and optional degraded panel policy.
+
+Fixture contract:
+
+- `run-manifest.json` remains the discovery source.
+- Fixture paths are flat and safe relative paths so current browser file input behavior does not drop manifest path context.
+- Required panels covered: Run Overview, Candidate Flow, Scoring Eligibility, Review Worklist, and Provider Lineage.
+- Optional panels covered by local degradation: Conflict Panel via missing `conflict_events`; Performance/Error Timeline via missing `performance_timeline`.
+- `scoring-view.json` contains only scoring-eligible facts; blocked/non-scoring evidence remains visible through `canonical-evidence.json` plus review artifacts.
+- Known collection and indirect joins (`review_item_ids`, `review_event_ids`, `recompute_marker_ids`, and scoring facts joined through canonical evidence) must appear as informational diagnostics, not warning diagnostics, in the valid validation report.
+- Provider confidence is lineage context only and remains outside scoring behavior.
+
+Verification evidence:
+
+- Red test before fixture generation: `tests.test_v11_visualization_fixtures -v` failed on missing `run-manifest.json` and degraded report status `unavailable`.
+- Fixture contract gate after implementation: `tests.test_v11_visualization_fixtures -v` ran 4 tests OK.
+- Visualization targeted gate after implementation: `tests.test_v11_visualization_fixtures tests.test_artifact_viewer tests.test_artifact_validation tests.test_readonly_api -v` ran 26 tests OK.
+- Full gate after implementation: `python -m unittest discover tests -v` ran 232 tests OK.
+- Reviewer blocker fix: `tests.test_artifact_validation tests.test_v11_visualization_fixtures -v` ran 13 tests OK after join diagnostics alias handling and sidecar regeneration.
+- Full gate after reviewer blocker fix: `python -m unittest discover tests -v` ran 232 tests OK.
+
+## V11 P0 Boundary Notes
+
+- V11 close scope: after visualization readiness fixtures land and full verification passes, V11 P0 closes. Actual reusable frontend components move to V12/P1.
+- First real frontend panel default: Scoring Eligibility is the recommended first P1 component, then Review Worklist. It has the strongest read-model support through `scoring-view.json`, `canonical-evidence.json`, review artifacts, repository validation, and read-only API/MCP envelopes.
+- Shared API/MCP envelope: V11 read-only REST-like surfaces and MCP read tools use `v11.readonly_api.envelope.v1`.
+- Second repository backend: defer final selection to V12/P1. SQLite is the default first candidate for local indexed reads; do not introduce Parquet/Arrow/LanceDB until benchmark data shows join/scoring hot spots.
+- Performance/Polars baseline: no Polars, Arrow, Rust, or second-backend replacement in V11 P0. V11 records the policy gate only: replacements require semantic equivalence plus measured baseline for candidate filtering, weighted scoring, Pareto, and artifact joins.
+- Optional panels: Conflict Panel and Performance/Error Timeline remain optional/degraded until their artifact shapes are selected in V12/P1.
+
 ## Next Slice
 
 ```text
-Slice: v11-visualization-readiness-fixtures
-Status: next after `v11-readonly-api-mcp-inventory` lands on main.
-Goal: commit frontend diagnostic fixtures and readiness checks that future components can render through manifest-discovered artifacts.
+Slice: v11-closeout
+Status: after `v11-visualization-readiness-fixtures` lands on main.
+Goal: mark V11 complete, push, and remove temporary worktrees/branches.
 Stop condition:
-  - fixture bundle covers Run Overview, Candidate Flow, Scoring Eligibility, Review Worklist, Provider Lineage, and optional degraded panels
-  - all fixture artifacts validate against declared schemas and manifest metadata
-  - artifact validation reports capture valid and degraded frontend states
-  - no frontend/readiness check depends on hard-coded artifact filenames or Python internals
+  - visualization readiness fixture merge commit is recorded
+  - full test gate passes on main
+  - V11 loop queue item 5 is landed
+  - V11 closeout decisions remain recorded
 ```
 
 ## Suggested Verification
 
-Use targeted verification from the V11 dependency-freeze worktree.
+Use targeted verification from the V11 visualization-readiness worktree.
 
 ```powershell
-$env:PYTHONPATH='src'; uv run python -m unittest tests.test_artifact_validation tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v
+$env:PYTHONPATH='src'; uv run python -m unittest tests.test_v11_visualization_fixtures tests.test_artifact_viewer tests.test_artifact_validation tests.test_readonly_api -v
 ```
 
 Before merge of any V11 implementation slice:
@@ -270,27 +314,27 @@ git status --short --branch
    - Output: read-only manifest, artifact, scoring view, review summary, and provider lineage surface inventory.
 
 5. `v11-visualization-readiness-fixtures`
-   - Status: ready to start.
-   - Output: frontend fixture matrix for diagnostic panels.
+   - Status: implemented in branch `codex/v11-visualization-readiness-fixtures`; merge pending.
+   - Output: frontend fixture matrix and diagnostic fixture bundle for Run Overview, Candidate Flow, Scoring Eligibility, Review Worklist, Provider Lineage, and optional degraded panels.
 
 ## Frontend Readiness Matrix
 
 | Panel | Required artifacts | V11 blocker |
 |---|---|---|
-| Run Overview | `run-manifest.json` | Dependency-freeze sample manifest verified |
-| Candidate Flow | candidate pool, enrichment results, canonical evidence, scoring view | Join-key matrix frozen |
-| Scoring Eligibility | `scoring-view.json`, review queue/summary | Dependency-freeze sample artifact bundle verified |
-| Review Worklist | review queue, review events, review summary | Review closure sample verified |
-| Provider Lineage | provider cache index, agent trace, provenance/raw hash | Provider cache index and trace shape frozen for JSON/JSONL repository |
-| Conflict Panel | conflict events, canonical evidence | Conflict artifacts optional; UI must degrade |
-| Performance/Error Timeline | benchmark notes, trace/error artifacts | Benchmark artifact shape not selected |
+| Run Overview | `run-manifest.json`, `recommendations`, `review_summary` | Covered by `tests/fixtures/artifact_viewer/v11_diagnostic_run` |
+| Candidate Flow | `enrichment_results`, `canonical_evidence`, `review_queue`, `provider_cache_index`, `agent_trace` | Covered by fixture join test and static viewer render test |
+| Scoring Eligibility | `scoring_view`, `canonical_evidence`, review artifacts | Covered; scoring facts join to canonical energy evidence by `evidence_id` |
+| Review Worklist | `review_queue`, `review_events`, `review_summary`, `recompute_markers` | Covered; summary counts and IDs agree with queue/events/markers |
+| Provider Lineage | `provider_cache_index`, `provider_cache`, `agent_trace`, provenance/raw hash | Covered; cache index entries join to provider cache responses and trace events |
+| Conflict Panel | optional `conflict_events`, canonical evidence | Optional; degraded sidecar marks panel-local unavailable |
+| Performance/Error Timeline | optional `performance_timeline`, trace/error artifacts | Optional; degraded sidecar marks panel-local unavailable |
 
 ## Open Decisions
 
-- Which second repository backend to evaluate first after JSON/JSONL: SQLite or Parquet/Arrow.
-- Whether P1 API and MCP should share one response envelope for structured `unavailable`.
-- Which benchmark thresholds are meaningful enough before Polars/Arrow replaces any hot path.
-- Which visualization panel should be implemented first after V10 closure: Scoring Eligibility or Review Worklist.
+- V11 P0 boundary: second backend selection is deferred to V12/P1; SQLite is the default first candidate if local indexed reads are needed.
+- V11 P0 boundary: read-only API and MCP share `v11.readonly_api.envelope.v1`; write-capable tools require a separate human gate.
+- V11 P0 boundary: no Polars/Arrow/Rust replacement in V11 P0; benchmark thresholds move to V12/P1 with semantic equivalence tests.
+- V11 P0 boundary: Scoring Eligibility is the recommended first reusable frontend component, before Review Worklist.
 
 ## Loop Caps
 

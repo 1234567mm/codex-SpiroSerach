@@ -1,0 +1,49 @@
+{
+  "cache_keys": [
+    "cache-local-spiro-ometsad-homo-lumo",
+    "cache-local-spiro-frontier-review-lumo"
+  ],
+  "cache_path": "provider-cache.jsonl",
+  "entries": [
+    {
+      "cache_key": "cache-local-spiro-ometsad-homo-lumo",
+      "cache_status": "hit",
+      "candidate_id": "spiro-ometsad",
+      "lookup_id": "lookup-local-spiro-ometsad-001",
+      "provider": "local_fixture",
+      "query": "Spiro-OMeTAD HOMO LUMO",
+      "raw_hash": "raw-hash-spiro-ometsad-001",
+      "read": true,
+      "response_id": "response-local-spiro-ometsad-001",
+      "retrieved_at": "2026-07-10T00:00:00+00:00",
+      "source_url": "fixture://providers/spiro-ometsad",
+      "trace_event_id": "trace-ometsad-provider-001",
+      "ttl_hours": 720,
+      "written": false
+    },
+    {
+      "cache_key": "cache-local-spiro-frontier-review-lumo",
+      "cache_status": "miss",
+      "candidate_id": "spiro-frontier-review",
+      "lookup_id": "lookup-local-spiro-frontier-review-001",
+      "provider": "local_fixture",
+      "query": "Frontier review candidate HOMO LUMO",
+      "raw_hash": "raw-hash-spiro-frontier-review-001",
+      "read": false,
+      "reason": "homo_ev_missing",
+      "response_id": "response-local-spiro-frontier-review-001",
+      "retrieved_at": "2026-07-10T00:00:00+00:00",
+      "source_url": "fixture://providers/spiro-frontier-review",
+      "trace_event_id": "trace-frontier-provider-001",
+      "ttl_hours": 720,
+      "written": true
+    }
+  ],
+  "entries_read": 1,
+  "entries_written": 1,
+  "entry_count": 2,
+  "failure_count": 0,
+  "hit_count": 1,
+  "miss_count": 1,
+  "schema_version": "v6.provider_cache_index.v1"
+}
