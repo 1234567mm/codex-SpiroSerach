@@ -95,6 +95,41 @@ class CrossrefWorksProvider:
             self.rate_limiter.wait_for_retry(attempt=1)
             return self.transport(url)
 
+    def search_page(
+        self,
+        query: str,
+        *,
+        page_size: int = 20,
+        cursor: str = "*",
+    ) -> ProviderResponse:
+        query_value = query.strip()
+        if not query_value:
+            raise ValueError("query is required")
+        if page_size <= 0:
+            raise ValueError("page_size must be positive")
+        if self.rate_limiter is not None:
+            self.rate_limiter.wait_for_slot()
+        url = (
+            f"{self.base_url}/works"
+            f"?query={quote(query_value, safe='')}"
+            f"&rows={page_size}"
+            f"&cursor={quote(cursor, safe='')}"
+        )
+        payload = self._fetch_with_backoff(url)
+        normalized, confidence = _normalize_crossref_page(payload)
+        return ProviderResponse.from_payload(
+            provider=self.provider_name,
+            query=f"search_page:{query_value}",
+            normalized_result=normalized,
+            source_url=url,
+            retrieved_at=self.retrieved_at,
+            license_hint=self.license_hint,
+            raw_payload=payload,
+            confidence=confidence,
+            trust_level=self.trust_level,
+            allowed_output_fields=self.allowed_output_fields,
+        )
+
 
 class OpenAlexWorksProvider:
     provider_name = "openalex"
@@ -181,6 +216,41 @@ class OpenAlexWorksProvider:
                 raise
             self.rate_limiter.wait_for_retry(attempt=1)
             return self.transport(url)
+
+    def search_page(
+        self,
+        query: str,
+        *,
+        page_size: int = 25,
+        cursor: str = "*",
+    ) -> ProviderResponse:
+        query_value = query.strip()
+        if not query_value:
+            raise ValueError("query is required")
+        if page_size <= 0:
+            raise ValueError("page_size must be positive")
+        if self.rate_limiter is not None:
+            self.rate_limiter.wait_for_slot()
+        url = (
+            f"{self.base_url}/works"
+            f"?search={quote(query_value, safe='')}"
+            f"&per-page={page_size}"
+            f"&cursor={quote(cursor, safe='')}"
+        )
+        payload = self._fetch_with_backoff(url)
+        normalized, confidence = _normalize_openalex_page(payload)
+        return ProviderResponse.from_payload(
+            provider=self.provider_name,
+            query=f"search_page:{query_value}",
+            normalized_result=normalized,
+            source_url=url,
+            retrieved_at=self.retrieved_at,
+            license_hint=self.license_hint,
+            raw_payload=payload,
+            confidence=confidence,
+            trust_level=self.trust_level,
+            allowed_output_fields=self.allowed_output_fields,
+        )
 
 
 def _urllib_json_transport(url: str) -> Mapping[str, Any]:
@@ -328,3 +398,61 @@ def _openalex_concepts(value: Any) -> list[str]:
         if isinstance(display_name, str) and display_name.strip():
             concepts.append(display_name.strip())
     return concepts
+
+def _normalize_crossref_record(record: Mapping[str, Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    _put_text(normalized, "doi", _normalize_doi(record.get("DOI")))
+    _put_text(normalized, "title", _first_text(record.get("title")))
+    _put_text(normalized, "journal", _first_text(record.get("container-title")))
+    _put_text(normalized, "published_at", _crossref_published_at(record))
+    authors = _crossref_authors(record.get("author"))
+    if authors:
+        normalized["authors"] = authors
+    _put_text(normalized, "license", _crossref_license(record.get("license")))
+    return normalized
+
+
+def _normalize_crossref_page(payload: Mapping[str, Any]) -> tuple[dict[str, Any], float]:
+    message = dict(payload.get("message", {}))
+    items = list(message.get("items", []))
+    records = [_normalize_crossref_record(dict(item)) for item in items]
+    total_results = int(message.get("total-results", 0))
+    next_cursor = message.get("next-cursor")
+    result: dict[str, Any] = {
+        "records": records,
+        "next_cursor": next_cursor,
+        "total_results": total_results,
+    }
+    confidence = 0.7 if records else 0.1
+    return result, confidence
+
+
+def _normalize_openalex_record(record: Mapping[str, Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    _put_text(normalized, "openalex_id", _openalex_id(record.get("id")))
+    _put_text(normalized, "doi", _normalize_doi(record.get("doi")))
+    _put_text(normalized, "title", record.get("title"))
+    concepts = _openalex_concepts(record.get("concepts"))
+    if concepts:
+        normalized["concepts"] = concepts
+    open_access = record.get("open_access")
+    if isinstance(open_access, Mapping):
+        _put_text(normalized, "oa_status", open_access.get("oa_status"))
+    if record.get("cited_by_count") is not None:
+        normalized["cited_by_count"] = int(record["cited_by_count"])
+    return normalized
+
+
+def _normalize_openalex_page(payload: Mapping[str, Any]) -> tuple[dict[str, Any], float]:
+    results = list(payload.get("results", []))
+    records = [_normalize_openalex_record(dict(item)) for item in results]
+    meta = payload.get("meta", {})
+    next_cursor = meta.get("next_cursor")
+    total_results = int(meta.get("count", 0))
+    result: dict[str, Any] = {
+        "records": records,
+        "next_cursor": next_cursor,
+        "total_results": total_results,
+    }
+    confidence = 0.7 if records else 0.1
+    return result, confidence

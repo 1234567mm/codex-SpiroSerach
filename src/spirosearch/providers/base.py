@@ -10,6 +10,8 @@ from spirosearch.contracts import TRUST_LEVELS
 
 PROVIDER_RESPONSE_CONTRACT_VERSION = "provider-response-v1"
 
+SOURCE_QUOTE_FIELDS = frozenset({"title", "abstract", "source_text"})
+
 
 def stable_json(value: Any) -> str:
     """Serialize JSON-compatible data deterministically."""
@@ -20,22 +22,27 @@ def stable_hash(value: Any) -> str:
     return hashlib.sha256(stable_json(value).encode("utf-8")).hexdigest()
 
 
-def contains_conclusion(value: Any) -> bool:
+def contains_conclusion(value: Any, *, source_quote_fields: frozenset[str] = SOURCE_QUOTE_FIELDS) -> bool:
     if isinstance(value, Mapping):
-        return any(_contains_conclusion_item(str(key), item) for key, item in value.items())
+        return any(
+            _contains_conclusion_item(str(key), item, source_quote_fields=source_quote_fields)
+            for key, item in value.items()
+        )
     if isinstance(value, list | tuple):
-        return any(contains_conclusion(item) for item in value)
+        return any(contains_conclusion(item, source_quote_fields=source_quote_fields) for item in value)
     if isinstance(value, str):
         return _contains_conclusion_phrase(value)
     return False
 
 
-def _contains_conclusion_item(key: str, value: Any) -> bool:
+def _contains_conclusion_item(key: str, value: Any, *, source_quote_fields: frozenset[str] = SOURCE_QUOTE_FIELDS) -> bool:
     if _is_conclusion_key(key) and _has_conclusion_value(value):
         return True
     if _is_free_text_key(key) and _contains_conclusion_phrase(value):
         return True
-    return contains_conclusion(value)
+    if key in source_quote_fields:
+        return False
+    return contains_conclusion(value, source_quote_fields=source_quote_fields)
 
 
 def _is_conclusion_key(key: str) -> bool:
