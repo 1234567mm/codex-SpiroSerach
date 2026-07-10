@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/readonly-api-envelope.schema.json",
+  "title": "ReadOnlyApiEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "severity",
+    "surface",
+    "read_only",
+    "run_id",
+    "artifact_kind",
+    "source",
+    "payload",
+    "unavailable"
+  ],
+  "properties": {
+    "schema_version": { "const": "v11.readonly_api.envelope.v1" },
+    "status": { "enum": ["available", "degraded", "invalid", "unavailable"] },
+    "severity": { "enum": ["info", "warning", "error", "critical"] },
+    "surface": { "type": "string", "minLength": 1 },
+    "read_only": { "const": true },
+    "run_id": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    },
+    "artifact_kind": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "manifest_path"],
+      "properties": {
+        "backend": { "const": "json_artifact_repository" },
+        "manifest_path": { "type": "string" }
+      }
+    },
+    "payload": {},
+    "unavailable": {
+      "anyOf": [
+        { "type": "object" },
+        { "type": "null" }
+      ]
+    }
+  }
+}

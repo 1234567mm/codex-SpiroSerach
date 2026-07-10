@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from spirosearch.mcp.registry import MCPToolRegistry
+from spirosearch.mcp.read_tools import create_readonly_run_tools
 from spirosearch.mcp.tools import create_core_tools
 from spirosearch.v4 import ExperimentLedger
 
@@ -79,3 +80,27 @@ def create_default_server(
         Local MCP server skeleton.
     """
     return MCPServer(registry=create_default_registry(audit_path=audit_path, ledger=ledger))
+
+
+def create_readonly_run_registry(
+    output_dir: str | Path,
+) -> MCPToolRegistry:
+    """Create a registry with V11 read-only run artifact tools.
+
+    Args:
+        output_dir: Directory containing run-manifest.json and artifacts.
+
+    Returns:
+        MCP tool registry with read-only tools only.
+    """
+    registry = MCPToolRegistry()
+    for tool in create_readonly_run_tools(output_dir):
+        registry.register(tool)
+    return registry
+
+
+def create_readonly_run_server(
+    output_dir: str | Path,
+) -> MCPServer:
+    """Create a local MCP server skeleton exposing only V11 read surfaces."""
+    return MCPServer(registry=create_readonly_run_registry(output_dir=output_dir))

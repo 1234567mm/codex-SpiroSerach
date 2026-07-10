@@ -4,13 +4,13 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `main`
+- Branch: `codex/v11-readonly-api-mcp-inventory`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
-- Current phase: V11 P0 read-only API/MCP inventory
-- Current selected slice: `v11-readonly-api-mcp-inventory`
-- Current selected slice status: ready to start after artifact validation loop landed on main as `99dc396`
+- Current phase: V11 P0 visualization readiness fixtures
+- Current selected slice: `v11-visualization-readiness-fixtures`
+- Current selected slice status: ready after read-only API/MCP inventory verification passes
 - Human gate: required before merge, push, deleting worktrees, changing scoring policy, changing artifact contracts, or exposing non-read-only API/MCP behavior.
 
 ## Dependency State
@@ -188,17 +188,50 @@ Verification evidence:
 - Artifact validation targeted gate after security review fixes: `tests.test_artifact_validation tests.test_artifact_repository tests.test_run_artifacts tests.test_artifact_viewer tests.test_provider_schemas tests.test_enrichment_runtime_cli tests.test_v4_runtime_cli -v` ran 70 tests OK.
 - Full gate after security review fixes: `python -m unittest discover tests -v` ran 222 tests OK.
 
+## Read-Only API/MCP Inventory Result
+
+Status: implemented in branch `codex/v11-readonly-api-mcp-inventory`; not merged yet.
+
+Files:
+
+- `src/spirosearch/readonly_api.py`
+  - Adds `ReadOnlyRunAPI`, a transport-neutral read service over `JsonArtifactRepository`.
+  - Adds `readonly_surface_inventory()` for REST-like surface names and matching MCP read tools.
+  - Returns `v11.readonly_api.envelope.v1` envelopes with `status`, `severity`, `surface`, `read_only`, `run_id`, `artifact_kind`, `source`, `payload`, and `unavailable`.
+  - Maps artifact validation `valid/degraded/invalid/unavailable` status into top-level read envelope status.
+  - Rejects unsafe manifest artifact paths before manifest or artifact-index metadata is exposed through read-only surfaces.
+- `src/spirosearch/mcp/read_tools.py`
+  - Adds read-only MCP tool definitions over `ReadOnlyRunAPI`.
+  - Uses a tightened MCP output schema aligned with the frozen read-only envelope schema.
+- `src/spirosearch/mcp/server.py`
+  - Adds `create_readonly_run_registry(output_dir)` and `create_readonly_run_server(output_dir)`.
+  - Keeps the existing default V4 MCP registry unchanged, including existing write tools.
+  - Does not expose durable audit-path writes for the V11 read-only registry.
+- `schemas/readonly-api-envelope.schema.json`
+  - Freezes the shared REST/MCP read envelope shape.
+- `tests/test_readonly_api.py`
+  - Covers inventory names, schema-valid envelopes, manifest-only nested artifact paths, missing required artifacts, read-only MCP registry behavior, and compatibility with the existing MCP registry.
+- `docs/v11-readonly-api-mcp.md`
+  - Records REST inventory, MCP inventory, envelope, and non-goals.
+
+Verification evidence:
+
+- Red test before implementation: `tests.test_readonly_api -v` failed on missing `create_readonly_run_registry`.
+- Read-only API/MCP contract gate after review fixes: `tests.test_readonly_api -v` ran 6 tests OK.
+- Read-only API/MCP targeted gate after review fixes: `tests.test_v4_mcp_tools tests.test_readonly_api tests.test_artifact_repository tests.test_artifact_validation -v` ran 38 tests OK.
+- Full gate after review fixes: `python -m unittest discover tests -v` ran 228 tests OK.
+
 ## Next Slice
 
 ```text
-Slice: v11-readonly-api-mcp-inventory
-Status: next after `v11-artifact-validation-local-loop` lands on main.
-Goal: inventory read-only API/MCP surfaces over the repository facade and artifact validation report without adding mutation behavior.
+Slice: v11-visualization-readiness-fixtures
+Status: next after `v11-readonly-api-mcp-inventory` lands on main.
+Goal: commit frontend diagnostic fixtures and readiness checks that future components can render through manifest-discovered artifacts.
 Stop condition:
-  - inventory names each read-only run/artifact/scoring/review/provider-lineage/validation endpoint or MCP tool candidate
-  - response envelopes reuse repository `unavailable` and validation report status fields
-  - mutation, live provider calls, scoring policy changes, and database requirements remain out of scope
-  - frontend visualization can discover the stable report shapes without hard-coded artifact filenames
+  - fixture bundle covers Run Overview, Candidate Flow, Scoring Eligibility, Review Worklist, Provider Lineage, and optional degraded panels
+  - all fixture artifacts validate against declared schemas and manifest metadata
+  - artifact validation reports capture valid and degraded frontend states
+  - no frontend/readiness check depends on hard-coded artifact filenames or Python internals
 ```
 
 ## Suggested Verification
@@ -232,11 +265,11 @@ git status --short --branch
    - Output: local artifact validation loop and CLI covering manifest, schema, hash, JSONL, join keys, and optional panel-local unavailable states.
 
 4. `v11-readonly-api-mcp-inventory`
-   - Status: ready to start.
+   - Status: targeted verification passed in branch `codex/v11-readonly-api-mcp-inventory`; ready for review, merge, and push.
    - Output: read-only manifest, artifact, scoring view, review summary, and provider lineage surface inventory.
 
 5. `v11-visualization-readiness-fixtures`
-   - Status: pending read-only API/MCP inventory and fixture selection.
+   - Status: next after read-only API/MCP inventory lands on main.
    - Output: frontend fixture matrix for diagnostic panels.
 
 ## Frontend Readiness Matrix
