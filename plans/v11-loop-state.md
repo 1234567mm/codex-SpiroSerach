@@ -4,7 +4,7 @@ Purpose: persistent memory for V11 local loops. Update this file at the start an
 
 ## Current Status
 
-- Branch: `codex/v11-readonly-api-mcp-inventory`
+- Branch: `main`
 - Upstream: `origin/main`
 - V11 baseline document: `plans/v11-lightweight-productionization-and-repository-plan.md`
 - Loop spec: `plans/v11-loop-spec.md`
@@ -66,6 +66,7 @@ Implementation fixes from freeze validation:
 
 - Repository facade tracked changes landed on main as merge commit `613e06b`; feature commit `06e6d19`.
 - Artifact validation tracked changes landed on main as merge commit `99dc396`; feature commit `00b9880`.
+- Read-only API/MCP tracked changes landed on main as merge commit `38e1f2e`; feature commit `7dc56f6`.
 - Generated local files removed before repository facade commit:
   - `uv.lock`
 - Main worktree still has unrelated dirty state: `CLAUDE.md`, `.claude/`, `.codex/`, `.reasonix/`, and `plans/qorder_plan/`.
@@ -190,7 +191,7 @@ Verification evidence:
 
 ## Read-Only API/MCP Inventory Result
 
-Status: implemented in branch `codex/v11-readonly-api-mcp-inventory`; not merged yet.
+Status: landed on main as merge commit `38e1f2e`; feature commit `7dc56f6`.
 
 Files:
 
@@ -265,11 +266,11 @@ git status --short --branch
    - Output: local artifact validation loop and CLI covering manifest, schema, hash, JSONL, join keys, and optional panel-local unavailable states.
 
 4. `v11-readonly-api-mcp-inventory`
-   - Status: targeted verification passed in branch `codex/v11-readonly-api-mcp-inventory`; ready for review, merge, and push.
+   - Status: landed on main as `38e1f2e`.
    - Output: read-only manifest, artifact, scoring view, review summary, and provider lineage surface inventory.
 
 5. `v11-visualization-readiness-fixtures`
-   - Status: next after read-only API/MCP inventory lands on main.
+   - Status: ready to start.
    - Output: frontend fixture matrix for diagnostic panels.
 
 ## Frontend Readiness Matrix
