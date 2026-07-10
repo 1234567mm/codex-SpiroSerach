@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/conflict-report.schema.json",
+  "title": "ConflictReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_version", "conflicts", "context_mismatches"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "policy_version": { "type": "string" },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["conflict_id", "material_id", "property_name", "comparable_key", "evidence_ids", "values", "delta", "threshold", "action"],
+        "properties": {
+          "conflict_id": { "type": "string" },
+          "material_id": { "type": "string" },
+          "property_name": { "type": "string" },
+          "comparable_key": { "type": "string" },
+          "evidence_ids": { "type": "array", "items": { "type": "string" } },
+          "values": { "type": "array", "items": { "type": "number" } },
+          "delta": { "type": "number" },
+          "threshold": { "type": "number" },
+          "action": { "type": "string" },
+          "selected_evidence_id": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "context_mismatches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reason_code", "evidence_ids", "detail"],
+        "properties": {
+          "reason_code": { "type": "string" },
+          "evidence_ids": { "type": "array", "items": { "type": "string" } },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  }
+}

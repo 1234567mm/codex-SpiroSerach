@@ -12,6 +12,7 @@ MANIFEST_SCHEMA_VERSION = "v6.run_manifest.v1"
 V4_ARTIFACT_KINDS = {
     "provider_capabilities",
     "device_evidence",
+    "conflict_report",
     "recommendations",
     "agent_trace",
     "ledger",
@@ -37,6 +38,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
     "device_evidence": {
         "schema_ref": "schemas/device-evidence.schema.json",
         "join_keys": ("device_evidence_id", "use_instance_id", "doi"),
+        "depends_on": (),
+    },
+    "conflict_report": {
+        "schema_ref": "schemas/conflict-report.schema.json",
+        "join_keys": ("conflict_id", "evidence_id", "review_item_id"),
         "depends_on": (),
     },
     "recommendations": {
