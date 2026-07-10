@@ -129,6 +129,7 @@ class RunArtifactContractTests(unittest.TestCase):
         self.assertEqual(
             V4_ARTIFACT_KINDS,
             {
+                "provider_capabilities",
                 "recommendations",
                 "agent_trace",
                 "ledger",

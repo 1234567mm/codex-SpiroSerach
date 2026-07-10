@@ -25,7 +25,11 @@
       "ambiguous_cids",
       "resolution_status"
     ],
-    "disambiguation_required": true
+    "disambiguation_required": true,
+    "operational_status": "active",
+    "capabilities": ["identity"],
+    "execution_modes": ["direct", "enrichment"],
+    "last_verified_at": "2026-07-10"
   },
   {
     "provider": "nomad",
@@ -47,7 +51,11 @@
       "xc_functional",
       "computed"
     ],
-    "disambiguation_required": false
+    "disambiguation_required": false,
+    "operational_status": "quarantined",
+    "capabilities": ["electronic_structure", "computed_material_summary"],
+    "execution_modes": ["direct"],
+    "last_verified_at": null
   },
   {
     "provider": "pubchemqc",
@@ -69,7 +77,11 @@
       "basis_set",
       "computed"
     ],
-    "disambiguation_required": false
+    "disambiguation_required": false,
+    "operational_status": "quarantined",
+    "capabilities": ["electronic_structure"],
+    "execution_modes": ["direct"],
+    "last_verified_at": null
   },
   {
     "provider": "crossref",
@@ -91,7 +103,11 @@
       "license",
       "retraction_flag"
     ],
-    "disambiguation_required": false
+    "disambiguation_required": false,
+    "operational_status": "active",
+    "capabilities": ["literature_metadata"],
+    "execution_modes": ["direct"],
+    "last_verified_at": "2026-07-10"
   },
   {
     "provider": "openalex",
@@ -102,7 +118,8 @@
       "requests_per_second": 10,
       "backoff_strategy": "exponential"
     },
-    "requires_api_key": false,
+    "requires_api_key": true,
+    "api_key_env": "OPENALEX_API_KEY",
     "cache_ttl_hours": 168,
     "allowed_output_fields": [
       "openalex_id",
@@ -112,7 +129,11 @@
       "oa_status",
       "cited_by_count"
     ],
-    "disambiguation_required": false
+    "disambiguation_required": false,
+    "operational_status": "experimental",
+    "capabilities": ["literature_metadata"],
+    "execution_modes": ["direct"],
+    "last_verified_at": null
   },
   {
     "provider": "materials_project",
@@ -136,6 +157,10 @@
       "space_group",
       "computed"
     ],
-    "disambiguation_required": false
+    "disambiguation_required": false,
+    "operational_status": "active",
+    "capabilities": ["electronic_structure", "computed_material_summary"],
+    "execution_modes": ["direct", "enrichment"],
+    "last_verified_at": "2026-07-10"
   }
 ]

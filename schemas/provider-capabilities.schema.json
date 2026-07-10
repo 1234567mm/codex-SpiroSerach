@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/provider-capabilities.schema.json",
+  "title": "ProviderCapabilities",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "producer_version",
+    "providers"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "producer_version": { "type": "string", "minLength": 1 },
+    "record_count": { "type": "null" },
+    "providers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "base_url",
+          "trust_level",
+          "operational_status",
+          "live_enabled",
+          "capabilities",
+          "execution_modes",
+          "requires_api_key",
+          "last_verified_at"
+        ],
+        "properties": {
+          "provider": { "type": "string", "minLength": 1 },
+          "base_url": { "type": "string", "minLength": 1 },
+          "license_hint": { "type": "string" },
+          "trust_level": { "type": "string", "minLength": 1 },
+          "operational_status": {
+            "enum": ["active", "experimental", "quarantined", "disabled"]
+          },
+          "live_enabled": { "type": "boolean" },
+          "capabilities": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "execution_modes": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "requires_api_key": { "type": "boolean" },
+          "api_key_env": { "type": ["string", "null"] },
+          "cache_ttl_hours": { "type": "integer" },
+          "last_verified_at": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

@@ -11,6 +11,8 @@ from spirosearch.contracts import TRUST_LEVELS
 
 
 BACKOFF_STRATEGIES = {"none", "fixed", "exponential"}
+OPERATIONAL_STATUSES = {"active", "experimental", "quarantined", "disabled"}
+EXECUTION_MODES = {"direct", "enrichment", "local_dataset"}
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,10 @@ class SourceRegistryEntry:
     allowed_output_fields: tuple[str, ...]
     disambiguation_required: bool
     api_key_env: str | None = None
+    operational_status: str = "experimental"
+    capabilities: tuple[str, ...] = ()
+    execution_modes: tuple[str, ...] = ()
+    last_verified_at: str | None = None
 
     def __post_init__(self) -> None:
         if not self.provider.strip():
@@ -44,9 +50,22 @@ class SourceRegistryEntry:
             raise ValueError(f"unknown backoff_strategy for {self.provider}")
         if self.requires_api_key and not (self.api_key_env or "").strip():
             raise ValueError(f"api_key_env is required for API-key provider {self.provider}")
+        if self.operational_status not in OPERATIONAL_STATUSES:
+            raise ValueError(
+                f"unknown operational_status for {self.provider}: {self.operational_status}"
+            )
+        if not self.capabilities:
+            raise ValueError(f"at least one capability is required for {self.provider}")
+        for mode in self.execution_modes:
+            if mode not in EXECUTION_MODES:
+                raise ValueError(f"unknown execution_mode for {self.provider}: {mode}")
+        if not self.execution_modes:
+            raise ValueError(f"at least one execution_mode is required for {self.provider}")
 
         object.__setattr__(self, "rate_limit", dict(self.rate_limit))
         object.__setattr__(self, "allowed_output_fields", tuple(self.allowed_output_fields))
+        object.__setattr__(self, "capabilities", tuple(self.capabilities))
+        object.__setattr__(self, "execution_modes", tuple(self.execution_modes))
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "SourceRegistryEntry":
@@ -61,6 +80,10 @@ class SourceRegistryEntry:
             allowed_output_fields=tuple(str(item) for item in data["allowed_output_fields"]),
             disambiguation_required=bool(data["disambiguation_required"]),
             api_key_env=str(data["api_key_env"]) if data.get("api_key_env") else None,
+            operational_status=str(data.get("operational_status", "experimental")),
+            capabilities=tuple(str(item) for item in data.get("capabilities", ())),
+            execution_modes=tuple(str(item) for item in data.get("execution_modes", ())),
+            last_verified_at=str(data["last_verified_at"]) if data.get("last_verified_at") else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -75,7 +98,18 @@ class SourceRegistryEntry:
             "allowed_output_fields": list(self.allowed_output_fields),
             "disambiguation_required": self.disambiguation_required,
             "api_key_env": self.api_key_env,
+            "operational_status": self.operational_status,
+            "capabilities": list(self.capabilities),
+            "execution_modes": list(self.execution_modes),
+            "last_verified_at": self.last_verified_at,
         }
+
+    @property
+    def live_enabled(self) -> bool:
+        return (
+            self.operational_status == "active"
+            and "enrichment" in self.execution_modes
+        )
 
     def validate_output_fields(self, normalized_result: Mapping[str, Any]) -> None:
         allowed = set(self.allowed_output_fields)

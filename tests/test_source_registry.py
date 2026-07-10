@@ -4,7 +4,12 @@ import unittest
 from pathlib import Path
 
 from spirosearch.contracts import TRUST_LEVELS
-from spirosearch.source_registry import ApiKeyManager, load_source_registry
+from spirosearch.source_registry import (
+    ApiKeyManager,
+    OPERATIONAL_STATUSES,
+    SourceRegistryEntry,
+    load_source_registry,
+)
 
 
 class SourceRegistryTests(unittest.TestCase):
@@ -83,6 +88,134 @@ class SourceRegistryTests(unittest.TestCase):
         finally:
             if previous is not None:
                 os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+    def test_registry_exposes_live_eligibility(self):
+        registry = load_source_registry(
+            [
+                {
+                    "provider": "verified",
+                    "base_url": "https://example.invalid",
+                    "license_hint": "fixture",
+                    "trust_level": "T2_computed_db",
+                    "rate_limit": {"requests_per_second": 1, "backoff_strategy": "none"},
+                    "requires_api_key": False,
+                    "cache_ttl_hours": 24,
+                    "allowed_output_fields": ["value"],
+                    "disambiguation_required": False,
+                    "operational_status": "active",
+                    "capabilities": ["electronic_structure"],
+                    "execution_modes": ["direct", "enrichment"],
+                    "last_verified_at": "2026-07-10",
+                }
+            ]
+        )
+        entry = registry.get("verified")
+        self.assertTrue(entry.live_enabled)
+        self.assertEqual(entry.capabilities, ("electronic_structure",))
+        self.assertEqual(entry.execution_modes, ("direct", "enrichment"))
+        self.assertEqual(entry.operational_status, "active")
+        self.assertEqual(entry.last_verified_at, "2026-07-10")
+
+    def test_quarantined_provider_is_not_live_enabled(self):
+        record = {
+            "provider": "quarantined_source",
+            "base_url": "https://example.invalid",
+            "license_hint": "fixture",
+            "trust_level": "T3_literature_machine",
+            "rate_limit": {"requests_per_second": 1, "backoff_strategy": "none"},
+            "requires_api_key": False,
+            "cache_ttl_hours": 24,
+            "allowed_output_fields": ["value"],
+            "disambiguation_required": False,
+            "operational_status": "quarantined",
+            "capabilities": ["electronic_structure"],
+            "execution_modes": ["direct"],
+            "last_verified_at": None,
+        }
+        entry = SourceRegistryEntry.from_dict(record)
+        self.assertFalse(entry.live_enabled)
+        self.assertEqual(entry.operational_status, "quarantined")
+
+    def test_experimental_provider_is_not_live_enabled(self):
+        record = {
+            "provider": "experimental_source",
+            "base_url": "https://example.invalid",
+            "license_hint": "fixture",
+            "trust_level": "T3_literature_machine",
+            "rate_limit": {"requests_per_second": 1, "backoff_strategy": "none"},
+            "requires_api_key": False,
+            "cache_ttl_hours": 24,
+            "allowed_output_fields": ["value"],
+            "disambiguation_required": False,
+            "operational_status": "experimental",
+            "capabilities": ["literature_metadata"],
+            "execution_modes": ["direct"],
+            "last_verified_at": None,
+        }
+        entry = SourceRegistryEntry.from_dict(record)
+        self.assertFalse(entry.live_enabled)
+
+    def test_disabled_provider_is_not_live_enabled(self):
+        record = {
+            "provider": "disabled_source",
+            "base_url": "https://example.invalid",
+            "license_hint": "fixture",
+            "trust_level": "T3_literature_machine",
+            "rate_limit": {"requests_per_second": 1, "backoff_strategy": "none"},
+            "requires_api_key": False,
+            "cache_ttl_hours": 24,
+            "allowed_output_fields": ["value"],
+            "disambiguation_required": False,
+            "operational_status": "disabled",
+            "capabilities": ["identity"],
+            "execution_modes": ["direct"],
+            "last_verified_at": None,
+        }
+        entry = SourceRegistryEntry.from_dict(record)
+        self.assertFalse(entry.live_enabled)
+
+    def test_invalid_operational_status_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "operational_status"):
+            load_source_registry(
+                [
+                    {
+                        "provider": "bad_status",
+                        "base_url": "https://example.invalid",
+                        "license_hint": "fixture",
+                        "trust_level": "T2_computed_db",
+                        "rate_limit": {"requests_per_second": 1, "backoff_strategy": "none"},
+                        "requires_api_key": False,
+                        "cache_ttl_hours": 24,
+                        "allowed_output_fields": ["value"],
+                        "disambiguation_required": False,
+                        "operational_status": "not-a-real-status",
+                        "capabilities": ["identity"],
+                        "execution_modes": ["direct"],
+                    }
+                ]
+            )
+
+    def test_active_without_enrichment_is_not_live_enabled(self):
+        record = {
+            "provider": "direct_only",
+            "base_url": "https://example.invalid",
+            "license_hint": "fixture",
+            "trust_level": "T2_computed_db",
+            "rate_limit": {"requests_per_second": 1, "backoff_strategy": "none"},
+            "requires_api_key": False,
+            "cache_ttl_hours": 24,
+            "allowed_output_fields": ["value"],
+            "disambiguation_required": False,
+            "operational_status": "active",
+            "capabilities": ["identity"],
+            "execution_modes": ["direct"],
+            "last_verified_at": None,
+        }
+        entry = SourceRegistryEntry.from_dict(record)
+        self.assertFalse(entry.live_enabled)
+
+    def test_operational_status_constants_are_well_defined(self):
+        self.assertEqual(OPERATIONAL_STATUSES, {"active", "experimental", "quarantined", "disabled"})
 
 
 if __name__ == "__main__":
