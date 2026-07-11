@@ -167,6 +167,7 @@ class ReadOnlyApiTests(unittest.TestCase):
         self.assertEqual(
             sorted(rest),
             [
+                "algorithm_diagnostics",
                 "artifact_by_kind",
                 "artifact_index",
                 "artifact_validation",
@@ -184,6 +185,7 @@ class ReadOnlyApiTests(unittest.TestCase):
         self.assertEqual(
             sorted(mcp_tools),
             [
+                "read_algorithm_diagnostics",
                 "read_artifact_validation_report",
                 "read_provider_lineage",
                 "read_review_summary",
@@ -238,6 +240,34 @@ class ReadOnlyApiTests(unittest.TestCase):
             self.assertEqual(scoring["unavailable"]["reason"], "artifact_not_declared")
             self.assertIsNone(scoring["payload"])
             self.assert_envelope_schema_valid(scoring)
+
+    def test_algorithm_diagnostics_degrades_locally_without_writing(self):
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            write_manifest(output_dir, [])
+            before = {path.relative_to(output_dir) for path in output_dir.rglob("*")}
+
+            diagnostics = ReadOnlyRunAPI(output_dir).algorithm_diagnostics()
+
+            after = {path.relative_to(output_dir) for path in output_dir.rglob("*")}
+            self.assertEqual(before, after)
+            self.assertEqual(diagnostics["status"], "degraded")
+            self.assertEqual(diagnostics["severity"], "warning")
+            self.assertEqual(
+                set(diagnostics["payload"]["panels"]),
+                {
+                    "provider_capabilities",
+                    "extraction_evaluation",
+                    "conflict_report",
+                    "screening_input_view",
+                    "model_evaluation",
+                    "acquisition_breakdown",
+                },
+            )
+            self.assertTrue(
+                all(panel["status"] == "unavailable" for panel in diagnostics["payload"]["panels"].values())
+            )
+            self.assert_envelope_schema_valid(diagnostics)
 
     def test_manifest_and_index_reject_unsafe_paths_before_exposing_metadata(self):
         with TemporaryDirectory() as temp_dir:

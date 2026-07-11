@@ -10,9 +10,25 @@ from spirosearch.artifact_validation import validate_artifact_run
 READONLY_API_SCHEMA_VERSION = "v11.readonly_api.envelope.v1"
 READONLY_API_INVENTORY_SCHEMA_VERSION = "v11.readonly_api_inventory.v1"
 READONLY_API_ENVELOPE_SCHEMA_REF = "schemas/readonly-api-envelope.schema.json"
+ALGORITHM_DIAGNOSTIC_KINDS = (
+    "provider_capabilities",
+    "extraction_evaluation",
+    "conflict_report",
+    "screening_input_view",
+    "model_evaluation",
+    "acquisition_breakdown",
+)
 
 
 REST_SURFACES: tuple[dict[str, Any], ...] = (
+    {
+        "surface_id": "algorithm_diagnostics",
+        "method": "GET",
+        "path": "/runs/{run_id}/algorithm-diagnostics",
+        "mcp_tool": "read_algorithm_diagnostics",
+        "read_only": True,
+        "response_schema": READONLY_API_ENVELOPE_SCHEMA_REF,
+    },
     {
         "surface_id": "manifest",
         "method": "GET",
@@ -73,6 +89,7 @@ REST_SURFACES: tuple[dict[str, Any], ...] = (
 
 
 MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
+    "read_algorithm_diagnostics": "Read V13 algorithm diagnostics with panel-local degradation.",
     "read_run_manifest": "Read the manifest envelope for a completed artifact run.",
     "read_run_artifacts": "List manifest-discovered artifact metadata for a completed run.",
     "read_run_artifact": "Read one manifest-discovered artifact by kind.",
@@ -235,6 +252,22 @@ class ReadOnlyRunAPI:
             payload=report,
             status=_validation_report_status(str(report.get("status", "unavailable"))),
             severity=str(report.get("severity", "critical")),
+        )
+
+    def algorithm_diagnostics(self) -> dict[str, Any]:
+        panels = {kind: self.artifact(kind) for kind in ALGORITHM_DIAGNOSTIC_KINDS}
+        unavailable_count = sum(panel["status"] != "available" for panel in panels.values())
+        return _available_envelope(
+            surface="algorithm_diagnostics",
+            run_id=self._run_id(),
+            artifact_kind=None,
+            payload={
+                "panels": panels,
+                "available_count": len(panels) - unavailable_count,
+                "unavailable_count": unavailable_count,
+            },
+            status="degraded" if unavailable_count else "available",
+            severity="warning" if unavailable_count else "info",
         )
 
     def _run_id(self) -> str | None:

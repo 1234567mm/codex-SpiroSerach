@@ -75,6 +75,7 @@ READONLY_ENVELOPE_OUTPUT_SCHEMA: dict[str, Any] = {
 def create_readonly_run_tools(output_dir: str | Path) -> tuple[MCPTool, ...]:
     api = ReadOnlyRunAPI(output_dir)
     return (
+        _tool("read_algorithm_diagnostics", EMPTY_INPUT_SCHEMA, lambda payload, context: api.algorithm_diagnostics()),
         _tool("read_run_manifest", EMPTY_INPUT_SCHEMA, lambda payload, context: api.manifest()),
         _tool("read_run_artifacts", EMPTY_INPUT_SCHEMA, lambda payload, context: api.artifacts()),
         _tool("read_run_artifact", READ_ARTIFACT_INPUT_SCHEMA, lambda payload, context: api.artifact(str(payload["kind"]))),
