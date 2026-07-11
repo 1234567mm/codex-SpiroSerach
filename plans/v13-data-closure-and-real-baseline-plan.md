@@ -9,7 +9,7 @@
 3. Add grouped dummy/heuristic/GPR evaluation, calibration metrics, and fail-closed activation status.
 4. Close all eleven V12 artifact contracts through schema, writer, manifest, repository, and read-only tests.
 5. Add explicit offline CLI operations and a manifest-discovered diagnostic fixture; reads never train, fetch, or write.
-6. Verify a CC BY 4.0 public PSC source, commit a bounded normalized snapshot with source row IDs and hashes, and run offline replay.
+6. Verify a CC0 public PSC source, commit a bounded normalized snapshot with source row IDs and hashes, and run offline replay.
 7. Update V12/V13 status and interface docs from fresh test evidence.
 
 ## Gates

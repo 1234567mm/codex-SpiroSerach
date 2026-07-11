@@ -318,6 +318,14 @@ V4 提供 `assess_manufacturability()`，用于判断候选是否能进入实验
 
 这类失败会输出 `film_morphology` 根因、quarantine 建议和 router 更新动作。
 
+## V13 数据闭环与真实基线
+
+V13 增加离线 `dataset-import`、`model-evaluate` 和 `acquisition-replay` 命令，补齐 11 类算法 artifact，并在只读 API/MCP 和静态 viewer 中提供 Scoring Eligibility 与 Model Evaluation 诊断。
+
+公开基线位于 `data/baselines/figshare-25868737-v2/`：来源为 CC0 的 3,164 行设备属性数据，提交快照为带原始 row ID 的 24 行确定性子集。该数据没有 PCE/稳定性目标，因此只用于数据接入和筛选输入验收，模型状态明确为 `disabled`，不会把描述性字段伪装成训练标签。
+
+完整命令、哈希、artifact 清单和激活规则见 `docs/v13-data-closure-and-real-baseline.md`。
+
 ## Schema
 
 仓库提供 V4 契约 schema：

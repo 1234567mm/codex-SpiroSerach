@@ -29,10 +29,11 @@ Execute `plans/v13-data-closure-and-real-baseline-plan.md` from `main@82303f1`.
 | Eleven-artifact closure | complete | 4 new round-trips; 37 artifact/repository/read tests OK |
 | Runtime/read-only diagnostics | complete | Offline dataset-import, model-evaluate, acquisition-replay, and read-only aggregate implemented |
 | Public snapshot and replay | complete | CC0 source verified; 24-row descriptive snapshot; replay 3 tests; qLogNEHVI 2 bo-extra tests |
-| Full verification and docs | in_progress | 11-artifact fixture and viewer/read-only aggregate: 26 tests OK |
+| Full verification and docs | complete | Default: 343 tests OK; ML extra: 9 tests OK; BO extra: 5 tests OK; V12/V13 docs updated |
 
 ## Pitfalls
 
 - `uv run` creates `uv.lock`; remove it after verification.
 - Do not touch unrelated changes in the main worktree.
 - A passing default suite does not prove optional ML/BO paths.
+- On Windows without MSVC, BoTorch emits a compiler warning and uses its valid but slower pure-Python qLogEHVI kernel.
