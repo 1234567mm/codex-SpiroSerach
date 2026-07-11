@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/public-device-snapshot.schema.json",
+  "title": "PublicDeviceSnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "status", "model_activation", "model_activation_reasons", "source", "source_record_count", "record_count", "selection_policy", "records_sha256", "records"],
+  "properties": {
+    "schema_version": { "const": "v13.public_device_snapshot.v1" },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "status": { "const": "descriptive_only" },
+    "model_activation": { "const": "disabled" },
+    "model_activation_reasons": { "const": ["no_performance_targets"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["article_id", "file_id", "doi", "license", "source_url", "file_name", "bytes", "md5", "sha256"],
+      "properties": {
+        "article_id": { "type": "integer", "minimum": 1 },
+        "file_id": { "type": "integer", "minimum": 1 },
+        "doi": { "type": "string", "minLength": 1 },
+        "license": { "const": "CC0" },
+        "source_url": { "type": "string", "format": "uri" },
+        "file_name": { "type": "string", "minLength": 1 },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "md5": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "source_record_count": { "type": "integer", "minimum": 1 },
+    "record_count": { "type": "integer", "minimum": 1 },
+    "selection_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "max_records", "per_htl", "sort"],
+      "properties": {
+        "name": { "const": "top-htl-frequency-with-known-architecture" },
+        "max_records": { "type": "integer", "minimum": 1 },
+        "per_htl": { "type": "integer", "minimum": 1 },
+        "sort": { "const": "group_frequency_desc_then_htl_then_doi" }
+      }
+    },
+    "records_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_row_id", "doi", "raw_htl", "canonical_htl", "architecture", "substrate", "perovskite_composition", "etl", "flexible"],
+        "properties": {
+          "source_row_id": { "type": "string", "pattern": "^figshare:[0-9]+:[0-9]+$" },
+          "doi": { "type": "string", "minLength": 1 },
+          "raw_htl": { "type": "string", "minLength": 1 },
+          "canonical_htl": { "type": "string", "minLength": 1 },
+          "architecture": { "enum": ["n-i-p", "p-i-n"] },
+          "substrate": { "type": "string" },
+          "perovskite_composition": { "type": "string" },
+          "etl": { "type": "string" },
+          "flexible": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

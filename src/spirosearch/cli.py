@@ -15,6 +15,7 @@ from spirosearch.contracts import (
 )
 from spirosearch.enrichment_runtime import run_enrichment
 from spirosearch.pipeline import load_candidates, run_screening, write_report, write_report_directory
+from spirosearch.public_device_baseline import build_public_device_snapshot
 from spirosearch.traceability import LocalPaperTraceError
 from spirosearch.validation import ValidationFailure, write_validation_errors
 from spirosearch.v4_runtime import run_v4_round
@@ -27,6 +28,8 @@ def main() -> int:
         return _main_enrich(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "validate-artifacts":
         return _main_validate_artifacts(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "dataset-import":
+        return _main_dataset_import(sys.argv[2:])
     return _main_screening()
 
 
@@ -216,6 +219,35 @@ def _main_validate_artifacts(argv: list[str]) -> int:
     except Exception:
         print("internal error", file=sys.stderr)
         return EXIT_INTERNAL_ERROR
+
+
+def _main_dataset_import(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Build a verified offline public-device snapshot.")
+    parser.add_argument("--source", required=True, help="Local source JSON downloaded from the declared public source.")
+    parser.add_argument("--source-manifest", required=True, help="Source license and checksum manifest JSON.")
+    parser.add_argument("--output", required=True, help="Path for the normalized snapshot JSON.")
+    parser.add_argument("--max-records", type=int, default=24)
+    parser.add_argument("--per-htl", type=int, default=2)
+    args = parser.parse_args(argv)
+
+    try:
+        source_manifest = json.loads(Path(args.source_manifest).read_text(encoding="utf-8"))
+        snapshot = build_public_device_snapshot(
+            args.source,
+            source_manifest,
+            max_records=args.max_records,
+            per_htl=args.per_htl,
+        )
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(snapshot, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
+            encoding="utf-8",
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        print("dataset-import failed validation; verify the local source and source manifest", file=sys.stderr)
+        return EXIT_VALIDATION_ERROR
+    return EXIT_SUCCESS
 
 
 def _parse_optional_artifacts(items: list[str]) -> dict[str, str | None]:

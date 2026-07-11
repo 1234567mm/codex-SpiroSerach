@@ -1,0 +1,295 @@
+{
+  "model_activation": "disabled",
+  "model_activation_reasons": [
+    "no_performance_targets"
+  ],
+  "record_count": 24,
+  "records": [
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "spiro-ometad",
+      "doi": "10.1038/am.2017.91",
+      "etl": "PCBM",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "spiro-ometad",
+      "source_row_id": "figshare:46458169:3",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "spiro-ometad",
+      "doi": "10.1038/lsa.2016.243",
+      "etl": "TiO2",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "spiro-meotad",
+      "source_row_id": "figshare:46458169:4",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "pedot:pss",
+      "doi": "10.1038/am.2016.85",
+      "etl": "PC60BM",
+      "flexible": true,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "pedot:pss",
+      "source_row_id": "figshare:46458169:2",
+      "substrate": "PET | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "pedot:pss",
+      "doi": "10.1038/nature18306",
+      "etl": "PCBM",
+      "flexible": false,
+      "perovskite_composition": "(BA)2(MA)3Pb4I13",
+      "raw_htl": "pedot:pss",
+      "source_row_id": "figshare:46458169:9",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "niox",
+      "doi": "10.1038/nenergy.2016.148",
+      "etl": "PCBM",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "NiO",
+      "source_row_id": "figshare:46458169:59",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "niox",
+      "doi": "10.1038/nenergy.2017.9",
+      "etl": "SnO2",
+      "flexible": false,
+      "perovskite_composition": "Cs0.17FA0.83Pb(Br0.17I0.83)3",
+      "raw_htl": "NiOx",
+      "source_row_id": "figshare:46458169:67",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "ptaa",
+      "doi": "10.1038/ncomms12806",
+      "etl": "c60-sam",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "PTAA",
+      "source_row_id": "figshare:46458169:23",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "ptaa",
+      "doi": "10.1038/s41377-020-0264-5",
+      "etl": "C60",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "PTAA",
+      "source_row_id": "figshare:46458169:84",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "p3ht",
+      "doi": "10.1038/s41560-023-01310-y",
+      "etl": "SnO2",
+      "flexible": false,
+      "perovskite_composition": "CsPbI3",
+      "raw_htl": "P3HT",
+      "source_row_id": "figshare:46458169:275",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "p3ht",
+      "doi": "10.1038/s41586-019-1036-3",
+      "etl": "TiO2",
+      "flexible": false,
+      "perovskite_composition": "HTAB0.3(FAPbI3)0.95(MAPbBr3)0.05",
+      "raw_htl": "P3HT",
+      "source_row_id": "figshare:46458169:321",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "pedot",
+      "doi": "10.1038/ncomms15390",
+      "etl": "TiO2",
+      "flexible": false,
+      "perovskite_composition": "Cs2SnI6",
+      "raw_htl": "PEDOT",
+      "source_row_id": "figshare:46458169:33",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "pedot",
+      "doi": "10.1038/s41467-020-15078-2",
+      "etl": "ICBA",
+      "flexible": false,
+      "perovskite_composition": "UNKNOWN",
+      "raw_htl": "PEDOT",
+      "source_row_id": "figshare:46458169:143",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "p3ct-na",
+      "doi": "10.1039/c7tc03368k",
+      "etl": "C60",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "p3ct-na",
+      "source_row_id": "figshare:46458169:1447",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "p3ct-na",
+      "doi": "10.1039/c8ta00492g",
+      "etl": "itcptc-se",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "p3ct-na",
+      "source_row_id": "figshare:46458169:1616",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "moox",
+      "doi": "10.1038/s41586-021-04216-5",
+      "etl": "TiO2",
+      "flexible": false,
+      "perovskite_composition": "Cs0.05FA0.9MA0.05PbI2.74Br0.26",
+      "raw_htl": "MoOx",
+      "source_row_id": "figshare:46458169:329",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "moox",
+      "doi": "10.1039/c9tc03684a",
+      "etl": "SnO2",
+      "flexible": true,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "MoOx",
+      "source_row_id": "figshare:46458169:2103",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "rgo",
+      "doi": "10.1039/c6cc01249c",
+      "etl": "TiO2",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "rGO",
+      "source_row_id": "figshare:46458169:850",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "rgo",
+      "doi": "10.1039/c8mh00511g",
+      "etl": "SnO2",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "rGO",
+      "source_row_id": "figshare:46458169:1518",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "wo3",
+      "doi": "10.1038/s41467-023-41187-9",
+      "etl": "SnO2",
+      "flexible": false,
+      "perovskite_composition": "FAPbBr3",
+      "raw_htl": "WO3",
+      "source_row_id": "figshare:46458169:210",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "wo3",
+      "doi": "10.1039/c4ta04883k",
+      "etl": "TiO2",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "WO3",
+      "source_row_id": "figshare:46458169:587",
+      "substrate": "SLG | FTO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "2pacz",
+      "doi": "10.1039/d1ee01508g",
+      "etl": "C60",
+      "flexible": false,
+      "perovskite_composition": "Cs0.18FA0.82PbI3",
+      "raw_htl": "2PACz",
+      "source_row_id": "figshare:46458169:2439",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "2pacz",
+      "doi": "10.1039/d3ee03772j",
+      "etl": "C60",
+      "flexible": false,
+      "perovskite_composition": "FAPb0.5Sn0.5I3",
+      "raw_htl": "2PACz",
+      "source_row_id": "figshare:46458169:2991",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "p-i-n",
+      "canonical_htl": "cuscn",
+      "doi": "10.1039/c9ta01094g",
+      "etl": "AZO",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "CuSCN",
+      "source_row_id": "figshare:46458169:1948",
+      "substrate": "SLG | ITO"
+    },
+    {
+      "architecture": "n-i-p",
+      "canonical_htl": "cuscn",
+      "doi": "10.1039/d1ma00861g",
+      "etl": "TiO2",
+      "flexible": false,
+      "perovskite_composition": "MAPbI3",
+      "raw_htl": "CuSCN",
+      "source_row_id": "figshare:46458169:2458",
+      "substrate": "SLG | ITO"
+    }
+  ],
+  "records_sha256": "f9b1f23161bac94a69ca78893029cb4f64fbc06bb259b596c421eaf132df0e26",
+  "schema_version": "v13.public_device_snapshot.v1",
+  "selection_policy": {
+    "max_records": 24,
+    "name": "top-htl-frequency-with-known-architecture",
+    "per_htl": 2,
+    "sort": "group_frequency_desc_then_htl_then_doi"
+  },
+  "snapshot_id": "figshare-25868737-f9b1f23161ba",
+  "source": {
+    "article_id": 25868737,
+    "bytes": 4665284,
+    "doi": "10.6084/m9.figshare.25868737.v2",
+    "file_id": 46458169,
+    "file_name": "device_attributes_combined.json",
+    "license": "CC0",
+    "md5": "5a55853502d45bb501d3640ed76f8d37",
+    "sha256": "c10fc32cc23c1d9136e4f56fc49a9196366fa8d77c28ae09018dc7fd2bb1e3dc",
+    "source_url": "https://figshare.com/ndownloader/files/46458169"
+  },
+  "source_record_count": 3164,
+  "status": "descriptive_only"
+}

@@ -27,8 +27,8 @@ Execute `plans/v13-data-closure-and-real-baseline-plan.md` from `main@82303f1`.
 | Leakage-safe training snapshot | complete | 15 focused tests; 39 aggregate tests OK |
 | Grouped model evaluation | complete | 4 evaluator tests + 3 sklearn-extra tests; schema instance OK |
 | Eleven-artifact closure | complete | 4 new round-trips; 37 artifact/repository/read tests OK |
-| Runtime/read-only diagnostics | in_progress | |
-| Public snapshot and replay | pending | |
+| Runtime/read-only diagnostics | partial | Read-only aggregate and offline dataset-import complete; model/replay CLI pending |
+| Public snapshot and replay | in_progress | CC0 3,164-row source verified; 24-row descriptive snapshot complete; replay pending |
 | Full verification and docs | pending | |
 
 ## Pitfalls
