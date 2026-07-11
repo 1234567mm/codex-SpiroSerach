@@ -1,0 +1,34 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "pass-1",
+      "codes": [],
+      "components": [],
+      "coverage": 1.0,
+      "status": "pass",
+      "weighted_utility": 0.8
+    },
+    {
+      "candidate_id": "defer-1",
+      "codes": [
+        "missing_homo"
+      ],
+      "components": [],
+      "coverage": 0.5,
+      "status": "defer",
+      "weighted_utility": 0.3
+    },
+    {
+      "candidate_id": "reject-1",
+      "codes": [
+        "homo_out_of_window"
+      ],
+      "components": [],
+      "coverage": 1.0,
+      "status": "reject",
+      "weighted_utility": 0.1
+    }
+  ],
+  "profile_version": "v12.htl_profile.v1",
+  "schema_version": "v12.screening_input_view.v1"
+}

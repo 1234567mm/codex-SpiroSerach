@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-07-11T00:00:00+00:00",
+  "producer_version": "spirosearch-v13-fixture",
+  "providers": [
+    {
+      "api_key_env": null,
+      "base_url": "https://api.crossref.org",
+      "cache_ttl_hours": 24,
+      "capabilities": [
+        "literature_metadata"
+      ],
+      "execution_modes": [
+        "direct"
+      ],
+      "last_verified_at": "2026-07-11",
+      "license_hint": "metadata",
+      "live_enabled": false,
+      "operational_status": "active",
+      "provider": "crossref",
+      "requires_api_key": false,
+      "trust_level": "T3_literature_metadata"
+    }
+  ],
+  "record_count": null,
+  "schema_version": "v12.provider_capabilities.v1"
+}

@@ -224,6 +224,36 @@ th {
   color: var(--accent);
 }
 
+.gate-status {
+  min-width: 72px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.gate-pass,
+.gate-eligible {
+  border-color: #4f8a65;
+  background: #edf8f0;
+  color: #245b37;
+}
+
+.gate-defer,
+.gate-disabled,
+.gate-unavailable {
+  border-color: #c48b31;
+  background: #fff7e8;
+  color: #704b12;
+}
+
+.gate-reject {
+  border-color: #bf5b5b;
+  background: #fff0f0;
+  color: #7a2525;
+}
+
 .flow-list,
 .review-list {
   max-height: 648px;

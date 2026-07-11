@@ -11,6 +11,8 @@ const ARTIFACT_REGISTRY = {
   provider_cache_index: { legacyFileName: "provider-cache-index.json" },
   review_queue: { legacyFileName: "review-queue.jsonl" },
   scoring_view: { legacyFileName: "" },
+  screening_input_view: { legacyFileName: "" },
+  model_evaluation: { legacyFileName: "" },
   review_events: { legacyFileName: "review-events.jsonl" },
   review_summary: { legacyFileName: "review-summary.json" },
   recompute_markers: { legacyFileName: "recompute-markers.jsonl" },
@@ -109,6 +111,8 @@ function renderKnownArtifacts() {
   const enrichment = getKnownArtifact("enrichment_results");
   const canonicalEvidence = getKnownArtifact("canonical_evidence");
   const scoringView = getKnownArtifact("scoring_view");
+  const screeningInputView = getKnownArtifact("screening_input_view");
+  const modelEvaluation = getKnownArtifact("model_evaluation");
   const reviewEvents = getKnownArtifact("review_events") || [];
   const reviewSummary = getKnownArtifact("review_summary");
   const recomputeMarkers = getKnownArtifact("recompute_markers") || [];
@@ -122,6 +126,8 @@ function renderKnownArtifacts() {
   renderEnrichmentFlow(enrichment, cacheIndex, reviewQueue, trace);
   renderCanonicalEvidence(canonicalEvidence);
   renderScoringView(scoringView);
+  renderScreeningEligibility(screeningInputView);
+  renderModelEvaluation(modelEvaluation);
   renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
   renderReviewQueue(reviewQueue);
 }
@@ -353,6 +359,69 @@ function renderScoringView(scoringView) {
     .join("");
 }
 
+function renderScreeningEligibility(screeningInputView) {
+  const list = document.getElementById("screeningEligibilityList");
+  const candidates = screeningInputView?.candidates || [];
+  document.getElementById("screeningEligibilityCount").textContent = `${candidates.length} candidates`;
+  if (!candidates.length) {
+    list.innerHTML = `<div class="empty">No screening input view loaded</div>`;
+    return;
+  }
+  list.innerHTML = candidates
+    .map((candidate) => `<section class="flow-item">
+      <div class="item-title">
+        <span>${escapeHtml(candidate.candidate_id || "-")}</span>
+        <span class="gate-status gate-${escapeHtml(candidate.status || "defer")}" title="Evidence eligibility status">${escapeHtml(candidate.status || "defer")}</span>
+      </div>
+      <div class="item-meta">
+        ${compactMeta([
+          ["utility", formatNumber(candidate.weighted_utility)],
+          ["coverage", formatNumber(candidate.coverage)],
+          ["profile", candidate.profile_version || screeningInputView.profile_version],
+        ])}
+      </div>
+      <div class="chip-row">
+        ${(candidate.codes || []).map((code) => `<span class="chip review-chip">${escapeHtml(code)}</span>`).join("") || `<span class="chip muted">no blocking codes</span>`}
+      </div>
+    </section>`)
+    .join("");
+}
+
+function renderModelEvaluation(modelEvaluation) {
+  const list = document.getElementById("modelEvaluationList");
+  const status = modelEvaluation?.activation_status || "unavailable";
+  document.getElementById("modelActivationStatus").textContent = status;
+  if (!modelEvaluation) {
+    list.innerHTML = `<div class="empty">No model evaluation loaded</div>`;
+    return;
+  }
+  const metrics = modelEvaluation.metrics || {};
+  const dummy = modelEvaluation.baselines?.dummy || {};
+  const heuristic = modelEvaluation.baselines?.heuristic || {};
+  const calibration = modelEvaluation.calibration || {};
+  list.innerHTML = `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(modelEvaluation.model_version || "-")}</span>
+      <span class="gate-status gate-${escapeHtml(status)}" title="Model activation gate">${escapeHtml(status)}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["model", modelEvaluation.surrogate_type],
+        ["objective", modelEvaluation.objective_name],
+        ["rmse", formatNumber(metrics.rmse)],
+        ["dummy_rmse", formatNumber(dummy.rmse)],
+        ["heuristic_rmse", formatNumber(heuristic.rmse)],
+        ["coverage_95", formatNumber(calibration.coverage_95)],
+        ["replay", modelEvaluation.replay_status],
+        ["folds", (modelEvaluation.folds || []).length],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${(modelEvaluation.activation_reasons || []).map((reason) => `<span class="chip review-chip">${escapeHtml(reason)}</span>`).join("") || `<span class="chip">all activation gates passed</span>`}
+    </div>
+  </section>`;
+}
+
 function renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers) {
   const list = document.getElementById("reviewClosureList");
   const events = reviewEvents || [];
@@ -577,5 +646,7 @@ renderTimeline([]);
 renderEnrichmentFlow(null, null, [], []);
 renderCanonicalEvidence(null);
 renderScoringView(null);
+renderScreeningEligibility(null);
+renderModelEvaluation(null);
 renderReviewClosure([], null, []);
 renderReviewQueue([]);

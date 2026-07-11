@@ -1,0 +1,45 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "defer-1",
+      "heuristic_score": 0.8,
+      "heuristic_selected": true,
+      "model_score": 0.2,
+      "model_selected": false,
+      "observed_utility": 0.5
+    },
+    {
+      "candidate_id": "pass-1",
+      "heuristic_score": 0.3,
+      "heuristic_selected": false,
+      "model_score": 0.9,
+      "model_selected": true,
+      "observed_utility": 0.8
+    },
+    {
+      "candidate_id": "reject-1",
+      "heuristic_score": 0.1,
+      "heuristic_selected": false,
+      "model_score": 0.1,
+      "model_selected": false,
+      "observed_utility": 0.1
+    }
+  ],
+  "model_version": "heuristic-v1",
+  "replay": {
+    "batch_size": 1,
+    "heuristic_observed_utility": 0.5,
+    "heuristic_selected_ids": [
+      "defer-1"
+    ],
+    "model_observed_utility": 0.8,
+    "model_selected_ids": [
+      "pass-1"
+    ],
+    "status": "non_regression",
+    "utility_delta": 0.30000000000000004
+  },
+  "request_id": "request-v13-fixture",
+  "schema_version": "v13.acquisition_breakdown.v1",
+  "strategy": "qlognehvi"
+}

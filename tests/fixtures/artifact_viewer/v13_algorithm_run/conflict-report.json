@@ -1,0 +1,25 @@
+{
+  "conflicts": [
+    {
+      "action": "route_to_review",
+      "comparable_key": "ctx:material-1|homo_ev|cv|vacuum|film|experimental",
+      "conflict_id": "conflict-1",
+      "delta": 0.5,
+      "evidence_ids": [
+        "evidence-1",
+        "evidence-2"
+      ],
+      "material_id": "material-1",
+      "property_name": "homo_ev",
+      "selected_evidence_id": null,
+      "threshold": 0.3,
+      "values": [
+        -5.2,
+        -5.7
+      ]
+    }
+  ],
+  "context_mismatches": [],
+  "policy_version": "v12.conflict_policy.v1",
+  "schema_version": "v12.conflict_report.v1"
+}

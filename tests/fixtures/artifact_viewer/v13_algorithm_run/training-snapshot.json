@@ -1,0 +1,112 @@
+{
+  "content_sha256": "8da3bd86cf2cd9bb8d0f256293820a88efa234f832e717dca1f31a53c6f2bf80",
+  "feature_names": [
+    "x"
+  ],
+  "feature_schema_version": "htl-features-v2",
+  "fold_count": 5,
+  "objective_names": [
+    "pce"
+  ],
+  "objective_schema_version": "htl-objectives-v2",
+  "random_seed": 1729,
+  "row_count": 6,
+  "rows": [
+    {
+      "features": {
+        "x": 0.0
+      },
+      "fold_id": 0,
+      "group_id": "group-c747a0d4f04fa633",
+      "material_id": "material-0",
+      "objectives": {
+        "pce": 1.0
+      },
+      "outcome_status": "success",
+      "row_id": "training-row-b00dbe0150bc604a",
+      "source_group_id": "source-0",
+      "source_row_id": "row-0"
+    },
+    {
+      "features": {
+        "x": 1.0
+      },
+      "fold_id": 1,
+      "group_id": "group-2e5d063b01e082b7",
+      "material_id": "material-1",
+      "objectives": {
+        "pce": 2.0
+      },
+      "outcome_status": "success",
+      "row_id": "training-row-fbf6f1a434710a09",
+      "source_group_id": "source-1",
+      "source_row_id": "row-1"
+    },
+    {
+      "features": {
+        "x": 2.0
+      },
+      "fold_id": 3,
+      "group_id": "group-a7e43443dd94f49f",
+      "material_id": "material-2",
+      "objectives": {
+        "pce": 3.0
+      },
+      "outcome_status": "success",
+      "row_id": "training-row-a0693dcdd3ec3efd",
+      "source_group_id": "source-2",
+      "source_row_id": "row-2"
+    },
+    {
+      "features": {
+        "x": 3.0
+      },
+      "fold_id": 4,
+      "group_id": "group-f3dd8954d7612b4d",
+      "material_id": "material-3",
+      "objectives": {
+        "pce": 4.0
+      },
+      "outcome_status": "success",
+      "row_id": "training-row-12b00299818b115f",
+      "source_group_id": "source-3",
+      "source_row_id": "row-3"
+    },
+    {
+      "features": {
+        "x": 4.0
+      },
+      "fold_id": 4,
+      "group_id": "group-09f5a02eb35d51f5",
+      "material_id": "material-4",
+      "objectives": {
+        "pce": 5.0
+      },
+      "outcome_status": "success",
+      "row_id": "training-row-06b57ffd70124e3e",
+      "source_group_id": "source-4",
+      "source_row_id": "row-4"
+    },
+    {
+      "features": {
+        "x": 5.0
+      },
+      "fold_id": 2,
+      "group_id": "group-76ef8c630d128e42",
+      "material_id": "material-5",
+      "objectives": {
+        "pce": 6.0
+      },
+      "outcome_status": "success",
+      "row_id": "training-row-d30de441897c8c86",
+      "source_group_id": "source-5",
+      "source_row_id": "row-5"
+    }
+  ],
+  "schema_version": "v13.training_snapshot.v1",
+  "snapshot_id": "training-8da3bd86cf2c",
+  "source_run_ids": [
+    "v13-algorithm-diagnostic-001"
+  ],
+  "split_strategy": "material-source-connected-components"
+}

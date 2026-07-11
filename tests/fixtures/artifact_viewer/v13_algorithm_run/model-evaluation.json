@@ -1,0 +1,124 @@
+{
+  "activation_reasons": [
+    "does_not_beat_heuristic",
+    "fold_0_does_not_beat_heuristic",
+    "fold_1_does_not_beat_heuristic",
+    "fold_2_does_not_beat_heuristic",
+    "fold_3_does_not_beat_dummy",
+    "fold_3_does_not_beat_heuristic",
+    "fold_4_does_not_beat_heuristic"
+  ],
+  "activation_status": "disabled",
+  "baselines": {
+    "dummy": {
+      "mae": 1.9000000000000001,
+      "rmse": 2.105548226313834
+    },
+    "heuristic": {
+      "mae": 1.0,
+      "rmse": 1.0
+    }
+  },
+  "calibration": {
+    "coverage_95": 1.0,
+    "mean_interval_width_95": 3.92
+  },
+  "feature_count": 1,
+  "folds": [
+    {
+      "dummy": {
+        "mae": 3.0,
+        "rmse": 3.0
+      },
+      "fold_id": 0,
+      "heuristic": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "metrics": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "test_count": 1,
+      "train_count": 5
+    },
+    {
+      "dummy": {
+        "mae": 1.7999999999999998,
+        "rmse": 1.7999999999999998
+      },
+      "fold_id": 1,
+      "heuristic": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "metrics": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "test_count": 1,
+      "train_count": 5
+    },
+    {
+      "dummy": {
+        "mae": 3.0,
+        "rmse": 3.0
+      },
+      "fold_id": 2,
+      "heuristic": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "metrics": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "test_count": 1,
+      "train_count": 5
+    },
+    {
+      "dummy": {
+        "mae": 0.6000000000000001,
+        "rmse": 0.6000000000000001
+      },
+      "fold_id": 3,
+      "heuristic": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "metrics": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "test_count": 1,
+      "train_count": 5
+    },
+    {
+      "dummy": {
+        "mae": 1.5,
+        "rmse": 1.5811388300841898
+      },
+      "fold_id": 4,
+      "heuristic": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "metrics": {
+        "mae": 1.0,
+        "rmse": 1.0
+      },
+      "test_count": 2,
+      "train_count": 4
+    }
+  ],
+  "metrics": {
+    "mae": 1.0,
+    "rmse": 1.0
+  },
+  "model_version": "heuristic-v1",
+  "objective_name": "pce",
+  "replay_status": "non_regression",
+  "schema_version": "v13.model_evaluation.v1",
+  "snapshot_id": "training-8da3bd86cf2c",
+  "surrogate_type": "HEURISTIC"
+}

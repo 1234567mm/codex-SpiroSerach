@@ -29,7 +29,7 @@ Execute `plans/v13-data-closure-and-real-baseline-plan.md` from `main@82303f1`.
 | Eleven-artifact closure | complete | 4 new round-trips; 37 artifact/repository/read tests OK |
 | Runtime/read-only diagnostics | complete | Offline dataset-import, model-evaluate, acquisition-replay, and read-only aggregate implemented |
 | Public snapshot and replay | complete | CC0 source verified; 24-row descriptive snapshot; replay 3 tests; qLogNEHVI 2 bo-extra tests |
-| Full verification and docs | pending | |
+| Full verification and docs | in_progress | 11-artifact fixture and viewer/read-only aggregate: 26 tests OK |
 
 ## Pitfalls
 

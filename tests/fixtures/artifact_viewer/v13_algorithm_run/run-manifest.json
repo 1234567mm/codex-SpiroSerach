@@ -1,0 +1,235 @@
+{
+  "artifacts": [
+    {
+      "bytes": 1107,
+      "depends_on": [],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "candidate_id",
+        "request_id",
+        "model_version"
+      ],
+      "kind": "acquisition_breakdown",
+      "path": "acquisition-breakdown.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/acquisition-breakdown.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "9d907eb2d3b77723917fb28bbbcdf4c0b14731d3d5f23f94ada0b1ab1d4cc0ff"
+    },
+    {
+      "bytes": 608,
+      "depends_on": [],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "conflict_id",
+        "evidence_id",
+        "review_item_id"
+      ],
+      "kind": "conflict_report",
+      "path": "conflict-report.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/conflict-report.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "395a2196744047d831f001c67e96868174d1143e6cfa9dbee520e824a795da6b"
+    },
+    {
+      "bytes": 508,
+      "depends_on": [],
+      "format": "jsonl",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "device_evidence_id",
+        "use_instance_id",
+        "doi"
+      ],
+      "kind": "device_evidence",
+      "path": "device-evidence.jsonl",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": 1,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/device-evidence.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "1ff6be163b71d0b4bc2eb9361acfe429061e75d31e3d125005f04f70d8952ee5"
+    },
+    {
+      "bytes": 374,
+      "depends_on": [
+        "literature_claims"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "extractor_version",
+        "gold_snapshot_hash"
+      ],
+      "kind": "extraction_evaluation",
+      "path": "extraction-evaluation.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/extraction-evaluation.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "894c27ecc420d821c929adbacb54a63e346f7e933875489a8252815235dcc774"
+    },
+    {
+      "bytes": 377,
+      "depends_on": [
+        "source_assets"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "claim_id",
+        "asset_id",
+        "chunk_id",
+        "doi"
+      ],
+      "kind": "literature_claims",
+      "path": "literature-claims.jsonl",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": 1,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/literature-claim.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "8b5aafafe5f4ff138ab7968f9ed70d6283c41b93e707991f2e7c92727d8b3104"
+    },
+    {
+      "bytes": 408,
+      "depends_on": [],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "query_id",
+        "doi",
+        "openalex_id"
+      ],
+      "kind": "literature_search_results",
+      "path": "literature-search-results.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/literature-search-results.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "0705c35bf1c2c0a95ef37e3af250374509543eff9cb883a8f4f159eadcfb8718"
+    },
+    {
+      "bytes": 2502,
+      "depends_on": [
+        "training_snapshot"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "snapshot_id",
+        "model_version",
+        "fold_id"
+      ],
+      "kind": "model_evaluation",
+      "path": "model-evaluation.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/model-evaluation.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "9719b545e7e38df454a8444be547c382d9b52fb633f8f43d664c601ac4f74791"
+    },
+    {
+      "bytes": 703,
+      "depends_on": [],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "provider"
+      ],
+      "kind": "provider_capabilities",
+      "path": "provider-capabilities.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/provider-capabilities.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "98784f6812bad1cb0c4e64c5d944a9f5646a5a87f6d433a099a83f6195e54b7f"
+    },
+    {
+      "bytes": 720,
+      "depends_on": [],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "candidate_id",
+        "evidence_id",
+        "review_item_id"
+      ],
+      "kind": "screening_input_view",
+      "path": "screening-input-view.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/screening-input-view.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "3beffa7477881bb5ce615a7321009f278fc49882f495143339a576fb981e6cca"
+    },
+    {
+      "bytes": 291,
+      "depends_on": [
+        "literature_search_results"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "asset_id",
+        "doi",
+        "document_id"
+      ],
+      "kind": "source_assets",
+      "path": "source-assets.jsonl",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": 1,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/source-asset.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "b9017ff82f9c4be7ae8d89b90ff260fe38ff390b669adc4c3091eab6fa930a29"
+    },
+    {
+      "bytes": 2821,
+      "depends_on": [],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "snapshot_id",
+        "candidate_id",
+        "source_run_id"
+      ],
+      "kind": "training_snapshot",
+      "path": "training-snapshot.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/training-snapshot.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "b2066e52d1dc68cdbed393ead5fff9073e1b5e1eee87f93e8678b1fc7ed6754c"
+    }
+  ],
+  "generated_at": "2026-07-11T00:00:00+00:00",
+  "input_hash": "sha256:v13-algorithm-diagnostic-input",
+  "producer_version": "spirosearch-v13-fixture",
+  "run_id": "v13-algorithm-diagnostic-001",
+  "schema_version": "v6.run_manifest.v1"
+}
