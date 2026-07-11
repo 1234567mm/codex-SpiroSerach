@@ -4,9 +4,9 @@
   "title": "TrainingSnapshot",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "snapshot_id", "row_count", "feature_names", "objective_names"],
+  "required": ["schema_version", "snapshot_id", "row_count", "feature_names", "objective_names", "rows", "content_sha256"],
   "properties": {
-    "schema_version": { "type": "string" },
+    "schema_version": { "const": "v13.training_snapshot.v1" },
     "snapshot_id": { "type": "string" },
     "source_run_ids": { "type": "array", "items": { "type": "string" } },
     "feature_schema_version": { "type": "string" },
@@ -17,6 +17,25 @@
     "feature_names": { "type": "array", "items": { "type": "string" } },
     "objective_names": { "type": "array", "items": { "type": "string" } },
     "fold_count": { "type": "integer" },
-    "content_sha256": { "type": "string" }
+    "content_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["row_id", "material_id", "source_group_id", "source_row_id", "outcome_status", "group_id", "fold_id", "features", "objectives"],
+        "properties": {
+          "row_id": { "type": "string", "minLength": 1 },
+          "material_id": { "type": "string", "minLength": 1 },
+          "source_group_id": { "type": "string", "minLength": 1 },
+          "source_row_id": { "type": "string", "minLength": 1 },
+          "outcome_status": { "enum": ["success", "failed", "partial", "censored"] },
+          "group_id": { "type": "string", "minLength": 1 },
+          "fold_id": { "type": ["integer", "null"], "minimum": 0 },
+          "features": { "type": "object", "additionalProperties": { "type": "number" } },
+          "objectives": { "type": "object", "additionalProperties": { "type": "number" } }
+        }
+      }
+    }
   }
 }

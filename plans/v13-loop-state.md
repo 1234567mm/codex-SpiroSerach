@@ -24,8 +24,8 @@ Execute `plans/v13-data-closure-and-real-baseline-plan.md` from `main@82303f1`.
 | Slice | Status | Evidence |
 |---|---|---|
 | Deterministic fixture baseline | complete | `tests.test_v11_visualization_fixtures`: 4 tests OK |
-| Leakage-safe training snapshot | in_progress | |
-| Grouped model evaluation | pending | |
+| Leakage-safe training snapshot | complete | 15 focused tests; 39 aggregate tests OK |
+| Grouped model evaluation | in_progress | |
 | Eleven-artifact closure | pending | |
 | Runtime/read-only diagnostics | pending | |
 | Public snapshot and replay | pending | |
