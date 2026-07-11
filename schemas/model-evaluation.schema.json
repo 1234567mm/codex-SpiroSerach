@@ -4,17 +4,63 @@
   "title": "ModelEvaluation",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "snapshot_id", "model_version", "activation_status"],
+  "required": ["schema_version", "snapshot_id", "model_version", "surrogate_type", "objective_name", "activation_status", "activation_reasons", "replay_status", "metrics", "baselines", "calibration", "folds", "feature_count"],
   "properties": {
-    "schema_version": { "type": "string" },
+    "schema_version": { "const": "v13.model_evaluation.v1" },
     "snapshot_id": { "type": "string" },
     "model_version": { "type": "string" },
-    "fold_id": { "type": "string" },
-    "activation_status": { "enum": ["active", "disabled"] },
+    "objective_name": { "type": "string", "minLength": 1 },
+    "activation_status": { "enum": ["eligible", "disabled", "unavailable"] },
     "activation_reasons": { "type": "array", "items": { "type": "string" } },
     "surrogate_type": { "type": "string" },
-    "metrics": { "type": "object" },
-    "dummy_baseline": { "type": "object" },
+    "replay_status": { "enum": ["non_regression", "regression", "unavailable"] },
+    "metrics": { "$ref": "#/$defs/errorMetrics" },
+    "baselines": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dummy", "heuristic"],
+      "properties": {
+        "dummy": { "$ref": "#/$defs/errorMetrics" },
+        "heuristic": { "$ref": "#/$defs/errorMetrics" }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coverage_95", "mean_interval_width_95"],
+      "properties": {
+        "coverage_95": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mean_interval_width_95": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "folds": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fold_id", "train_count", "test_count", "metrics", "dummy", "heuristic"],
+        "properties": {
+          "fold_id": { "type": "integer", "minimum": 0 },
+          "train_count": { "type": "integer", "minimum": 1 },
+          "test_count": { "type": "integer", "minimum": 1 },
+          "metrics": { "$ref": "#/$defs/errorMetrics" },
+          "dummy": { "$ref": "#/$defs/errorMetrics" },
+          "heuristic": { "$ref": "#/$defs/errorMetrics" }
+        }
+      }
+    },
     "feature_count": { "type": "integer" }
+  },
+  "$defs": {
+    "errorMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mae", "rmse"],
+      "properties": {
+        "mae": { "type": "number", "minimum": 0 },
+        "rmse": { "type": "number", "minimum": 0 }
+      }
+    }
   }
 }

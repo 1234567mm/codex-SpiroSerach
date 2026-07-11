@@ -469,7 +469,7 @@ class SklearnSurrogate(SurrogateModel):
     """scikit-learn GaussianProcessRegressor with lazy imports.
 
     Requires `[ml]` optional dependency group (numpy, scikit-learn).
-    Falls back to HeuristicSurrogate if ml extras are not installed.
+    Missing optional dependencies fail closed with an actionable error.
     """
 
     def __init__(self, random_seed: int = 1729):
@@ -500,9 +500,16 @@ class SklearnSurrogate(SurrogateModel):
 
         if not X:
             raise ValueError("X must not be empty")
-        self._feature_names = tuple(sorted(X[0].keys()))
+        if len(X) != len(y):
+            raise ValueError("X and y must have the same length")
+        rows = tuple(surrogate_feature_row(row) for row in X)
+        self._feature_names = tuple(sorted(rows[0].keys()))
+        if not self._feature_names:
+            raise ValueError("X must contain at least one model-safe feature")
+        if any(tuple(sorted(row)) != self._feature_names for row in rows):
+            raise ValueError("all X rows must use the same feature schema")
         X_array = np.asarray(
-            [[float(row.get(f, np.nan)) for f in self._feature_names] for row in X],
+            [[float(row[f]) for f in self._feature_names] for row in rows],
             dtype=float,
         )
         y_array = np.asarray([float(v) for v in y], dtype=float)
@@ -527,15 +534,16 @@ class SklearnSurrogate(SurrogateModel):
 
         import hashlib
         import json
-        content = json.dumps({"X": [dict(sorted(r.items())) for r in X], "y": list(y)}, sort_keys=True)
-        self._training_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
+        content = json.dumps({"X": [dict(sorted(r.items())) for r in rows], "y": list(y)}, sort_keys=True)
+        self._training_hash = hashlib.sha256(content.encode()).hexdigest()
 
         return ModelFitResult(
             state=SurrogateModelState(
                 surrogate_type="SKLEARN_GPR",
                 fit_status=FitStatus.FITTED,
                 training_set_hash=self._training_hash,
-                version=1,
+                posterior_version=1,
+                last_refit_at=datetime.now(UTC),
             ),
             metrics={"r2_score": float(self._model.score(X_array, y_array))},
         )
@@ -563,14 +571,17 @@ class SklearnSurrogate(SurrogateModel):
         return tuple(float(v) for v in std)
 
     def acquisition(self, X: Sequence[Mapping[str, float]], strategy: str) -> tuple[float, ...]:
+        normalized = str(strategy).casefold()
+        if normalized not in {"ei", "ucb"}:
+            raise UnsupportedSurrogateError(
+                f"Unknown sklearn acquisition strategy: '{strategy}'. Supported strategies: ei, ucb."
+            )
         mean = self.predict(X)
         std = self.uncertainty(X)
         beta = 1.0
-        if strategy == "ei":
+        if normalized == "ei":
             return tuple(m + beta * s for m, s in zip(mean, std))
-        if strategy == "ucb":
-            return tuple(m + 2.0 * s for m, s in zip(mean, std))
-        return tuple(m + s for m, s in zip(mean, std))
+        return tuple(m + 2.0 * s for m, s in zip(mean, std))
 
 
 class AcquisitionStrategy(ABC):
