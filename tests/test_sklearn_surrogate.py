@@ -1,9 +1,14 @@
+import importlib.util
 import unittest
 
 from spirosearch.surrogate import SklearnSurrogate, UnsupportedSurrogateError
 
 
 class SklearnSurrogateTests(unittest.TestCase):
+    @unittest.skipUnless(
+        importlib.util.find_spec("numpy") and importlib.util.find_spec("sklearn"),
+        "requires optional ml dependencies",
+    )
     def test_fit_returns_valid_state_and_predictive_uncertainty(self):
         model = SklearnSurrogate(random_seed=7)
         result = model.fit(
@@ -16,6 +21,10 @@ class SklearnSurrogateTests(unittest.TestCase):
         self.assertEqual(len(model.predict([{"x": 1.5}])), 1)
         self.assertGreater(model.uncertainty([{"x": 1.5}])[0], 0.0)
 
+    @unittest.skipUnless(
+        importlib.util.find_spec("numpy") and importlib.util.find_spec("sklearn"),
+        "requires optional ml dependencies",
+    )
     def test_fit_rejects_mismatched_lengths(self):
         with self.assertRaisesRegex(ValueError, "same length"):
             SklearnSurrogate().fit([{"x": 0.0}, {"x": 1.0}], [1.0])
