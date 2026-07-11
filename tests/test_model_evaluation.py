@@ -1,5 +1,11 @@
 import unittest
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
+from spirosearch.artifact_repository import JsonArtifactRepository
+from spirosearch.cli import main
 from spirosearch.model_evaluation import evaluate_grouped_snapshot
 from spirosearch.prediction_dataset import build_training_snapshot
 
@@ -93,6 +99,38 @@ class ModelEvaluationTests(unittest.TestCase):
                 model_version="linear-v1",
                 surrogate_type="TEST_LINEAR",
             )
+
+    def test_model_evaluate_cli_writes_manifest_discovered_disabled_report(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            snapshot_path = directory / "input-snapshot.json"
+            output_dir = directory / "run"
+            snapshot_path.write_text(json.dumps(_snapshot().to_dict()), encoding="utf-8")
+            with patch(
+                "sys.argv",
+                [
+                    "spirosearch",
+                    "model-evaluate",
+                    "--snapshot",
+                    str(snapshot_path),
+                    "--objective",
+                    "pce",
+                    "--model",
+                    "heuristic",
+                    "--model-version",
+                    "heuristic-v1",
+                    "--output-dir",
+                    str(output_dir),
+                ],
+            ):
+                self.assertEqual(main(), 0)
+
+            repository = JsonArtifactRepository.from_output_dir(output_dir)
+            evaluation = repository.read_json("model_evaluation")
+            self.assertTrue(evaluation.available, evaluation.unavailable)
+            self.assertEqual(evaluation.payload["activation_status"], "disabled")
+            self.assertIn("offline_replay_unavailable", evaluation.payload["activation_reasons"])
+            self.assertTrue(repository.read_json("training_snapshot").available)
 
 
 if __name__ == "__main__":

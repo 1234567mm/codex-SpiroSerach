@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from spirosearch.artifact_validation import validate_artifact_run
+from spirosearch.acquisition_replay import evaluate_offline_replay
+from spirosearch.artifacts import build_run_manifest, write_json_artifact
 from spirosearch.contracts import (
     EXIT_INTERNAL_ERROR,
     EXIT_LOCAL_TRACE_ERROR,
@@ -16,6 +20,9 @@ from spirosearch.contracts import (
 from spirosearch.enrichment_runtime import run_enrichment
 from spirosearch.pipeline import load_candidates, run_screening, write_report, write_report_directory
 from spirosearch.public_device_baseline import build_public_device_snapshot
+from spirosearch.model_evaluation import evaluate_grouped_snapshot
+from spirosearch.prediction_dataset import training_snapshot_from_dict
+from spirosearch.surrogate import HeuristicSurrogate, SklearnSurrogate, UnsupportedSurrogateError
 from spirosearch.traceability import LocalPaperTraceError
 from spirosearch.validation import ValidationFailure, write_validation_errors
 from spirosearch.v4_runtime import run_v4_round
@@ -30,6 +37,10 @@ def main() -> int:
         return _main_validate_artifacts(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "dataset-import":
         return _main_dataset_import(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "model-evaluate":
+        return _main_model_evaluate(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "acquisition-replay":
+        return _main_acquisition_replay(sys.argv[2:])
     return _main_screening()
 
 
@@ -246,6 +257,104 @@ def _main_dataset_import(argv: list[str]) -> int:
         )
     except (OSError, ValueError, json.JSONDecodeError):
         print("dataset-import failed validation; verify the local source and source manifest", file=sys.stderr)
+        return EXIT_VALIDATION_ERROR
+    return EXIT_SUCCESS
+
+
+def _main_model_evaluate(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Evaluate a model with grouped, fail-closed activation gates.")
+    parser.add_argument("--snapshot", required=True)
+    parser.add_argument("--objective", required=True)
+    parser.add_argument("--model", required=True, choices=("heuristic", "sklearn"))
+    parser.add_argument("--model-version", required=True)
+    parser.add_argument("--replay-report", help="Validated acquisition-breakdown JSON from acquisition-replay.")
+    parser.add_argument("--output-dir", required=True)
+    args = parser.parse_args(argv)
+
+    factories = {"heuristic": HeuristicSurrogate, "sklearn": SklearnSurrogate}
+    try:
+        snapshot_payload = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
+        snapshot = training_snapshot_from_dict(snapshot_payload)
+        replay_status = "unavailable"
+        if args.replay_report:
+            replay_payload = json.loads(Path(args.replay_report).read_text(encoding="utf-8"))
+            if replay_payload.get("schema_version") != "v13.acquisition_breakdown.v1":
+                raise ValueError("unsupported replay report schema_version")
+            if replay_payload.get("model_version") != args.model_version:
+                raise ValueError("replay report model_version does not match evaluation")
+            replay_status = str(dict(replay_payload.get("replay", {})).get("status", "unavailable"))
+        evaluation = evaluate_grouped_snapshot(
+            snapshot,
+            objective_name=args.objective,
+            model_factory=factories[args.model],
+            model_version=args.model_version,
+            surrogate_type="HEURISTIC" if args.model == "heuristic" else "SKLEARN_GPR",
+            replay_status=replay_status,
+        )
+        output_dir = Path(args.output_dir)
+        generated_at = datetime.now(UTC).isoformat()
+        common = {
+            "run_id": f"v13-model-{snapshot.content_sha256[:12]}",
+            "input_hash": f"sha256:{snapshot.content_sha256}",
+            "generated_at": generated_at,
+            "producer_version": "spirosearch-v13",
+        }
+        artifacts = [
+            write_json_artifact(
+                output_dir,
+                "training-snapshot.json",
+                snapshot.to_dict(),
+                kind="training_snapshot",
+                **common,
+            ),
+            write_json_artifact(
+                output_dir,
+                "model-evaluation.json",
+                evaluation.to_dict(),
+                kind="model_evaluation",
+                **common,
+            ),
+        ]
+        build_run_manifest(artifacts, **common).write_json(output_dir)
+    except (OSError, ValueError, json.JSONDecodeError, UnsupportedSurrogateError):
+        print("model-evaluate failed validation or optional model availability", file=sys.stderr)
+        return EXIT_VALIDATION_ERROR
+    return EXIT_SUCCESS
+
+
+def _main_acquisition_replay(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Compare model and heuristic acquisition on observed outcomes.")
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output-dir", required=True)
+    args = parser.parse_args(argv)
+    try:
+        raw_input = Path(args.input).read_bytes()
+        payload = json.loads(raw_input.decode("utf-8"))
+        report = evaluate_offline_replay(
+            payload["candidates"],
+            request_id=payload["request_id"],
+            model_version=payload["model_version"],
+            strategy=payload["strategy"],
+            batch_size=int(payload.get("batch_size", 1)),
+        )
+        output_dir = Path(args.output_dir)
+        generated_at = datetime.now(UTC).isoformat()
+        common = {
+            "run_id": f"v13-replay-{hashlib.sha256(raw_input).hexdigest()[:12]}",
+            "input_hash": f"sha256:{hashlib.sha256(raw_input).hexdigest()}",
+            "generated_at": generated_at,
+            "producer_version": "spirosearch-v13",
+        }
+        artifact = write_json_artifact(
+            output_dir,
+            "acquisition-breakdown.json",
+            report,
+            kind="acquisition_breakdown",
+            **common,
+        )
+        build_run_manifest([artifact], **common).write_json(output_dir)
+    except (KeyError, OSError, ValueError, TypeError, json.JSONDecodeError):
+        print("acquisition-replay failed validation", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
     return EXIT_SUCCESS
 

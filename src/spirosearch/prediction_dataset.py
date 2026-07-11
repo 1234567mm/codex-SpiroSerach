@@ -291,6 +291,30 @@ def build_training_snapshot(
     )
 
 
+def training_snapshot_from_dict(payload: dict[str, Any]) -> TrainingSnapshot:
+    if payload.get("schema_version") != "v13.training_snapshot.v1":
+        raise ValueError("unsupported training snapshot schema_version")
+    raw_rows = payload.get("rows")
+    if not isinstance(raw_rows, list) or not raw_rows:
+        raise ValueError("training snapshot rows must be a non-empty array")
+    snapshot = build_training_snapshot(
+        [dict(row["features"]) for row in raw_rows],
+        [dict(row["objectives"]) for row in raw_rows],
+        [str(row["material_id"]) for row in raw_rows],
+        [str(row["source_group_id"]) for row in raw_rows],
+        snapshot_id=str(payload["snapshot_id"]),
+        random_seed=int(payload.get("random_seed", 1729)),
+        source_run_ids=tuple(str(value) for value in payload.get("source_run_ids", [])),
+        source_row_ids=[str(row["source_row_id"]) for row in raw_rows],
+        outcome_statuses=[str(row["outcome_status"]) for row in raw_rows],
+    )
+    if snapshot.content_sha256 != payload.get("content_sha256"):
+        raise ValueError("training snapshot content_sha256 does not match rows")
+    if snapshot.row_count != payload.get("row_count"):
+        raise ValueError("training snapshot row_count does not match rows")
+    return snapshot
+
+
 def _required_id(value: object, field_name: str) -> str:
     normalized = str(value).strip()
     if not normalized:

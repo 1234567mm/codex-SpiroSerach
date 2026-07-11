@@ -4,23 +4,41 @@
   "title": "AcquisitionBreakdown",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "model_version", "candidates"],
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "model_version", "strategy", "candidates", "replay"],
   "properties": {
-    "schema_version": { "type": "string" },
+    "schema_version": { "const": "v13.acquisition_breakdown.v1" },
     "model_version": { "type": "string" },
     "request_id": { "type": "string" },
+    "strategy": { "type": "string", "minLength": 1 },
     "candidates": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["candidate_id"],
+        "additionalProperties": false,
+        "required": ["candidate_id", "model_score", "heuristic_score", "observed_utility", "model_selected", "heuristic_selected"],
         "properties": {
           "candidate_id": { "type": "string" },
-          "predicted_mean": { "type": "object" },
-          "predicted_std": { "type": "object" },
-          "acquisition_score": { "type": "number" },
-          "selection_status": { "type": "string" }
+          "model_score": { "type": "number" },
+          "heuristic_score": { "type": "number" },
+          "observed_utility": { "type": "number" },
+          "model_selected": { "type": "boolean" },
+          "heuristic_selected": { "type": "boolean" }
         }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "batch_size", "model_selected_ids", "heuristic_selected_ids", "model_observed_utility", "heuristic_observed_utility", "utility_delta"],
+      "properties": {
+        "status": { "enum": ["non_regression", "regression"] },
+        "batch_size": { "type": "integer", "minimum": 1 },
+        "model_selected_ids": { "type": "array", "items": { "type": "string" } },
+        "heuristic_selected_ids": { "type": "array", "items": { "type": "string" } },
+        "model_observed_utility": { "type": "number" },
+        "heuristic_observed_utility": { "type": "number" },
+        "utility_delta": { "type": "number" }
       }
     }
   }
