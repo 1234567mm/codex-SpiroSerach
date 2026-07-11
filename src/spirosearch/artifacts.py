@@ -11,6 +11,10 @@ MANIFEST_SCHEMA_VERSION = "v6.run_manifest.v1"
 
 V4_ARTIFACT_KINDS = {
     "provider_capabilities",
+    "literature_search_results",
+    "source_assets",
+    "literature_claims",
+    "extraction_evaluation",
     "device_evidence",
     "conflict_report",
     "screening_input_view",
@@ -38,6 +42,26 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/provider-capabilities.schema.json",
         "join_keys": ("provider",),
         "depends_on": (),
+    },
+    "literature_search_results": {
+        "schema_ref": "schemas/literature-search-results.schema.json",
+        "join_keys": ("query_id", "doi", "openalex_id"),
+        "depends_on": (),
+    },
+    "source_assets": {
+        "schema_ref": "schemas/source-asset.schema.json",
+        "join_keys": ("asset_id", "doi", "document_id"),
+        "depends_on": ("literature_search_results",),
+    },
+    "literature_claims": {
+        "schema_ref": "schemas/literature-claim.schema.json",
+        "join_keys": ("claim_id", "asset_id", "chunk_id", "doi"),
+        "depends_on": ("source_assets",),
+    },
+    "extraction_evaluation": {
+        "schema_ref": "schemas/extraction-evaluation.schema.json",
+        "join_keys": ("extractor_version", "gold_snapshot_hash"),
+        "depends_on": ("literature_claims",),
     },
     "device_evidence": {
         "schema_ref": "schemas/device-evidence.schema.json",

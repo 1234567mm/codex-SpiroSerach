@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/literature-search-results.schema.json",
+  "title": "LiteratureSearchResults",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "query_id", "provider", "query", "retrieved_at", "response_sha256", "records", "next_cursor"],
+  "properties": {
+    "schema_version": { "const": "v13.literature_search_results.v1" },
+    "query_id": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "minLength": 1 },
+    "query": { "type": "string", "minLength": 1 },
+    "retrieved_at": { "type": "string", "format": "date-time" },
+    "response_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "next_cursor": { "type": ["string", "null"] },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "doi": { "type": "string", "minLength": 1 },
+          "openalex_id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 }
+        },
+        "anyOf": [{ "required": ["doi"] }, { "required": ["openalex_id"] }]
+      }
+    }
+  }
+}

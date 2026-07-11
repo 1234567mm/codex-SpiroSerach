@@ -30,20 +30,31 @@
     "path": { "type": "string", "minLength": 1 },
     "kind": {
       "enum": [
+        "acquisition_breakdown",
         "agent_trace",
         "canonical_evidence",
+        "conflict_report",
+        "device_evidence",
         "enrichment_results",
+        "extraction_evaluation",
         "ledger",
+        "literature_claims",
+        "literature_search_results",
+        "model_evaluation",
         "model_updates",
         "posterior",
         "provider_cache",
         "provider_cache_index",
+        "provider_capabilities",
         "recommendations",
         "recompute_markers",
         "review_events",
         "review_queue",
         "review_summary",
-        "scoring_view"
+        "scoring_view",
+        "screening_input_view",
+        "source_assets",
+        "training_snapshot"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },

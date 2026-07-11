@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/source-asset.schema.json",
+  "title": "SourceAsset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "asset_id", "document_id", "doi", "source_url", "license", "text_sha256", "local_path"],
+  "properties": {
+    "schema_version": { "const": "v13.source_asset.v1" },
+    "asset_id": { "type": "string", "minLength": 1 },
+    "document_id": { "type": "string", "minLength": 1 },
+    "doi": { "type": "string", "minLength": 1 },
+    "source_url": { "type": "string", "format": "uri" },
+    "license": { "type": "string", "minLength": 1 },
+    "text_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "local_path": { "type": "string", "pattern": "^(?![A-Za-z]:|[/\\\\]|.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$" }
+  }
+}

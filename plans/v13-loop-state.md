@@ -26,8 +26,8 @@ Execute `plans/v13-data-closure-and-real-baseline-plan.md` from `main@82303f1`.
 | Deterministic fixture baseline | complete | `tests.test_v11_visualization_fixtures`: 4 tests OK |
 | Leakage-safe training snapshot | complete | 15 focused tests; 39 aggregate tests OK |
 | Grouped model evaluation | complete | 4 evaluator tests + 3 sklearn-extra tests; schema instance OK |
-| Eleven-artifact closure | in_progress | |
-| Runtime/read-only diagnostics | pending | |
+| Eleven-artifact closure | complete | 4 new round-trips; 37 artifact/repository/read tests OK |
+| Runtime/read-only diagnostics | in_progress | |
 | Public snapshot and replay | pending | |
 | Full verification and docs | pending | |
 

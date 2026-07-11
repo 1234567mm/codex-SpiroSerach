@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/literature-claim.schema.json",
+  "title": "LiteratureClaim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "claim_id", "asset_id", "chunk_id", "doi", "property", "value", "unit", "text_sha256", "method", "conditions", "extractor_version", "review_status"],
+  "properties": {
+    "schema_version": { "const": "v13.literature_claim.v1" },
+    "claim_id": { "type": "string", "minLength": 1 },
+    "asset_id": { "type": "string", "minLength": 1 },
+    "chunk_id": { "type": "string", "minLength": 1 },
+    "doi": { "type": "string", "minLength": 1 },
+    "property": { "type": "string", "minLength": 1 },
+    "value": { "type": "number" },
+    "unit": { "type": "string", "minLength": 1 },
+    "text_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "method": { "type": "string", "minLength": 1 },
+    "conditions": { "type": "object" },
+    "extractor_version": { "type": "string", "minLength": 1 },
+    "review_status": { "enum": ["needs_review", "accepted", "rejected"] }
+  }
+}

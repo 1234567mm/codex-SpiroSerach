@@ -130,6 +130,10 @@ class RunArtifactContractTests(unittest.TestCase):
             V4_ARTIFACT_KINDS,
             {
                 "provider_capabilities",
+                "literature_search_results",
+                "source_assets",
+                "literature_claims",
+                "extraction_evaluation",
                 "device_evidence",
                 "conflict_report",
                 "screening_input_view",
