@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from spirosearch.artifact_validation import validate_artifact_run
-from spirosearch.acquisition_replay import evaluate_offline_replay
+from spirosearch.acquisition_replay import evaluate_offline_replay, validated_replay_status
 from spirosearch.artifacts import build_run_manifest, write_json_artifact
 from spirosearch.contracts import (
     EXIT_INTERNAL_ERROR,
@@ -278,11 +278,9 @@ def _main_model_evaluate(argv: list[str]) -> int:
         replay_status = "unavailable"
         if args.replay_report:
             replay_payload = json.loads(Path(args.replay_report).read_text(encoding="utf-8"))
-            if replay_payload.get("schema_version") != "v13.acquisition_breakdown.v1":
-                raise ValueError("unsupported replay report schema_version")
-            if replay_payload.get("model_version") != args.model_version:
-                raise ValueError("replay report model_version does not match evaluation")
-            replay_status = str(dict(replay_payload.get("replay", {})).get("status", "unavailable"))
+            replay_status = validated_replay_status(
+                replay_payload, expected_model_version=args.model_version
+            )
         evaluation = evaluate_grouped_snapshot(
             snapshot,
             objective_name=args.objective,

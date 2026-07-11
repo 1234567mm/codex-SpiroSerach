@@ -58,6 +58,13 @@ class PublicDeviceBaselineTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "sha256"):
                 build_public_device_snapshot(source_path, manifest)
 
+    def test_snapshot_rejects_non_cc0_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path, manifest = self._source(Path(temp_dir))
+            manifest["license"] = "CC BY 4.0"
+            with self.assertRaisesRegex(ValueError, "CC0"):
+                build_public_device_snapshot(source_path, manifest)
+
     def test_dataset_import_cli_is_offline_and_writes_snapshot(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)

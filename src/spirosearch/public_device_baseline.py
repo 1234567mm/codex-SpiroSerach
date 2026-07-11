@@ -33,6 +33,8 @@ def build_public_device_snapshot(
     missing = [field for field in REQUIRED_SOURCE_FIELDS if field not in source_manifest]
     if missing:
         raise ValueError(f"source manifest is missing: {', '.join(missing)}")
+    if source_manifest["license"] != "CC0":
+        raise ValueError("public device baseline requires a verified CC0 source")
 
     path = Path(source_path)
     content = path.read_bytes()

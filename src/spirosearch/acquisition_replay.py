@@ -59,6 +59,30 @@ def evaluate_offline_replay(
     }
 
 
+def validated_replay_status(
+    report: Mapping[str, Any], *, expected_model_version: str
+) -> str:
+    """Recompute an external replay report before trusting its gate status."""
+    if report.get("schema_version") != "v13.acquisition_breakdown.v1":
+        raise ValueError("unsupported replay report schema_version")
+    if report.get("model_version") != expected_model_version:
+        raise ValueError("replay report model_version does not match evaluation")
+    replay = report.get("replay")
+    candidates = report.get("candidates")
+    if not isinstance(replay, Mapping) or not isinstance(candidates, list):
+        raise ValueError("replay report must contain candidates and replay objects")
+    recomputed = evaluate_offline_replay(
+        candidates,
+        request_id=report.get("request_id", ""),
+        model_version=report.get("model_version", ""),
+        strategy=report.get("strategy", ""),
+        batch_size=int(replay.get("batch_size", 0)),
+    )
+    if dict(report) != recomputed:
+        raise ValueError("replay report does not match recomputed evidence")
+    return str(recomputed["replay"]["status"])
+
+
 def _validated_candidate(candidate: Mapping[str, Any]) -> dict[str, Any]:
     candidate_id = str(candidate.get("candidate_id", "")).strip()
     if not candidate_id:

@@ -4,8 +4,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from spirosearch.acquisition_replay import evaluate_offline_replay
 from spirosearch.artifact_repository import JsonArtifactRepository
 from spirosearch.cli import main
+from spirosearch.contracts import EXIT_VALIDATION_ERROR
 from spirosearch.model_evaluation import evaluate_grouped_snapshot
 from spirosearch.prediction_dataset import build_training_snapshot
 
@@ -131,6 +133,56 @@ class ModelEvaluationTests(unittest.TestCase):
             self.assertEqual(evaluation.payload["activation_status"], "disabled")
             self.assertIn("offline_replay_unavailable", evaluation.payload["activation_reasons"])
             self.assertTrue(repository.read_json("training_snapshot").available)
+
+    def test_model_evaluate_cli_rejects_tampered_replay_status(self):
+        replay = evaluate_offline_replay(
+            [
+                {
+                    "candidate_id": "candidate-a",
+                    "model_score": 2.0,
+                    "heuristic_score": 1.0,
+                    "observed_utility": 0.0,
+                },
+                {
+                    "candidate_id": "candidate-b",
+                    "model_score": 1.0,
+                    "heuristic_score": 2.0,
+                    "observed_utility": 1.0,
+                },
+            ],
+            request_id="replay-1",
+            model_version="heuristic-v1",
+            strategy="heuristic",
+        )
+        self.assertEqual(replay["replay"]["status"], "regression")
+        replay["replay"]["status"] = "non_regression"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            snapshot_path = directory / "input-snapshot.json"
+            replay_path = directory / "replay.json"
+            snapshot_path.write_text(json.dumps(_snapshot().to_dict()), encoding="utf-8")
+            replay_path.write_text(json.dumps(replay), encoding="utf-8")
+            with patch(
+                "sys.argv",
+                [
+                    "spirosearch",
+                    "model-evaluate",
+                    "--snapshot",
+                    str(snapshot_path),
+                    "--objective",
+                    "pce",
+                    "--model",
+                    "heuristic",
+                    "--model-version",
+                    "heuristic-v1",
+                    "--replay-report",
+                    str(replay_path),
+                    "--output-dir",
+                    str(directory / "run"),
+                ],
+            ):
+                self.assertEqual(main(), EXIT_VALIDATION_ERROR)
 
 
 if __name__ == "__main__":

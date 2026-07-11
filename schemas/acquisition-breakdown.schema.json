@@ -4,7 +4,6 @@
   "title": "AcquisitionBreakdown",
   "type": "object",
   "additionalProperties": false,
-  "additionalProperties": false,
   "required": ["schema_version", "request_id", "model_version", "strategy", "candidates", "replay"],
   "properties": {
     "schema_version": { "const": "v13.acquisition_breakdown.v1" },
