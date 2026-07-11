@@ -11,3 +11,8 @@ manual_inbox/
 literature_assets/
 object_store/
 fulltext_chunks/
+
+# Local agent/session state
+.claude/settings.local.json
+.reasonix/desktop-topic-*.json
+.reasonix/autoresearch/
