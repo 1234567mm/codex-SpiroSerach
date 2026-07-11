@@ -24,7 +24,7 @@
       "sha256": "487db37e183544a6929018e4f49b5ee3d9b527ccbc23c00b0793c1ecb644a350"
     },
     {
-      "bytes": 7027,
+      "bytes": 6831,
       "depends_on": [
         "enrichment_results",
         "review_events"
@@ -46,10 +46,10 @@
       "run_id": "v11-diagnostic-run-001",
       "schema_ref": "schemas/canonical-evidence.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "60069f0b8f7d6449fa681adf779776c2c40c8c59e8086cc690a9216a72210345"
+      "sha256": "024e653fa08abf2c536dfe8b8fe0cb744c8a0869cb6a472783352d9658964ea7"
     },
     {
-      "bytes": 2765,
+      "bytes": 2678,
       "depends_on": [
         "provider_cache_index"
       ],
@@ -70,7 +70,7 @@
       "run_id": "v11-diagnostic-run-001",
       "schema_ref": "schemas/enrichment-results.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "29d61f4f31df4109214f8104e4d5bffe2a1e29b334f23a6d36a7c40ecdaf65a5"
+      "sha256": "4c891fb5f9195cc59a82c4eba9b47d4641ffeda52f23ea08af012674995e9a3a"
     },
     {
       "bytes": 1297,
@@ -94,7 +94,7 @@
       "sha256": "1f0d83f63866096cd6cb43fcfe84464ceadecc3c92224581c7909ba047720eab"
     },
     {
-      "bytes": 1693,
+      "bytes": 1644,
       "depends_on": [
         "provider_cache"
       ],
@@ -116,10 +116,10 @@
       "run_id": "v11-diagnostic-run-001",
       "schema_ref": "schemas/provider-cache-index.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "446fa5d1dcc8787b8d16f09f2a1c831e1b9f0e4a3faa1c2d9d00c113e9939129"
+      "sha256": "8e0f8b15e77be38ec2f47df8847cf9da3bb1a6ab99c030be97f6a17cf4ea8043"
     },
     {
-      "bytes": 419,
+      "bytes": 405,
       "depends_on": [
         "ledger",
         "posterior"
@@ -138,7 +138,7 @@
       "run_id": "v11-diagnostic-run-001",
       "schema_ref": null,
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "8b3c7df50e363c01d4e107cb95e4dbdcc70112d7279aa08f7389371112859954"
+      "sha256": "0aa48ee78a9ba85398dc3448aae9e3dfd8dfbd5aa25238db85eb72414000e235"
     },
     {
       "bytes": 543,
@@ -214,7 +214,7 @@
       "sha256": "51e835ad296a161bb7d17d36e455a9cbdf2b2b710643041751fce60635258566"
     },
     {
-      "bytes": 797,
+      "bytes": 761,
       "depends_on": [
         "review_queue",
         "review_events",
@@ -235,10 +235,10 @@
       "run_id": "v11-diagnostic-run-001",
       "schema_ref": "schemas/review-summary.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "426f853f0b0ccfab7a252b69979c368ca8d9f8c56ba176ad5731a04e641afb6e"
+      "sha256": "032400c4458f2fc78259425164b1a2130c06685ed81604368f5a2868aed1f122"
     },
     {
-      "bytes": 1451,
+      "bytes": 1404,
       "depends_on": [
         "canonical_evidence",
         "review_queue"
@@ -258,7 +258,7 @@
       "run_id": "v11-diagnostic-run-001",
       "schema_ref": "schemas/scoring-view.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "b17bca4613e9e3aac6d509f57ed9969422e3d2f471c5ad09f74a9b607d5ac75b"
+      "sha256": "dc99e0bd76512d238447795b743de2a661b21afdd08767e782d784f263fe7f0a"
     }
   ],
   "candidate_count": 2,
