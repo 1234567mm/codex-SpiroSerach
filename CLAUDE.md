@@ -17,25 +17,19 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 
 注意：用户上下文有时会落在 `frontend` 子目录，但 Python 项目根目录在仓库根目录。涉及 `src/`、`tests/`、`plans/`、`schemas/` 的操作必须在仓库根目录执行。
 
-## V9 当前状态
+## 当前项目状态
 
-V9 已完成并推送到 `main` 的关键提交：
+项目已完成 V9-V13 多轮迭代，形成了稳定的证据治理、评分隔离、artifact 制品化和数据契约框架。不要在本文档中写死最新 commit、测试数量或 MCP 图谱节点数量；这些值会随提交和索引刷新变化。
 
-- `77123de`：新增 canonical domain 与 legacy adapter。
-- `b378ecc`：增加 literature metadata providers。
-- `987783a`：增加 canonical literature extraction agent。
-- `41170d5`：将 literature claims 接入 canonical evidence gate。
-- `4338929`：生成 `canonical-evidence.json` artifact。
-- `ae5e36a`：形式化 canonical evidence schema 与 emitter。
-- `d83c324`：抽取 `ReviewQueueFinalizer`，收敛 review runtime 边界。
-- `73e411f`：新增 `EvidenceQualityPolicy` 与 `ScoringView` read model。
+进入任务时先确认当前基线：
 
-V9 后续优先级：
+```powershell
+git log --oneline -5 --decorate
+git status --short --branch
+git rev-list --left-right --count main...origin/main
+```
 
-1. 让 `scoring.py` / `htl_scoring.py` 逐步读取 `ScoringView` 或 adapter view。
-2. 增加运行产物：`evidence-snapshot.json`、`scoring-view.json`、`review-summary.json`。
-3. 让 `CentralAgent` 消费 evidence snapshot + review status，减少直接读取 provider/runtime 原始结构。
-4. 保持旧 CLI、旧模型和现有测试可运行，不做一次性大迁移。
+当前默认门禁仍是 `uv run python -m unittest discover tests -v`。可选依赖门禁使用 `--extra ml`（scikit-learn/numpy）和 `--extra bo`（torch/gpytorch/BoTorch）。代码发现优先使用 `codebase-memory-mcp` 图谱；如果图谱缺失、空、过期或项目名不匹配，先重新索引或按工具返回的可用项目名查询。
 
 ## Worktree 规范
 
@@ -44,20 +38,20 @@ V9 后续优先级：
 推荐格式：
 
 ```powershell
-git worktree add D:\tmp\spiro-v9-<phase-or-topic> -b codex/v9-<phase-or-topic> main
+git worktree add D:\tmp\spiro-<version-or-topic> -b codex/<version-or-topic> main
 ```
 
 示例：
 
 ```powershell
-git worktree add D:\tmp\spiro-v9-phase7-scoring-adapter -b codex/v9-phase7-scoring-adapter main
+git worktree add D:\tmp\spiro-v13-closure -b codex/v13-data-closure main
 ```
 
 工作完成后必须清理：
 
 ```powershell
-git worktree remove D:\tmp\spiro-v9-<phase-or-topic>
-git branch -d codex/v9-<phase-or-topic>
+git worktree remove D:\tmp\spiro-<version-or-topic>
+git branch -d codex/<version-or-topic>
 ```
 
 清理后检查：
@@ -73,7 +67,7 @@ git rev-list --left-right --count main...origin/main
 
 - 只剩主 worktree。
 - 当前分支是 `main`。
-- `git status` 无未跟踪或未提交文件。
+- 除已知用户/项目配置改动外，`git status` 无未跟踪或未提交文件；不要为了达成干净状态删除或回滚用户改动。
 - `main...origin/main` 输出 `0 0`。
 
 ## 分阶段开发流程
@@ -115,6 +109,18 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 
 如果只改了窄范围模块，可以先跑相关测试，但最终合并到 `main` 后仍必须跑全量测试。
 
+### Optional dependency gates
+
+项目有 `--extra ml`（scikit-learn/numpy）和 `--extra bo`（torch/gpytorch/BoTorch）两个可选依赖门禁：
+
+```powershell
+$env:PYTHONPATH='src'; uv run --extra ml python -m unittest tests.test_model_evaluation tests.test_v4_surrogate -v
+$env:PYTHONPATH='src'; uv run --extra bo python -m unittest tests.test_botorch_adapter tests.test_acquisition_replay -v
+```
+
+- 默认测试套件通过**不证明**可选 ML/BO 路径通过。修改或声明 model evaluation、surrogate、acquisition、replay、BoTorch、scikit-learn 相关行为时，必须运行对应 optional gate；纯文档、agent 配置或无关切片不需要默认运行 optional gate。
+- 在 Windows 上未安装 MSVC 时，BoTorch 会输出编译器警告并降级到纯 Python 内核（功能正常，速度较慢）。
+
 `uv run` 常见行为：
 
 - 可能创建 `.venv`，通常已忽略。
@@ -137,14 +143,14 @@ Remove-Item -LiteralPath uv.lock
 - **生成物污染：** `uv run` 会反复生成 `uv.lock`。提交前、合并后、推送前都要检查。
 - **只信分支测试不够：** feature worktree 通过后，合并到 `main` 还要重新跑全量测试。
 - **临时分支遗留：** 每个阶段结束必须删除临时 worktree 和本地分支。
-- **状态口径不清：** 回复用户前必须给出 commit、测试数量、`main...origin/main` 状态和 worktree 状态。
-- **计划漂移：** V9 只按 `plans/v9-architecture-optimization-and-industrialization.md` 推进，不临时扩成大平台重写。
+- **状态口径不清：** 交付、声明完成、合并、推送或保存上下文前，必须给出 commit、测试数量、`main...origin/main` 状态和 worktree 状态。
+- **计划漂移：** 每个阶段只按对应 `plans/` 中的计划推进，不临时扩成大平台重写。
 - **边界过宽：** 每次只做一个可测试切片，例如 runtime finalizer、scoring view、artifact emission，避免一次性改 scoring、orchestrator、provider 和 UI。
 - **未读代码先改：** 新阶段开始前必须读取相关 domain、adapter、runtime、tests，按现有模式落地。
 
 ## 架构原则
 
-V9 的核心目标是把真实数据富集、证据治理、人工复核、评分隔离和项目结构边界统一到可测试、可演进的架构中。
+项目的核心目标是把真实数据富集、证据治理、人工复核、评分隔离和项目结构边界统一到可测试、可演进的架构中。
 
 强制边界：
 
@@ -171,8 +177,8 @@ Test-Path uv.lock
 提交信息使用英文 conventional commit 风格：
 
 ```text
-feat(v9): add scoring view quality policy
-test(v9): strengthen provider scoring isolation
+feat(v13): add grouped evaluation with leakage-safe snapshot
+test(scoring): strengthen scoring view quality isolation
 docs: add agent working rules
 chore: clean generated test artifact
 ```
@@ -183,6 +189,7 @@ chore: clean generated test artifact
 - 不要用 `git reset --hard`、`git checkout --` 回滚用户可能的改动，除非用户明确要求。
 - 不要在不清楚远端状态时直接 push。
 - 不要把 unrelated diff 混进阶段提交。
+- 不要删除或回滚与当前任务无关的项目级 agent 配置，例如 `.codex/skills/`、`.reasonix/skills/`、`.claude/`、`reasonix.toml`；如果它们处于 dirty 状态，应在交付报告中说明归属。
 
 ## gstack 与上下文保存
 
@@ -215,14 +222,18 @@ git log --oneline -8 --decorate
 
 ## Skill routing
 
-当用户请求匹配可用技能时，应调用对应技能或遵守其流程。
+当用户请求匹配可用技能时，应优先调用项目级功能型技能或遵守其流程。Codex 项目级技能位于 `.codex/skills/`，Reasonix 项目级技能位于 `.reasonix/skills/`；Claude/gstack 应遵守本文档，并在各自支持的 skill 机制中使用等价能力。项目级技能只按能力组织，不绑定任何阶段计划；后续无论推进哪份计划，都复用同一组功能技能。
 
 关键规则：
 
-- 架构计划或方案评审：使用 `/plan-eng-review`、`/plan-ceo-review` 或相关 review 技能。
-- 复杂实现计划：使用 worktree + TDD + verification。
-- Bug、失败测试、异常行为：使用 systematic debugging / investigate。
-- 完成阶段、合并、推送、清理：使用 finishing development branch 流程。
-- 保存进度或压缩上下文：使用 `/context-save`。
-- 恢复进度：使用 `/context-restore`。
-
+- **代码发现与架构查询：** 优先使用 `$codebase-memory-mcp` 的 graph 工具（search_graph → trace_path → get_code_snippet → query_graph → get_architecture）。如果图谱未索引、返回空、项目名不匹配或结果明显过期，先运行 `index_repository` 或按工具返回的可用项目名查询。仅在搜索字面量、配置文件、非代码文件或图谱结果不足时回退到 grep/glob/read_file。
+- 实现或修改代码：优先使用 `$worktree-tdd`。
+- Bug、失败测试、schema 不匹配、adapter/provider 边界异常：优先使用 `$contract-debugging`，必要时叠加 systematic debugging / investigate。
+- CLI 输出、`run-manifest.json`、JSON schema、JSONL、cache index、artifact viewer 输入：优先使用 `$artifact-validation`。
+- 合并、推送、清理 worktree、声明完成前：优先使用 `$review-ship`，并遵守 verification-before-completion。
+- 保存进度、恢复进度、压缩上下文、跨 worktree 交接：优先使用 `$context-handoff`；如果可用，再叠加 gstack `/context-save` 或 `/context-restore`。
+- gstack 下载、安装、setup、升级或本地发现失败，且需要吸收线上 skill 内容：使用 `$upstream-skill-sync`，只融合工作流，不 vendored 整仓。
+- 后续更新 skills 只根据用户明确需求执行，不参考 `C:\Users\wchao\.cc-switch\skills`。
+- 架构计划或方案评审：通用 gstack `/plan-eng-review`、`/plan-ceo-review` 可作为第二层评审，但不要把评审流程写死到项目级功能技能里。
+- 前端视觉 QA 或浏览器交互：仅在需要真实浏览器验证时使用 browse / qa / playwright 相关技能。
+- 不要把整套全局 gstack skill vendored 到仓库；项目级 skills 只保留高频功能能力。
