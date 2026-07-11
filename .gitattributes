@@ -1,1 +1,2 @@
 tests/fixtures/artifact_viewer/v11_diagnostic_run/* text eol=lf
+tests/fixtures/artifact_viewer/v13_algorithm_run/* text eol=lf
