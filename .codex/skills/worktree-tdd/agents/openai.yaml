@@ -1,0 +1,5 @@
+interface:
+  display_name: "Worktree TDD"
+  short_description: "Isolated branch workflow with test-first changes"
+  default_prompt: "Use $worktree-tdd to implement the next tested code change."
+

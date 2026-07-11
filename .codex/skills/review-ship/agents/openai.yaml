@@ -1,0 +1,5 @@
+interface:
+  display_name: "Review Ship"
+  short_description: "Pre-ship review, verification, and cleanup"
+  default_prompt: "Use $review-ship before merging, pushing, or calling work complete."
+

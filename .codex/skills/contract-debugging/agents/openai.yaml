@@ -1,0 +1,5 @@
+interface:
+  display_name: "Contract Debugging"
+  short_description: "Root-cause debugging for schemas and data boundaries"
+  default_prompt: "Use $contract-debugging to investigate a failing contract or adapter test."
+

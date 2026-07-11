@@ -1,0 +1,5 @@
+interface:
+  display_name: "Codebase Memory MCP"
+  short_description: "Use MCP graph tools for code discovery"
+  default_prompt: "Use $codebase-memory-mcp to inspect code with the project knowledge graph."
+

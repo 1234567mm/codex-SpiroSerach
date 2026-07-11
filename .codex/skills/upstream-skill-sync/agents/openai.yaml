@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upstream Skill Sync"
+  short_description: "Refresh project skills from upstream sources on request"
+  default_prompt: "Use $upstream-skill-sync to merge user-requested upstream gstack skill behavior into project-level skills."

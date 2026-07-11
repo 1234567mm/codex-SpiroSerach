@@ -1,0 +1,5 @@
+interface:
+  display_name: "Artifact Validation"
+  short_description: "Validate JSON artifacts, schemas, and manifests"
+  default_prompt: "Use $artifact-validation to verify generated artifacts and schemas."
+
