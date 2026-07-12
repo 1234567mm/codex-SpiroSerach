@@ -26,6 +26,10 @@ REQUIRED_SOURCE_FIELDS = (
 _PCE_UNITS = {"", "%", "percent", "percentage"}
 _FF_FRACTION_UNITS = {"", "fraction", "ratio", "unitless"}
 _FF_PERCENT_UNITS = {"%", "percent", "percentage"}
+_VOC_UNITS = {"", "v", "volt", "volts"}
+_JSC_UNITS = {"", "ma/cm2", "macm-2", "macm2"}
+_IRRADIANCE_UNITS = {"", "mw/cm2", "mwcm-2", "mwcm2"}
+_ACTIVE_AREA_UNITS = {"", "cm2", "cm^2"}
 _COMPONENT_ORDER = ("substrate", "etl", "perovskite", "htl", "counter_electrode")
 
 
@@ -236,6 +240,9 @@ def _normalize_record(
     elif ff is not None and not 0.0 < ff <= 1.0:
         reasons.append("ff_out_of_range")
 
+    unit_reasons = _optional_unit_reasons(record)
+    reasons.extend(unit_reasons)
+
     if reasons:
         return None, BeardColeRejection(source_row_id, tuple(reasons))
 
@@ -330,6 +337,24 @@ def _parse_optional_float(container: Any) -> float | None:
     return _to_finite_float(_first_value(container))
 
 
+def _optional_unit_reasons(record: Mapping[str, Any]) -> list[str]:
+    checks = (
+        (_metric(record, "voc"), _VOC_UNITS, "unknown_voc_unit"),
+        (_metric(record, "jsc"), _JSC_UNITS, "unknown_jsc_unit"),
+        (
+            _nested(record, "device_metrology", "solar_simulator", "irradiance"),
+            _IRRADIANCE_UNITS,
+            "unknown_irradiance_unit",
+        ),
+        (_nested(record, "device_metrology", "active_area"), _ACTIVE_AREA_UNITS, "unknown_active_area_unit"),
+    )
+    reasons = []
+    for container, allowed_units, reason in checks:
+        if container is not None and _normalize_unit(_unit(container)) not in allowed_units:
+            reasons.append(reason)
+    return reasons
+
+
 def _pce_conflicts(
     *,
     pce: float,
@@ -399,6 +424,10 @@ def _unit(value: Any) -> str:
         unit = value.get("unit", value.get("units", ""))
         return str(unit).strip()
     return ""
+
+
+def _normalize_unit(unit: str) -> str:
+    return unit.casefold().replace(" ", "").replace("^", "")
 
 
 def _to_finite_float(value: Any) -> float | None:

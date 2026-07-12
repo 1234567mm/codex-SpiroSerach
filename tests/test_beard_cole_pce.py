@@ -131,6 +131,19 @@ class BeardColePceAdapterTests(unittest.TestCase):
         self.assertIn("ff_out_of_range", reasons_by_row["25942310:11"])
         self.assertIn("missing_pce", reasons_by_row["25942310:12"])
 
+    def test_records_with_unknown_jv_units_fail_closed(self) -> None:
+        adapter = _adapter_module()
+        records = _load_fixture_records()
+        records[0]["device_characteristics"]["jsc"]["unit"] = "A/m2"
+
+        accepted, report = adapter.parse_beard_cole_records(records, _load_manifest())
+        reasons_by_row = {
+            rejection.source_row_id: set(rejection.reasons) for rejection in report.rejections
+        }
+
+        self.assertNotIn("25942310:0", [record.source_row_id for record in accepted])
+        self.assertIn("unknown_jsc_unit", reasons_by_row["25942310:0"])
+
     def test_record_converts_to_device_evidence_with_canonical_metric_names(self) -> None:
         adapter = _adapter_module()
         accepted, _ = adapter.parse_beard_cole_records(_load_fixture_records(), _load_manifest())
