@@ -1,0 +1,30 @@
+{"document_id":"gold-001","chunk_id":"c1","raw_span":"PCE = 20.1%","property_name":"pce","value":20.1,"unit":"%","conditions":{"device":"champion"},"reviewer_status":"curated"}
+{"document_id":"gold-002","chunk_id":"c1","raw_span":"PCE = 18.4%","property_name":"pce","value":18.4,"unit":"%","conditions":{"device":"average"},"reviewer_status":"curated"}
+{"document_id":"gold-003","chunk_id":"c1","raw_span":"Voc was 1.12 V","property_name":"voc","value":1.12,"unit":"V","conditions":{"scan":"reverse"},"reviewer_status":"curated"}
+{"document_id":"gold-004","chunk_id":"c1","raw_span":"Jsc reached 23.5 mA cm-2","property_name":"jsc","value":23.5,"unit":"mA cm-2","conditions":{"illumination":"AM1.5G"},"reviewer_status":"curated"}
+{"document_id":"gold-005","chunk_id":"c1","raw_span":"FF = 0.78","property_name":"ff","value":0.78,"unit":"fraction","conditions":{"device":"champion"},"reviewer_status":"curated"}
+{"document_id":"gold-006","chunk_id":"table1","raw_span":"HOMO -5.21 eV","property_name":"homo_ev","value":-5.21,"unit":"eV","conditions":{"method":"UPS"},"reviewer_status":"curated"}
+{"document_id":"gold-007","chunk_id":"table1","raw_span":"LUMO -2.31 eV","property_name":"lumo_ev","value":-2.31,"unit":"eV","conditions":{"method":"CV"},"reviewer_status":"curated"}
+{"document_id":"gold-008","chunk_id":"c2","raw_span":"band gap of 2.90 eV","property_name":"band_gap_ev","value":2.9,"unit":"eV","conditions":{"method":"optical"},"reviewer_status":"curated"}
+{"document_id":"gold-009","chunk_id":"c1","raw_span":"PCE improved to 21.0%","property_name":"pce","value":21.0,"unit":"%","conditions":{"additive":"yes"},"reviewer_status":"curated"}
+{"document_id":"gold-010","chunk_id":"c1","raw_span":"control PCE was 17.2%","property_name":"pce","value":17.2,"unit":"%","conditions":{"additive":"no"},"reviewer_status":"curated"}
+{"document_id":"gold-011","chunk_id":"c3","raw_span":"Voc decreased to 1.05 V","property_name":"voc","value":1.05,"unit":"V","conditions":{"aging":"500h"},"reviewer_status":"curated"}
+{"document_id":"gold-012","chunk_id":"c3","raw_span":"PCE retained 90%","property_name":"stability_retention","value":90.0,"unit":"%","conditions":{"aging":"500h"},"reviewer_status":"curated"}
+{"document_id":"gold-013","chunk_id":"table2","raw_span":"PCE 19.8% for device A","property_name":"pce","value":19.8,"unit":"%","conditions":{"device":"A"},"reviewer_status":"curated"}
+{"document_id":"gold-014","chunk_id":"table2","raw_span":"PCE 20.3% for device B","property_name":"pce","value":20.3,"unit":"%","conditions":{"device":"B"},"reviewer_status":"curated"}
+{"document_id":"gold-015","chunk_id":"c4","raw_span":"no measurable PCE was reported","property_name":"pce","value":"not_reported","unit":"none","conditions":{"device":"failed"},"reviewer_status":"needs_review"}
+{"document_id":"gold-016","chunk_id":"c1","raw_span":"HOMO was calibrated to -5.18 eV","property_name":"homo_ev","value":-5.18,"unit":"eV","conditions":{"scale":"ferrocene"},"reviewer_status":"curated"}
+{"document_id":"gold-017","chunk_id":"c1","raw_span":"PCE = 15.6% under indoor light","property_name":"pce","value":15.6,"unit":"%","conditions":{"illumination":"indoor"},"reviewer_status":"curated"}
+{"document_id":"gold-018","chunk_id":"c1","raw_span":"PCE = 22.4% under AM1.5G","property_name":"pce","value":22.4,"unit":"%","conditions":{"illumination":"AM1.5G"},"reviewer_status":"curated"}
+{"document_id":"gold-019","chunk_id":"c5","raw_span":"active area was 0.10 cm2","property_name":"active_area_cm2","value":0.10,"unit":"cm2","conditions":{"mask":"certified"},"reviewer_status":"curated"}
+{"document_id":"gold-020","chunk_id":"c5","raw_span":"active area was 1.00 cm2","property_name":"active_area_cm2","value":1.00,"unit":"cm2","conditions":{"module":"mini"},"reviewer_status":"curated"}
+{"document_id":"gold-021","chunk_id":"c6","raw_span":"PCE dropped from 20.0% to 18.0%","property_name":"pce","value":18.0,"unit":"%","conditions":{"aging":"after"},"reviewer_status":"curated"}
+{"document_id":"gold-022","chunk_id":"c6","raw_span":"initial PCE was 20.0%","property_name":"pce","value":20.0,"unit":"%","conditions":{"aging":"before"},"reviewer_status":"curated"}
+{"document_id":"gold-023","chunk_id":"table3","raw_span":"device C: Voc 1.18 V","property_name":"voc","value":1.18,"unit":"V","conditions":{"device":"C"},"reviewer_status":"curated"}
+{"document_id":"gold-024","chunk_id":"table3","raw_span":"device C: Jsc 24.1 mA cm-2","property_name":"jsc","value":24.1,"unit":"mA cm-2","conditions":{"device":"C"},"reviewer_status":"curated"}
+{"document_id":"gold-025","chunk_id":"table3","raw_span":"device C: FF 82%","property_name":"ff","value":82.0,"unit":"%","conditions":{"device":"C"},"reviewer_status":"curated"}
+{"document_id":"gold-026","chunk_id":"c7","raw_span":"PCE not improved by dopant","property_name":"pce_trend","value":"not_improved","unit":"qualitative","conditions":{"dopant":"tested"},"reviewer_status":"curated"}
+{"document_id":"gold-027","chunk_id":"c8","raw_span":"HOMO onset was -5.35 eV","property_name":"homo_ev","value":-5.35,"unit":"eV","conditions":{"method":"CV"},"reviewer_status":"curated"}
+{"document_id":"gold-028","chunk_id":"c8","raw_span":"LUMO onset was -2.45 eV","property_name":"lumo_ev","value":-2.45,"unit":"eV","conditions":{"method":"CV"},"reviewer_status":"curated"}
+{"document_id":"gold-029","chunk_id":"c9","raw_span":"PCE of encapsulated cells was 19.1%","property_name":"pce","value":19.1,"unit":"%","conditions":{"encapsulation":"yes"},"reviewer_status":"curated"}
+{"document_id":"gold-030","chunk_id":"c9","raw_span":"PCE of unencapsulated cells was 18.2%","property_name":"pce","value":18.2,"unit":"%","conditions":{"encapsulation":"no"},"reviewer_status":"curated"}
