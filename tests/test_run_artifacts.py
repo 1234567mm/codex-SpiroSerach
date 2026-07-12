@@ -136,6 +136,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "extraction_evaluation",
                 "device_evidence",
                 "conflict_report",
+                "data_quality_report",
                 "screening_input_view",
                 "training_snapshot",
                 "model_evaluation",
