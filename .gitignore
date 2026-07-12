@@ -16,3 +16,4 @@ fulltext_chunks/
 .claude/settings.local.json
 .reasonix/desktop-topic-*.json
 .reasonix/autoresearch/
+.qoder/
