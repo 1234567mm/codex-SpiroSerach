@@ -166,6 +166,28 @@
     "last_verified_at": null
   },
   {
+    "provider": "custom_htl_dft",
+    "base_url": "file://data/custom_htl_pilot/",
+    "license_hint": "Project-generated calculations; source structures retain their own provenance",
+    "trust_level": "T1_calculated",
+    "rate_limit": {
+      "requests_per_second": 1,
+      "backoff_strategy": "none"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 8760,
+    "allowed_output_fields": [
+      "homo_ev",
+      "lumo_ev",
+      "band_gap_ev"
+    ],
+    "disambiguation_required": false,
+    "operational_status": "experimental",
+    "capabilities": ["electronic_structure"],
+    "execution_modes": ["local_dataset"],
+    "last_verified_at": null
+  },
+  {
     "provider": "materials_project",
     "base_url": "https://api.materialsproject.org",
     "license_hint": "Materials Project API terms",

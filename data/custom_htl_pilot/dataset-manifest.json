@@ -1,0 +1,15 @@
+{
+  "schema_version": "v17.custom_htl_pilot.dataset_manifest.v1",
+  "dataset_id": "custom-htl-pilot-v17",
+  "status": "blocked_external_data",
+  "molecule_count": 0,
+  "calculation_count": 0,
+  "blockers": [
+    "no_verified_20_30_molecule_structure_set",
+    "orca_not_available",
+    "xtb_not_available",
+    "rdkit_not_available",
+    "cclib_not_available",
+    "cv_ups_calibration_anchors_missing"
+  ]
+}
