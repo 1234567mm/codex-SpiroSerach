@@ -100,6 +100,6 @@
 - [ ] Run PowerShell hygiene tests, the real hygiene checker, targeted V13 fixture tests, and the full Python unittest gate.
 - [ ] Remove generated `uv.lock` and confirm the branch worktree is clean.
 - [ ] Commit only intended files with conventional commits.
-- [ ] Push `codex/agent-governance-v18` to origin.
-- [ ] Reconcile overlapping dirty-main files through a named backup stash before merging; leave unrelated user files untouched.
-- [ ] Merge into `main`, rerun the full verification gate, push `main`, and report branch, commits, tests, worktrees, stash, and sync counts.
+- [ ] Push `codex/agent-governance-v18` only when the user has explicitly authorized that remote update.
+- [ ] Do not stash, switch, clean, or otherwise mutate a dirty main worktree without separate explicit authorization; if overlap blocks integration, stop with the verified feature branch preserved.
+- [ ] Merge and push `main` only after explicit integration authorization and a fresh remote-state check; rerun the full verification gate on the exact merged tree and report branch, commits, tests, worktrees and sync counts.
