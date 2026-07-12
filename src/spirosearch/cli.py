@@ -19,6 +19,7 @@ from spirosearch.contracts import (
     EXIT_VALIDATION_ERROR,
 )
 from spirosearch.enrichment_runtime import run_enrichment
+from spirosearch.paper_ingest import run_paper_ingest
 from spirosearch.pipeline import load_candidates, run_screening, write_report, write_report_directory
 from spirosearch.public_device_baseline import build_public_device_snapshot
 from spirosearch.model_evaluation import evaluate_grouped_snapshot
@@ -44,6 +45,8 @@ def main() -> int:
         return _main_model_evaluate(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "acquisition-replay":
         return _main_acquisition_replay(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "paper-ingest":
+        return _main_paper_ingest(sys.argv[2:])
     return _main_screening()
 
 
@@ -461,6 +464,30 @@ def _main_acquisition_replay(argv: list[str]) -> int:
     except (KeyError, OSError, ValueError, TypeError, json.JSONDecodeError):
         print("acquisition-replay failed validation", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
+    return EXIT_SUCCESS
+
+
+def _main_paper_ingest(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Run the local V18 paper intelligence ingest.")
+    parser.add_argument("--paper-dir", required=True, help="Directory containing DOI-hashed paper folders.")
+    parser.add_argument("--output-dir", required=True, help="Directory for manifest-backed ingest artifacts.")
+    parser.add_argument("--extractor", default="regex", choices=("regex",), help="Offline extractor to use.")
+    parser.add_argument("--obsidian-dir", help="Optional Obsidian vault directory for derived notes.")
+    args = parser.parse_args(argv)
+
+    try:
+        run_paper_ingest(
+            args.paper_dir,
+            args.output_dir,
+            extractor=args.extractor,
+            obsidian_dir=args.obsidian_dir,
+        )
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        print("paper-ingest failed validation", file=sys.stderr)
+        return EXIT_VALIDATION_ERROR
+    except Exception:
+        print("internal error", file=sys.stderr)
+        return EXIT_INTERNAL_ERROR
     return EXIT_SUCCESS
 
 

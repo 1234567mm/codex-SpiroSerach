@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/paper-source-manifest.schema.json",
+  "title": "PaperSourceManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "doi",
+    "main_sha256",
+    "si_sha256",
+    "has_si",
+    "license",
+    "downloaded_at",
+    "source_rights"
+  ],
+  "properties": {
+    "doi": { "type": "string", "minLength": 1 },
+    "main_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "si_sha256": {
+      "anyOf": [
+        { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "has_si": { "type": "boolean" },
+    "license": { "type": "string", "minLength": 1 },
+    "downloaded_at": { "type": "string", "minLength": 1 },
+    "source_rights": { "type": "string", "minLength": 1 }
+  }
+}

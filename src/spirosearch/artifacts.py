@@ -36,6 +36,9 @@ V4_ARTIFACT_KINDS = {
     "review_events",
     "review_summary",
     "recompute_markers",
+    "paper_vault_summary",
+    "paper_cross_ref_report",
+    "obsidian_notes",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -168,6 +171,21 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/recompute-marker.schema.json",
         "join_keys": ("marker_id", "review_event_id", "review_item_id", "candidate_id", "target_id"),
         "depends_on": ("review_events", "canonical_evidence", "scoring_view"),
+    },
+    "paper_vault_summary": {
+        "schema_ref": "schemas/paper-vault-summary.schema.json",
+        "join_keys": ("doi", "paper_folder"),
+        "depends_on": ("source_assets",),
+    },
+    "paper_cross_ref_report": {
+        "schema_ref": "schemas/paper-cross-ref-report.schema.json",
+        "join_keys": ("doi", "source_id", "source_type"),
+        "depends_on": ("source_assets", "literature_claims"),
+    },
+    "obsidian_notes": {
+        "schema_ref": "schemas/obsidian-notes.schema.json",
+        "join_keys": ("doi", "note_path"),
+        "depends_on": ("paper_vault_summary", "literature_claims"),
     },
 }
 

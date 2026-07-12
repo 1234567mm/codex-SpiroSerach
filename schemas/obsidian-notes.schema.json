@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/obsidian-notes.schema.json",
+  "title": "ObsidianNotes",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "note_count", "notes"],
+  "properties": {
+    "schema_version": { "const": "v18.obsidian_notes.v1" },
+    "note_count": { "type": "integer", "minimum": 0 },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["note_type", "note_path"],
+        "properties": {
+          "note_type": { "enum": ["paper", "molecule", "property"] },
+          "note_path": { "type": "string", "minLength": 1 },
+          "doi": { "type": "string" },
+          "material": { "type": "string" },
+          "property": { "type": "string" }
+        }
+      }
+    }
+  }
+}

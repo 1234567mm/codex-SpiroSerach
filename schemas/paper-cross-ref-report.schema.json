@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/paper-cross-ref-report.schema.json",
+  "title": "PaperCrossRefReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_totals",
+    "overlap_count",
+    "external_test_pool_size",
+    "overlaps"
+  ],
+  "properties": {
+    "schema_version": { "const": "v18.paper_cross_ref_report.v1" },
+    "source_totals": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "overlap_count": { "type": "integer", "minimum": 0 },
+    "external_test_pool_size": { "type": "integer", "minimum": 0 },
+    "overlaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "match_type",
+          "left_source_type",
+          "left_source_id",
+          "right_source_type",
+          "right_source_id",
+          "match_value"
+        ],
+        "properties": {
+          "match_type": { "enum": ["doi", "inchi", "formula"] },
+          "left_source_type": { "type": "string", "minLength": 1 },
+          "left_source_id": { "type": "string", "minLength": 1 },
+          "right_source_type": { "type": "string", "minLength": 1 },
+          "right_source_id": { "type": "string", "minLength": 1 },
+          "match_value": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

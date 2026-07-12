@@ -155,6 +155,9 @@ class RunArtifactContractTests(unittest.TestCase):
                 "review_events",
                 "review_summary",
                 "recompute_markers",
+                "paper_vault_summary",
+                "paper_cross_ref_report",
+                "obsidian_notes",
             },
         )
 
