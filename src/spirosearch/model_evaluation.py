@@ -49,6 +49,8 @@ def evaluate_grouped_snapshot(
     model_version: str,
     surrogate_type: str,
     replay_status: str = "unavailable",
+    data_leakage_count: int = 0,
+    blocking_review_count: int = 0,
 ) -> ModelEvaluation:
     rows = [
         row
@@ -111,7 +113,15 @@ def evaluate_grouped_snapshot(
         "heuristic": _error_metrics(observed, heuristic_predictions),
     }
     calibration = _calibration_metrics(observed, predicted, uncertainties)
-    reasons = _activation_reasons(metrics, baselines, calibration, fold_reports, replay_status)
+    reasons = _activation_reasons(
+        metrics,
+        baselines,
+        calibration,
+        fold_reports,
+        replay_status,
+        data_leakage_count=data_leakage_count,
+        blocking_review_count=blocking_review_count,
+    )
     return ModelEvaluation(
         snapshot_id=snapshot.snapshot_id,
         model_version=str(model_version),
@@ -167,22 +177,29 @@ def _activation_reasons(
     calibration: dict[str, float],
     fold_reports: list[dict[str, Any]],
     replay_status: str,
+    *,
+    data_leakage_count: int = 0,
+    blocking_review_count: int = 0,
 ) -> list[str]:
     reasons = []
-    if metrics["rmse"] >= baselines["dummy"]["rmse"]:
+    if metrics["mae"] >= baselines["dummy"]["mae"]:
         reasons.append("does_not_beat_dummy")
-    if metrics["rmse"] >= baselines["heuristic"]["rmse"]:
+    if metrics["mae"] >= baselines["heuristic"]["mae"]:
         reasons.append("does_not_beat_heuristic")
     for fold in fold_reports:
         fold_id = fold["fold_id"]
-        if fold["metrics"]["rmse"] >= fold["dummy"]["rmse"]:
+        if fold["metrics"]["mae"] >= fold["dummy"]["mae"]:
             reasons.append(f"fold_{fold_id}_does_not_beat_dummy")
-        if fold["metrics"]["rmse"] >= fold["heuristic"]["rmse"]:
+        if fold["metrics"]["mae"] >= fold["heuristic"]["mae"]:
             reasons.append(f"fold_{fold_id}_does_not_beat_heuristic")
-    if calibration["coverage_95"] < 0.5 or calibration["mean_interval_width_95"] <= 0.0:
+    if not 0.85 <= calibration["coverage_95"] <= 1.0 or calibration["mean_interval_width_95"] <= 0.0:
         reasons.append("uncertainty_not_calibrated")
     if replay_status == "regression":
         reasons.append("offline_replay_regressed")
     elif replay_status != "non_regression":
         reasons.append("offline_replay_unavailable")
+    if data_leakage_count > 0:
+        reasons.append("data_leakage_detected")
+    if blocking_review_count > 0:
+        reasons.append("blocking_reviews_unresolved")
     return reasons
