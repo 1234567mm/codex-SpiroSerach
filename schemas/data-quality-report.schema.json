@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/data-quality-report.schema.json",
+  "title": "DataQualityReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "source_run_id",
+    "source_record_count",
+    "accepted_record_count",
+    "rejected_record_count",
+    "pce_missing_rate",
+    "jv_missing_rate",
+    "duplicate_rate",
+    "conflict_rate",
+    "htl_category_coverage",
+    "fold_leakage_count"
+  ],
+  "properties": {
+    "schema_version": { "const": "v17.data_quality_report.v1" },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "source_run_id": { "type": "string", "minLength": 1 },
+    "source_record_count": { "type": "integer", "minimum": 0 },
+    "accepted_record_count": { "type": "integer", "minimum": 0 },
+    "rejected_record_count": { "type": "integer", "minimum": 0 },
+    "pce_missing_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "jv_missing_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "duplicate_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "conflict_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "htl_category_coverage": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "fold_leakage_count": { "type": "integer", "minimum": 0 }
+  }
+}

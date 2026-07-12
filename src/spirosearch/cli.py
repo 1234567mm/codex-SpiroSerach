@@ -9,7 +9,8 @@ from pathlib import Path
 
 from spirosearch.artifact_validation import validate_artifact_run
 from spirosearch.acquisition_replay import evaluate_offline_replay, validated_replay_status
-from spirosearch.artifacts import build_run_manifest, write_json_artifact
+from spirosearch.artifacts import build_run_manifest, write_json_artifact, write_jsonl_artifact
+from spirosearch.beard_cole_training import build_beard_cole_training_snapshot
 from spirosearch.contracts import (
     EXIT_INTERNAL_ERROR,
     EXIT_LOCAL_TRACE_ERROR,
@@ -37,6 +38,8 @@ def main() -> int:
         return _main_validate_artifacts(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "dataset-import":
         return _main_dataset_import(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "beard-cole-import":
+        return _main_beard_cole_import(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "model-evaluate":
         return _main_model_evaluate(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "acquisition-replay":
@@ -261,6 +264,91 @@ def _main_dataset_import(argv: list[str]) -> int:
     return EXIT_SUCCESS
 
 
+def _main_beard_cole_import(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Import a local Beard/Cole PSC source into V17 artifacts.")
+    parser.add_argument("--source-file", required=True)
+    parser.add_argument("--source-manifest", required=True)
+    parser.add_argument("--output-dir", required=True)
+    args = parser.parse_args(argv)
+
+    try:
+        source_path = Path(args.source_file)
+        manifest_path = Path(args.source_manifest)
+        raw_records = json.loads(source_path.read_text(encoding="utf-8"))
+        source_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        training = build_beard_cole_training_snapshot(raw_records, source_manifest)
+
+        replay_report = evaluate_offline_replay(
+            _beard_cole_replay_candidates(training.accepted_records),
+            request_id="v17-beard-cole-replay",
+            model_version="beard-cole-heuristic-v1",
+            strategy="deterministic-pce-replay",
+            batch_size=1,
+        )
+        evaluation = evaluate_grouped_snapshot(
+            training.snapshot,
+            objective_name="pce",
+            model_factory=HeuristicSurrogate,
+            model_version="beard-cole-heuristic-v1",
+            surrogate_type="HEURISTIC",
+            replay_status=replay_report["replay"]["status"],
+            data_leakage_count=training.quality_report.fold_leakage_count,
+            blocking_review_count=0,
+        )
+
+        output_dir = Path(args.output_dir)
+        generated_at = datetime.now(UTC).isoformat()
+        input_hash = _combined_file_hash((source_path, manifest_path))
+        common = {
+            "run_id": f"v17-beard-cole-{training.snapshot.content_sha256[:12]}",
+            "input_hash": input_hash,
+            "generated_at": generated_at,
+            "producer_version": "spirosearch-v17",
+        }
+        artifacts = [
+            write_jsonl_artifact(
+                output_dir,
+                "device-evidence.jsonl",
+                [record.to_device_evidence().to_dict() for record in training.accepted_records],
+                kind="device_evidence",
+                **common,
+            ),
+            write_json_artifact(
+                output_dir,
+                "training-snapshot.json",
+                training.snapshot.to_dict(),
+                kind="training_snapshot",
+                **common,
+            ),
+            write_json_artifact(
+                output_dir,
+                "data-quality-report.json",
+                training.quality_report.to_dict(),
+                kind="data_quality_report",
+                **common,
+            ),
+            write_json_artifact(
+                output_dir,
+                "model-evaluation.json",
+                evaluation.to_dict(),
+                kind="model_evaluation",
+                **common,
+            ),
+            write_json_artifact(
+                output_dir,
+                "acquisition-breakdown.json",
+                replay_report,
+                kind="acquisition_breakdown",
+                **common,
+            ),
+        ]
+        build_run_manifest(artifacts, **common).write_json(output_dir)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        print("beard-cole-import failed validation", file=sys.stderr)
+        return EXIT_VALIDATION_ERROR
+    return EXIT_SUCCESS
+
+
 def _main_model_evaluate(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Evaluate a model with grouped, fail-closed activation gates.")
     parser.add_argument("--snapshot", required=True)
@@ -318,6 +406,25 @@ def _main_model_evaluate(argv: list[str]) -> int:
         print("model-evaluate failed validation or optional model availability", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
     return EXIT_SUCCESS
+
+
+def _beard_cole_replay_candidates(records) -> list[dict[str, float | str]]:
+    return [
+        {
+            "candidate_id": record.source_row_id,
+            "model_score": record.pce,
+            "heuristic_score": record.active_area_cm2 or 0.0,
+            "observed_utility": record.pce,
+        }
+        for record in records
+    ]
+
+
+def _combined_file_hash(paths: tuple[Path, ...]) -> str:
+    digest = hashlib.sha256()
+    for path in paths:
+        digest.update(path.read_bytes())
+    return f"sha256:{digest.hexdigest()}"
 
 
 def _main_acquisition_replay(argv: list[str]) -> int:

@@ -14,6 +14,8 @@ from spirosearch.prediction_dataset import TrainingSnapshot, build_training_snap
 
 @dataclass(frozen=True)
 class BeardColeDataQualityReport:
+    snapshot_id: str
+    source_run_id: str
     source_record_count: int
     accepted_record_count: int
     rejected_record_count: int
@@ -26,6 +28,9 @@ class BeardColeDataQualityReport:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schema_version": "v17.data_quality_report.v1",
+            "snapshot_id": self.snapshot_id,
+            "source_run_id": self.source_run_id,
             "source_record_count": self.source_record_count,
             "accepted_record_count": self.accepted_record_count,
             "rejected_record_count": self.rejected_record_count,
@@ -108,6 +113,8 @@ def _build_quality_report(
     duplicate_rows = sum(count - 1 for count in source_groups.values() if count > 1)
     htl_coverage = Counter(record.material_id for record in accepted)
     return BeardColeDataQualityReport(
+        snapshot_id=snapshot.snapshot_id,
+        source_run_id=snapshot.source_run_ids[0] if snapshot.source_run_ids else "",
         source_record_count=source_count,
         accepted_record_count=accepted_count,
         rejected_record_count=adapter_report.rejected_record_count,
