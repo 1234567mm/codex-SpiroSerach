@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel) || {
+    echo 'ERROR: unable to determine repository root for agent hygiene check.' >&2
+    exit 1
+}
+checker="$repo_root/scripts/check-agent-hygiene.ps1"
+
+if command -v pwsh >/dev/null 2>&1; then
+    exec pwsh -NoProfile -File "$checker" -RepositoryRoot "$repo_root"
+fi
+
+if command -v powershell.exe >/dev/null 2>&1; then
+    exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$checker" -RepositoryRoot "$repo_root"
+fi
+
+echo 'ERROR: PowerShell (pwsh or powershell.exe) is required for the agent hygiene pre-commit check.' >&2
+exit 1

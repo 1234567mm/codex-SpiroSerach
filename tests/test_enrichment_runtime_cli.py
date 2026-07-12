@@ -148,7 +148,19 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(results["candidate_count"], 2)
             self.assertEqual(results["summary"]["complete_count"], 1)
             self.assertEqual(results["summary"]["needs_review_count"], 1)
-            self.assertEqual(results["registry_providers"], ["crossref", "materials_project", "nomad", "openalex", "pubchem", "pubchemqc"])
+            self.assertEqual(
+                results["registry_providers"],
+                [
+                    "crossref",
+                    "custom_htl_dft",
+                    "llm_literature",
+                    "materials_project",
+                    "nomad",
+                    "openalex",
+                    "pubchem",
+                    "pubchemqc",
+                ],
+            )
 
             records = {record["candidate_id"]: record for record in results["records"]}
             self.assertEqual(records["complete_htl"]["status"], "complete")

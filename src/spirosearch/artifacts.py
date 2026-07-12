@@ -19,6 +19,7 @@ V4_ARTIFACT_KINDS = {
     "conflict_report",
     "screening_input_view",
     "training_snapshot",
+    "data_quality_report",
     "model_evaluation",
     "acquisition_breakdown",
     "recommendations",
@@ -82,6 +83,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/training-snapshot.schema.json",
         "join_keys": ("snapshot_id", "candidate_id", "source_run_id"),
         "depends_on": (),
+    },
+    "data_quality_report": {
+        "schema_ref": "schemas/data-quality-report.schema.json",
+        "join_keys": ("snapshot_id", "source_run_id"),
+        "depends_on": ("training_snapshot",),
     },
     "model_evaluation": {
         "schema_ref": "schemas/model-evaluation.schema.json",

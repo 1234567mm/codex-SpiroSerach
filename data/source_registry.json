@@ -136,6 +136,58 @@
     "last_verified_at": null
   },
   {
+    "provider": "llm_literature",
+    "base_url": "local://llm-literature-provider",
+    "license_hint": "Local document chunks only; source documents retain their own licenses",
+    "trust_level": "T3_literature_machine",
+    "rate_limit": {
+      "requests_per_second": 1,
+      "backoff_strategy": "none"
+    },
+    "requires_api_key": true,
+    "api_key_env": "LLM_LITERATURE_API_KEY",
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "claim_id",
+      "source_id",
+      "chunk_id",
+      "raw_span",
+      "property_name",
+      "value",
+      "unit",
+      "conditions",
+      "extractor_version",
+      "extraction_confidence"
+    ],
+    "disambiguation_required": true,
+    "operational_status": "experimental",
+    "capabilities": ["literature_claim_extraction"],
+    "execution_modes": ["local_dataset"],
+    "last_verified_at": null
+  },
+  {
+    "provider": "custom_htl_dft",
+    "base_url": "file://data/custom_htl_pilot/",
+    "license_hint": "Project-generated calculations; source structures retain their own provenance",
+    "trust_level": "T1_calculated",
+    "rate_limit": {
+      "requests_per_second": 1,
+      "backoff_strategy": "none"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 8760,
+    "allowed_output_fields": [
+      "homo_ev",
+      "lumo_ev",
+      "band_gap_ev"
+    ],
+    "disambiguation_required": false,
+    "operational_status": "experimental",
+    "capabilities": ["electronic_structure"],
+    "execution_modes": ["local_dataset"],
+    "last_verified_at": null
+  },
+  {
     "provider": "materials_project",
     "base_url": "https://api.materialsproject.org",
     "license_hint": "Materials Project API terms",
