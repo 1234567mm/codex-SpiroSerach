@@ -1,0 +1,406 @@
+[
+  {
+    "_id": {"$oid": "bc-valid-001"},
+    "fixture_case": "valid_complete_percent_ff",
+    "device_characteristics": {
+      "device_id": {"value": ["device-001"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [18.5], "unit": "%"},
+      "voc": {"value": [1.1], "unit": "V"},
+      "jsc": {"value": [22.0], "unit": "mA/cm2"},
+      "ff": {"value": [76.0], "unit": "%"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.valid",
+      "title": "Synthetic PSC device table",
+      "date": "2021-01-01",
+      "publisher": "Elsevier"
+    },
+    "table_data": {"first_columns": ["Device", "HTL", "PCE"]}
+  },
+  {
+    "_id": {"$oid": "bc-valid-002"},
+    "fixture_case": "valid_decimal_ff",
+    "device_characteristics": {
+      "device_id": {"value": ["device-002"]},
+      "architecture": {"value": ["p-i-n"]},
+      "pce": {"value": [17.16], "unit": "percent"},
+      "voc": {"value": [1.1], "unit": "V"},
+      "jsc": {"value": [22.0], "unit": "mA cm-2"},
+      "ff": {"value": [0.71], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["PTAA"]},
+      "etl": {"value": ["PCBM"]},
+      "perovskite": {"value": ["FAPbI3"]},
+      "substrate": {"value": ["ITO"]},
+      "counter_electrode": {"value": ["Ag"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.08], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.decimal",
+      "title": "Synthetic decimal fill factor",
+      "date": "2021-02-01",
+      "publisher": "RSC"
+    },
+    "table_data": {"first_columns": ["Cell", "Jsc", "FF"]}
+  },
+  {
+    "_id": {"$oid": "bc-valid-003"},
+    "fixture_case": "missing_doi_document_fallback",
+    "device_characteristics": {
+      "device_id": {"value": ["device-003"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [16.3], "unit": "%"},
+      "voc": {"value": [1.0], "unit": "V"},
+      "jsc": {"value": [21.7], "unit": "mA/cm2"},
+      "ff": {"value": [0.75], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["MeO-2PACz"]},
+      "etl": {"value": ["SnO2"]},
+      "perovskite": {"value": ["CsFAMA"]},
+      "substrate": {"value": ["ITO"]},
+      "counter_electrode": {"value": ["Ag"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.12], "unit": "cm2"}
+    },
+    "article_info": {
+      "title": "Document fallback without DOI",
+      "date": "2021-03-01",
+      "publisher": "Elsevier"
+    },
+    "table_data": {"first_columns": ["Sample", "PCE", "Voc"]}
+  },
+  {
+    "_id": {"$oid": "bc-reject-004"},
+    "fixture_case": "missing_device_id",
+    "device_characteristics": {
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [15.0], "unit": "%"},
+      "voc": {"value": [1.0], "unit": "V"},
+      "jsc": {"value": [20.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.75], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.reject.device",
+      "title": "Missing device identity",
+      "date": "2021-04-01",
+      "publisher": "Elsevier"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-reject-005"},
+    "fixture_case": "non_finite_pce",
+    "device_characteristics": {
+      "device_id": {"value": ["device-005"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": ["NaN"], "unit": "%"},
+      "voc": {"value": [1.0], "unit": "V"},
+      "jsc": {"value": [20.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.75], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.reject.nan",
+      "title": "Non finite PCE",
+      "date": "2021-05-01",
+      "publisher": "RSC"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-reject-006"},
+    "fixture_case": "pce_out_of_range",
+    "device_characteristics": {
+      "device_id": {"value": ["device-006"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [45.0], "unit": "%"},
+      "voc": {"value": [1.2], "unit": "V"},
+      "jsc": {"value": [25.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.80], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.reject.range",
+      "title": "PCE range failure",
+      "date": "2021-06-01",
+      "publisher": "Elsevier"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-valid-007"},
+    "fixture_case": "conflicting_reported_pce",
+    "device_characteristics": {
+      "device_id": {"value": ["device-007"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [15.0], "unit": "%"},
+      "voc": {"value": [1.2], "unit": "V"},
+      "jsc": {"value": [25.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.80], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.valid",
+      "title": "Synthetic PSC device table",
+      "date": "2021-01-01",
+      "publisher": "Elsevier"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-valid-008"},
+    "fixture_case": "duplicate_doi_second_device",
+    "device_characteristics": {
+      "device_id": {"value": ["device-008"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [19.0], "unit": "%"},
+      "voc": {"value": [1.1], "unit": "V"},
+      "jsc": {"value": [23.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.75], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.11], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.valid",
+      "title": "Synthetic PSC device table",
+      "date": "2021-01-01",
+      "publisher": "Elsevier"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-valid-009"},
+    "fixture_case": "same_article_third_device",
+    "device_characteristics": {
+      "device_id": {"value": ["device-009"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [18.9], "unit": "%"},
+      "voc": {"value": [1.1], "unit": "V"},
+      "jsc": {"value": [22.8], "unit": "mA/cm2"},
+      "ff": {"value": [0.754], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.11], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.valid",
+      "title": "Synthetic PSC device table",
+      "date": "2021-01-01",
+      "publisher": "Elsevier"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-reject-010"},
+    "fixture_case": "missing_htl",
+    "device_characteristics": {
+      "device_id": {"value": ["device-010"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [14.0], "unit": "%"},
+      "voc": {"value": [1.0], "unit": "V"},
+      "jsc": {"value": [20.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.70], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.reject.htl",
+      "title": "Missing HTL",
+      "date": "2021-07-01",
+      "publisher": "RSC"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-reject-011"},
+    "fixture_case": "ambiguous_pce_unit",
+    "device_characteristics": {
+      "device_id": {"value": ["device-011"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [14.0], "unit": "a.u."},
+      "voc": {"value": [1.0], "unit": "V"},
+      "jsc": {"value": [20.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.70], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.reject.unit",
+      "title": "Ambiguous PCE unit",
+      "date": "2021-08-01",
+      "publisher": "Elsevier"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-reject-012"},
+    "fixture_case": "ff_out_of_range",
+    "device_characteristics": {
+      "device_id": {"value": ["device-012"]},
+      "architecture": {"value": ["n-i-p"]},
+      "pce": {"value": [14.0], "unit": "%"},
+      "voc": {"value": [1.0], "unit": "V"},
+      "jsc": {"value": [20.0], "unit": "mA/cm2"},
+      "ff": {"value": [1.20], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.reject.ff",
+      "title": "FF range failure",
+      "date": "2021-09-01",
+      "publisher": "RSC"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-reject-013"},
+    "fixture_case": "missing_pce",
+    "device_characteristics": {
+      "device_id": {"value": ["device-013"]},
+      "architecture": {"value": ["n-i-p"]},
+      "voc": {"value": [1.0], "unit": "V"},
+      "jsc": {"value": [20.0], "unit": "mA/cm2"},
+      "ff": {"value": [0.70], "unit": "fraction"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["Spiro-OMeTAD"]},
+      "etl": {"value": ["TiO2"]},
+      "perovskite": {"value": ["MAPbI3"]},
+      "substrate": {"value": ["FTO"]},
+      "counter_electrode": {"value": ["Au"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.10], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.reject.pce",
+      "title": "Missing PCE",
+      "date": "2021-10-01",
+      "publisher": "Elsevier"
+    }
+  },
+  {
+    "_id": {"$oid": "bc-valid-014"},
+    "fixture_case": "valid_without_jv_optional_values",
+    "device_characteristics": {
+      "device_id": {"value": ["device-014"]},
+      "architecture": {"value": ["p-i-n"]},
+      "pce": {"value": [13.8], "unit": "%"},
+      "ff": {"value": [68.0], "unit": "%"}
+    },
+    "psc_material_components": {
+      "htl": {"value": ["NiPh"]},
+      "etl": {"value": ["C60"]},
+      "perovskite": {"value": ["FAPbI3"]},
+      "substrate": {"value": ["ITO"]},
+      "counter_electrode": {"value": ["Ag"]}
+    },
+    "device_metrology": {
+      "solar_simulator": {"irradiance": {"value": [100.0], "unit": "mW/cm2"}},
+      "active_area": {"value": [0.09], "unit": "cm2"}
+    },
+    "article_info": {
+      "doi": "10.1000/beard.valid.optional",
+      "title": "Optional JV fields",
+      "date": "2021-11-01",
+      "publisher": "RSC"
+    },
+    "table_data": {"first_columns": ["Sample", "PCE"]}
+  }
+]
