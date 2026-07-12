@@ -14,12 +14,11 @@
 
 **Files:**
 - Modify: `.gitattributes`
-- Normalize: `tests/fixtures/artifact_viewer/v13_algorithm_run/device-evidence.jsonl`
-- Normalize: `tests/fixtures/artifact_viewer/v13_algorithm_run/literature-claims.jsonl`
-- Normalize: `tests/fixtures/artifact_viewer/v13_algorithm_run/source-assets.jsonl`
+- Preserve: `tests/fixtures/artifact_viewer/v13_algorithm_run/*.json` as CRLF
+- Preserve: `tests/fixtures/artifact_viewer/v13_algorithm_run/*.jsonl` as LF
 
-- [x] Change the V13 diagnostic fixture rule from `eol=crlf` to `eol=lf`.
-- [x] Normalize the three affected JSONL files to LF without changing JSON payloads.
+- [x] Replace the directory-wide line-ending rule with file-type rules: pretty JSON uses CRLF and JSONL uses LF, matching frozen manifest byte counts.
+- [x] Preserve artifact payload blobs and manifest hashes; do not normalize the mixed fixture into one line-ending convention.
 - [x] Run `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_v13_diagnostic_fixture -v` and confirm three passing tests.
 - [x] Run the full test gate and confirm 371 tests with no failures and three optional skips.
 - [x] Commit as `fix(v17): restore diagnostic fixture line endings` (`c0c7916`).
