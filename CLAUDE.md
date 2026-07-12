@@ -1,8 +1,7 @@
 # SpiroSearch Agent Rules
 
-Read `AGENTS.md` and `docs/agent-collaboration-governance.md` before working.
-The governance document is the single source of truth for worktree lifecycle,
-multi-agent ownership, local state, memory, handoff, and merge or push authority.
+Follow `docs/agent-collaboration-governance.md` for all collaboration workflow,
+ownership, reporting, local state, and authorization rules.
 
 ## Repository Root
 
@@ -30,8 +29,7 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 
 Run focused tests while developing, then run the full gate before claiming a
 code change is complete. Documentation-only changes may use document-specific
-checks instead. Report the commands and fresh results; never record a fixed test
-count in governance or prompts.
+checks instead. Never record a fixed test count in governance or prompts.
 
 Changes to model evaluation, surrogate, acquisition, replay, scikit-learn, or
 BoTorch paths also require the applicable optional dependency gate:
@@ -57,18 +55,6 @@ and remove only that known generated file when appropriate.
 - `ScoringView` exposes eligible facts only.
 - Legacy `models.py`, `v4.py`, and `screening_v31.py` migrate through adapters;
   do not remove them as an incidental refactor.
-
-## Git Safety
-
-- Preserve unrelated and user-owned changes. Never clean a worktree merely to
-  make status empty.
-- Do not use `git reset --hard` or `git checkout --` on user work unless the
-  user explicitly requests it.
-- Stage only task-owned paths. Do not use broad staging for a scoped task.
-- Do not commit generated environments, caches, outputs, or local session state.
-- A feature-branch commit does not authorize merging or pushing. Each requires
-  explicit authority and a fresh check of the target main worktree.
-- Use English Conventional Commit messages unless the task specifies one.
 
 ## Skill Routing
 

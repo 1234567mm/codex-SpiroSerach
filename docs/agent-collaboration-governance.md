@@ -59,13 +59,17 @@ Every agent return must include:
 - `files`: every changed path, or `none`.
 - `tests`: exact commands and results, including checks not run and why.
 - `commit`: commit SHA, or `not committed`.
-- `no-op reason`: required when no files changed or no commit was produced.
+- `no-op reason`: required only when the task produced no substantive result.
+- `not-committed reason`: required when substantive output exists but was not
+  committed, including read-only research, diagnosis, or review.
 - `self-review` and `concerns`: risks, unrelated state, or follow-up needs.
 
 ## Empty Runs, Timeouts, and Recovery
 
-An empty run is a valid result only when it reports why no change was necessary
-or possible. Do not manufacture a diff to avoid a no-op.
+An empty run is a valid result only when it reports why no substantive output
+was necessary or possible. Read-only findings and decisions are substantive
+output even when they do not change files. Do not manufacture a diff to avoid a
+no-op.
 
 If an agent times out or stops responding, treat its work as untrusted local
 state. Record its last known start SHA and ownership, inspect its branch,
@@ -110,15 +114,23 @@ Do not commit raw session history or local databases as a substitute.
 
 ## Authorization and Integration Boundaries
 
-Read-only discovery and reversible checks stay within the assigned scope.
-Editing, committing, merging, pushing, deleting branches or worktrees, changing
-hooks, and destructive cleanup each require authority appropriate to their
-impact. Permission to implement includes scoped edits and requested feature
-commits; it does not imply permission to merge or push.
+Read-only discovery and non-mutating diagnostics stay within the assigned scope.
+Any action that changes a worktree, index, ref, configuration, hook, remote, or
+external system requires authority appropriate to its impact. Permission to
+implement includes scoped edits and requested feature commits; it does not imply
+permission to merge or push.
 
-Before any authorized merge or push, inspect the actual main worktree and target
-branch. Confirm its branch, HEAD, remote divergence, and dirty state. Classify
-every dirty path; stop on overlapping, ambiguous, or user-owned changes. Verify
-the feature branch before integration and rerun the required gate on the
+Before any authorized merge or push, locate the actual target worktree with
+`git worktree list --porcelain` and inspect it with read-only `git -C <path>`
+commands. Confirm its branch, HEAD, and dirty state without switching or checking
+out a branch. Classify every dirty path; stop on overlapping, ambiguous, or
+user-owned changes.
+
+Remote divergence may be confirmed only after network access is authorized and
+the exact target ref is fetched successfully in the current session. If the ref
+cannot be refreshed, report `remote status: unknown` and stop integration. A
+stale local remote-tracking ref is not evidence of current divergence.
+
+Verify the feature branch before integration and rerun the required gate on the
 integrated target before push. Report what was merged or pushed and the final
 state; never hide a force operation inside a routine workflow.

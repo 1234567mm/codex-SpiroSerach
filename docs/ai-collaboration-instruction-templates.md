@@ -15,12 +15,12 @@ Set-Location $RepoRoot
 $StartSha = git rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw "Cannot resolve start SHA" }
 $Branch = git branch --show-current
-$Status = git status --short --branch
+$GitStatus = git status --short --branch
 $Worktrees = git worktree list --porcelain
 ```
 
 Record `$StartSha`; do not substitute a commit copied from a plan or prior
-session. Classify `$Status` before editing. For Boolean path checks, capture the
+session. Classify `$GitStatus` before editing. For Boolean path checks, capture the
 result directly:
 
 ```powershell
@@ -28,8 +28,9 @@ $HasGeneratedLock = Test-Path -LiteralPath (Join-Path $RepoRoot 'uv.lock')
 if ($HasGeneratedLock) { Write-Output 'Generated lock requires classification' }
 ```
 
-Every response must report status, start SHA, scope, files, tests, commit, no-op
-reason when applicable, self-review, and concerns.
+Use the return contract in governance section "Multi-Agent Independence and
+Ownership". The result status must be one of `DONE`, `DONE_WITH_CONCERNS`,
+`BLOCKED`, or `NEEDS_CONTEXT`.
 
 ## Research Module
 
@@ -37,8 +38,7 @@ reason when applicable, self-review, and concerns.
 > Remain read-only unless explicitly authorized to create a named research
 > artifact. Prefer primary repository evidence and cite paths or symbols.
 > Separate facts, inferences, unknowns, and recommended next checks. Do not
-> implement fixes. Return the common response fields; use `files: none`,
-> `commit: not committed`, and a no-op reason for a read-only result.
+> implement fixes. Return findings under the governance return contract.
 
 ## Diagnose Module
 
@@ -47,17 +47,16 @@ reason when applicable, self-review, and concerns.
 > failing boundary toward the cause. State the root cause only when evidence
 > distinguishes it from alternatives. Run focused diagnostic checks and report
 > exact results. Do not change behavior unless implementation is separately
-> authorized. Return the common response fields.
+> authorized. Return under the governance contract.
 
 ## Implement Module
 
 > Implement `[requested behavior]` from the runtime-discovered start SHA. Own
-> only `[files or boundaries]`; preserve all other changes. Use an isolated
-> worktree for code or behavior changes, follow the repository's test-first and
-> contract rules, and keep the diff scoped. Run `[focused gates]` and the
-> applicable completion gate. Review the full diff, stage only owned files, and
-> commit with `[message]` when authorized. Do not merge or push. Return the
-> common response fields.
+> only `[files or boundaries]`. Follow governance sections "Worktree Lifecycle",
+> "Multi-Agent Independence and Ownership", and "Authorization and Integration
+> Boundaries". Apply the repository's test-first and contract rules. Run
+> `[focused gates]` and the applicable completion gate, then return under the
+> governance contract.
 
 ## Review Module
 
@@ -66,25 +65,30 @@ reason when applicable, self-review, and concerns.
 > read-only. Report actionable findings first, ordered by severity, with file
 > and line references. Focus on correctness, regressions, trust boundaries,
 > contracts, security, and missing tests. If there are no findings, say so and
-> identify residual risk or checks not run. Return the common response fields.
+> identify residual risk or checks not run. Return under the governance contract.
 
 ## Handoff Module
 
 > Prepare a handoff for `[recipient or next stage]`. Reinspect current Git state;
-> do not rely on an earlier checkpoint. Summarize objective, start SHA, current
-> branch and HEAD, owned scope, changed files, commits, exact tests and results,
-> decisions, unresolved risks, unrelated local state, and the next concrete
-> action. A handoff transfers context, not authority. Do not merge, push, clean,
-> or claim completion on the recipient's behalf.
+> do not rely on an earlier checkpoint. Use the governance return contract and
+> add decisions, unresolved risks, unrelated local state, and the next concrete
+> action. A handoff transfers context, not authority.
 
 ## Integration Authorization Check
 
-Merge and push are outside the modules above. Perform either only after explicit
-authorization for that specific operation. First switch to or inspect the real
-main worktree, then collect its branch, HEAD, remote divergence, and porcelain
-status. If main is dirty, classify every path and stop on overlap, ambiguity, or
-user-owned work. Merge only the verified feature commit. Push only after the
-integrated main gate passes and push authority is still current.
+Follow governance section "Authorization and Integration Boundaries". Before
+any branch-changing command, locate the target worktree from the read-only list:
+
+```powershell
+$WorktreeRecords = git worktree list --porcelain
+$TargetWorktree = '[path selected from WorktreeRecords for the target branch]'
+$TargetBranch = git -C $TargetWorktree branch --show-current
+$TargetHead = git -C $TargetWorktree rev-parse HEAD
+$TargetGitStatus = git -C $TargetWorktree status --short --branch
+```
+
+Classify `$TargetGitStatus` before any switch or checkout. Do not infer the main
+worktree path from the current directory or switch the current worktree to main.
 
 ## Skill Names
 
