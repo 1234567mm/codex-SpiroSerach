@@ -9,6 +9,15 @@ Use this skill for implementation work that should be isolated, tested, and easy
 
 This is a functional workflow skill. It is not tied to any roadmap, phase, or plan file.
 
+## Pairing
+
+- Use `codebase-memory-mcp` first when you still need discovery or impact
+  analysis.
+- Global planning or TDD skills may help shape the work, but this repository's
+  governance, boundaries, and test gates still control execution.
+- Documentation-only edits usually do not need this skill unless they are part
+  of a larger behavior change or require isolated integration.
+
 ## Repository Defaults
 
 - Repository root: `D:\1-QRS\qorder_pr\codex-SpiroSerach`
@@ -38,10 +47,24 @@ git worktree add D:\tmp\<repo>-<topic> -b codex/<topic> main
 ```
 
 3. Run a baseline test in the worktree.
-4. Write or update the smallest failing test that captures the intended behavior.
-5. Run that targeted test and confirm it fails for the expected reason.
-6. Implement the smallest passing change.
-7. Run the targeted test again, then the full test gate.
+4. Read the governing contract before editing:
+   provider boundary, scoring boundary, review path, artifact contract, or
+   frontend fixture as applicable.
+5. Write or update the smallest failing test that captures the intended behavior.
+6. Run that targeted test and confirm it fails for the expected reason.
+7. Implement the smallest passing change.
+8. Run the targeted test again, then the full test gate.
+
+## Design Rules
+
+- Think before coding. Do not start with a broad refactor when a bounded patch
+  is enough.
+- Keep the change surgical. Do not widen scope because neighboring code looks
+  untidy.
+- Prefer existing seams, adapters, and manifests over new side paths or hidden
+  fallback logic.
+- If the change touches providers, scoring, review, or artifacts, verify the
+  trust boundary explicitly before coding.
 
 ## Test Discipline
 

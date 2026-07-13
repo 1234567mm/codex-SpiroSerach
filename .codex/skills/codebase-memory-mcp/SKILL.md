@@ -7,6 +7,13 @@ description: Use when working in this repository and Codex needs to discover, in
 
 Use the codebase-memory-mcp tools as the first stop for code discovery in this project.
 
+## Pairing
+
+- Use this before planning, implementation, debugging, or review whenever the
+  task depends on repository structure.
+- Global planning or debugging skills can consume the findings, but this skill
+  owns repository-first discovery.
+
 ## Startup
 
 - If the project is not indexed or graph results are empty/stale, run `index_repository` on the repository root first.
@@ -20,6 +27,13 @@ Use the codebase-memory-mcp tools as the first stop for code discovery in this p
 4. Use `query_graph` for complex graph queries, aggregations, hotspots, and multi-hop patterns.
 5. Use `get_architecture` for high-level structure, dependencies, entry points, boundaries, clusters, and hotspots.
 6. Use `search_code` when looking for text patterns that still benefit from graph-enriched ranking.
+
+Prefer reading the boundary owner before editing:
+
+- providers and adapters for `ProviderResponse`
+- `domain/scoring_view.py` for scoring eligibility
+- review runtime for blocking/recompute behavior
+- artifact repository and viewer fixtures for manifest-driven reads
 
 ## Fallbacks
 
