@@ -7,6 +7,13 @@ description: Use when tests fail, structured payloads violate schemas, data cros
 
 Use this skill for bugs and contract failures. It is plan-neutral and applies to any feature area.
 
+## Pairing
+
+- Use `codebase-memory-mcp` for call-path and boundary tracing before broad text
+  search.
+- Optional global debugging skills may help structure investigation, but the
+  repository contract and evidence rules below control the fix.
+
 ## Standard
 
 Do not patch symptoms. First identify the contract that broke.
@@ -18,6 +25,10 @@ Do not patch symptoms. First identify the contract that broke.
 5. State one concrete hypothesis.
 6. Verify the hypothesis with the smallest diagnostic or test.
 7. Add or update the regression test before implementing the fix.
+
+Preserve the first failing signal. Do not replace a useful failure with a broad
+catch, silent fallback, or schema relaxation unless the contract actually
+requires it.
 
 ## Contract Categories
 

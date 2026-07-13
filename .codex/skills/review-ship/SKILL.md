@@ -7,6 +7,12 @@ description: Use before merging, pushing, deleting worktrees, claiming completio
 
 Use this skill before saying a code change is complete.
 
+## Pairing
+
+- Use after `worktree-tdd`, `contract-debugging`, or `artifact-validation`.
+- Optional global review or verification skills can strengthen the review, but
+  they do not replace the repository gates below.
+
 ## Pre-Ship Gate
 
 ```powershell
@@ -22,11 +28,14 @@ If `uv.lock` exists and is not intentional:
 Remove-Item -LiteralPath uv.lock
 ```
 
-Run the full test gate:
+If code, schema, runtime, or artifact behavior changed, run the full test gate:
 
 ```powershell
 $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 ```
+
+If the change is documentation-only, verify the relevant markdown files and diff
+instead of forcing an unrelated unit-test run.
 
 ## Review Focus
 
@@ -38,6 +47,7 @@ Check the diff for:
 - Cache/index readers that no longer match writers.
 - Missing review or error path for incomplete data.
 - Frontend assumptions about hard-coded output names.
+- Scoring paths that read raw provider payloads or provider confidence.
 - Unrelated docs, cache, output, or dependency churn.
 
 Read the full relevant diff before commenting. Do not flag issues already addressed in the diff. Prefer fix-first handling: apply obvious mechanical fixes directly, but ask before risky, architectural, destructive, or judgment-heavy changes.
@@ -57,11 +67,13 @@ git status --short --branch
 git rev-list --left-right --count main...origin/main
 ```
 
-4. Merge the feature branch.
-5. Run the full test gate again on `main`.
-6. Remove generated files if present.
-7. Push only after local `main` is verified.
-8. Remove the temporary worktree and local feature branch.
+4. Confirm the target worktree is the real `main` worktree before merging.
+5. Merge the feature branch.
+6. Run the full test gate again on `main` when behavior changed.
+7. For docs-only integration, rerun a diff/status sanity check on `main`.
+8. Remove generated files if present.
+9. Push only after local `main` is verified.
+10. Remove the temporary worktree and local feature branch.
 
 ## Completion Report
 

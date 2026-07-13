@@ -7,6 +7,14 @@ description: Use when saving, restoring, compressing, or handing off work contex
 
 Use this skill when the user asks to save progress, restore context, resume work, compress context, or hand work to another agent.
 
+## Pairing
+
+- Use after `review-ship` when handing off completed work.
+- Use during interrupted debugging or implementation when the next agent needs
+  exact branch, worktree, and verification state.
+- Global context or compression skills may help compact the text, but the
+  repository return contract still defines what must be preserved.
+
 ## Save Context
 
 Gather:
@@ -26,6 +34,7 @@ Summarize:
 
 - Current goal.
 - Worktree path and branch.
+- Start SHA.
 - Completed commits.
 - Files changed and why.
 - Tests run, exact commands, and results.
@@ -62,6 +71,8 @@ Restore should search across branches by default. "Most recent" means the filena
 
 ## Current State
 
+## Start SHA
+
 ## Decisions
 
 ## Files Changed
@@ -80,3 +91,4 @@ Restore should search across branches by default. "Most recent" means the filena
 - Full-test success in a feature worktree does not prove merged `main`.
 - Do not silently expand scope during resume.
 - If the saved context came from another branch, state that before continuing.
+- Shared filesystem visibility is not shared edit authority.

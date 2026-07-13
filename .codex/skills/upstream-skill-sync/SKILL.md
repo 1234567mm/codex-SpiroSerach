@@ -93,6 +93,8 @@ Remove-Item -LiteralPath $resolved -Recurse -Force
 - Do not use any legacy `.cc-switch\skills` directory as a reference source.
 - Do not import generated preambles, telemetry blocks, host-specific hooks, or install scaffolding unless the local skill specifically needs them.
 - Extract stable workflow rules, decision points, validation gates, and failure handling.
+- Reconcile imported behavior with `AGENTS.md`, `CLAUDE.md`, and repository
+  governance before patching local skills.
 - Merge the extracted behavior into the closest functional project-level skill:
 
 | Upstream behavior | Local project-level skill |
@@ -132,5 +134,6 @@ uv run --with pyyaml python $validator .codex\skills\<skill-name>
 - Keep local skills small enough to read quickly.
 - Preserve repository-specific commands only where they are stable operational defaults.
 - If upstream text conflicts with repository rules, repository rules win.
+- Prefer concrete execution rules over abstract advice.
 - Never leave a full upstream gstack repository inside the project.
 - Include source paths or links in the final response whenever upstream content was used.

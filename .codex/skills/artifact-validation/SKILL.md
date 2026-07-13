@@ -7,6 +7,13 @@ description: Use when generating, changing, or reviewing JSON artifacts, schemas
 
 Use this skill for generated files and machine-readable outputs. It is not tied to any roadmap or phase.
 
+## Pairing
+
+- Use with `worktree-tdd` when producer behavior changes.
+- Use with `review-ship` before claiming artifact-related work is complete.
+- Optional global verification skills can help review the results, but the
+  manifest, schema, and reader/writer checks here remain authoritative.
+
 ## Repository Defaults
 
 Run commands from the repository root.
@@ -24,6 +31,7 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 - Manifest paths exist relative to the output directory.
 - Manifest hashes and sizes match the actual files.
 - JSONL files contain one valid JSON object per line.
+- `run-manifest.json` stays the discovery source for readers and fixtures.
 - Frontend or downstream readers discover artifacts from indexes/manifests, not hard-coded assumptions.
 - Generated output directories remain ignored unless the task explicitly changes repository policy.
 
@@ -47,4 +55,6 @@ $env:PYTHONPATH='src'; uv run python -m unittest tests.test_artifact_viewer
 - Do not commit `uv.lock` unless dependency policy changes.
 - If a schema changes, update tests and user-facing documentation that describes the payload.
 - If a manifest changes, verify both producer and reader behavior.
+- If a reader depends on artifact joins, verify the affected fixture or read-only
+  surface, not just the producer.
 
