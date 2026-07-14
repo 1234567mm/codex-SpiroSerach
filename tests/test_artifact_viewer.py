@@ -286,6 +286,97 @@ main().catch((error) => {
         self.assertIn("function showError", script)
         self.assertIn("escapeHtml", script)
 
+    def test_screening_status_display_never_invents_a_defer_decision(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+
+const context = {
+  console,
+  Map,
+  Number,
+  String,
+  JSON,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+const screening = {
+  candidates: [
+    {candidate_id: "missing-status"},
+    {candidate_id: "empty-status", status: ""},
+    {candidate_id: "unknown-status", status: "queued"},
+    {candidate_id: "pass-status", status: "pass"},
+    {candidate_id: "defer-status", status: "defer"},
+    {candidate_id: "reject-status", status: "reject"},
+  ],
+};
+context.renderCandidateTracer(screening, {records: []});
+context.renderScreeningEligibility(screening);
+
+function badge(html, candidateId) {
+  const candidateStart = html.indexOf(`>${candidateId}</span>`);
+  if (candidateStart === -1) throw new Error(`candidate ${candidateId} was not rendered`);
+  const segment = html.slice(candidateStart, candidateStart + 500);
+  const match = segment.match(/class="gate-status gate-([^" ]+)"(?: title="([^"]*)")?[^>]*>([^<]+)<\/span>/);
+  if (!match) throw new Error(`candidate ${candidateId} badge was not rendered`);
+  return {classStatus: match[1], reason: match[2] || "", text: match[3]};
+}
+
+const tracerHtml = element("candidateTable").innerHTML;
+const eligibilityHtml = element("screeningEligibilityList").innerHTML;
+const ids = screening.candidates.map((candidate) => candidate.candidate_id);
+process.stdout.write(JSON.stringify({
+  tracer: Object.fromEntries(ids.map((id) => [id, badge(tracerHtml, id)])),
+  eligibility: Object.fromEntries(ids.map((id) => [id, badge(eligibilityHtml, id)])),
+  needsReviewCount: element("needsReviewCount").textContent,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        for surface_name in ("tracer", "eligibility"):
+            surface = observed[surface_name]
+            for candidate_id in ("missing-status", "empty-status"):
+                self.assertEqual(surface[candidate_id]["classStatus"], "unavailable")
+                self.assertEqual(surface[candidate_id]["text"], "unavailable")
+                self.assertIn("not provided", surface[candidate_id]["reason"])
+            self.assertEqual(surface["unknown-status"]["classStatus"], "unavailable")
+            self.assertEqual(surface["unknown-status"]["text"], "unavailable")
+            self.assertIn("Unsupported screening status: queued", surface["unknown-status"]["reason"])
+            for status in ("pass", "defer", "reject"):
+                candidate_id = f"{status}-status"
+                self.assertEqual(surface[candidate_id]["classStatus"], status)
+                self.assertEqual(surface[candidate_id]["text"], status)
+        self.assertEqual(observed["needsReviewCount"], "1")
+
     def test_bundle_bootstrap_renders_v13_candidate_and_retains_prior_run_on_failure(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
         runner = r"""

@@ -163,6 +163,25 @@ function getArtifact(kind) {
   return state.artifacts.get(artifact.path) || null;
 }
 
+function screeningStatusDisplay(value) {
+  if (value === "pass" || value === "defer" || value === "reject") {
+    return {status: value, reason: "Evidence eligibility status"};
+  }
+  const missing = value === undefined || value === null ||
+    (typeof value === "string" && !value.trim());
+  return {
+    status: "unavailable",
+    reason: missing
+      ? "Screening status was not provided"
+      : `Unsupported screening status: ${String(value)}`,
+  };
+}
+
+function renderScreeningStatusBadge(value) {
+  const display = screeningStatusDisplay(value);
+  return `<span class="gate-status gate-${escapeHtml(display.status)}" title="${escapeHtml(display.reason)}">${escapeHtml(display.status)}</span>`;
+}
+
 function renderCandidateTracer(screeningInputView, canonicalEvidence) {
   const table = document.getElementById("candidateTable");
   const candidates = screeningInputView?.candidates || [];
@@ -187,7 +206,7 @@ function renderCandidateTracer(screeningInputView, canonicalEvidence) {
       data-candidate-id="${escapeHtml(candidate.candidate_id || "")}"
       aria-pressed="${candidate.candidate_id === state.selectedCandidateId}">
       <span>${escapeHtml(candidate.candidate_id || "-")}</span>
-      <span class="gate-status gate-${escapeHtml(candidate.status || "defer")}">${escapeHtml(candidate.status || "defer")}</span>
+      ${renderScreeningStatusBadge(candidate.status)}
     </button>`)
     .join("");
 
@@ -197,7 +216,7 @@ function renderCandidateTracer(screeningInputView, canonicalEvidence) {
   renderCandidateDetail(selected, canonicalByCandidate.get(state.selectedCandidateId));
   document.getElementById("candidateCount").textContent = String(candidates.length);
   document.getElementById("needsReviewCount").textContent = String(
-    candidates.filter((candidate) => candidate.status === "defer").length
+    candidates.filter((candidate) => screeningStatusDisplay(candidate.status).status === "defer").length
   );
 }
 
@@ -454,7 +473,7 @@ function renderScreeningEligibility(screeningInputView) {
     .map((candidate) => `<section class="flow-item">
       <div class="item-title">
         <span>${escapeHtml(candidate.candidate_id || "-")}</span>
-        <span class="gate-status gate-${escapeHtml(candidate.status || "defer")}" title="Evidence eligibility status">${escapeHtml(candidate.status || "defer")}</span>
+        ${renderScreeningStatusBadge(candidate.status)}
       </div>
       <div class="item-meta">
         ${compactMeta([
