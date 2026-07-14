@@ -74,6 +74,32 @@ Ownership". The result status must be one of `DONE`, `DONE_WITH_CONCERNS`,
 > add decisions, unresolved risks, unrelated local state, and the next concrete
 > action. A handoff transfers context, not authority.
 
+## Skill Discovery Module
+
+> Discover or update project skills for `[workflow need]`. Start with Common
+> Runtime Discovery. Use `find-skills` and `upstream-skill-sync`; record the
+> upstream repository, ref, path, and trust review. Install only project-relevant
+> skills under `.codex/skills`, update all routing surfaces, and keep remote
+> publication or tracker writes pending unless explicitly authorized. Return
+> changed files, validation results, skipped skills, and provenance.
+
+## Spec Module
+
+> Turn `[approved proposal or conversation]` into a local implementation spec.
+> Start with Common Runtime Discovery. Use `to-spec`; read relevant plans,
+> decisions, and repository contracts. Draft to `plans/[topic]-spec.md` unless
+> the user authorizes another path. Do not publish to external trackers without
+> explicit authorization. Return the spec path, unresolved decisions, and
+> recommended verification.
+
+## Ticket Module
+
+> Split `[approved spec or plan]` into implementation tickets. Start with Common
+> Runtime Discovery. Use `to-tickets`; present the dependency graph for user
+> approval before writing files. With approval, write tickets under
+> `plans/[feature]-tickets/`. Do not infer remote issue trackers or create
+> external tickets without explicit authorization.
+
 ## Integration Authorization Check
 
 Follow governance section "Authorization and Integration Boundaries". Before
@@ -94,8 +120,10 @@ worktree path from the current directory or switch the current worktree to main.
 
 Treat project capabilities as required when their trigger applies:
 `codebase-memory-mcp`, `worktree-tdd`, `contract-debugging`,
-`artifact-validation`, `review-ship`, and `context-handoff`. They live with the
-repository and define repository-specific behavior.
+`artifact-validation`, `review-ship`, `context-handoff`, `find-skills`,
+`grilling`, `domain-modeling`, `grill-with-docs`, `to-spec`, `to-tickets`, and
+`upstream-skill-sync`. They live with the repository and define
+repository-specific behavior.
 
 Global capabilities such as general brainstorming, debugging, TDD, code review,
 browser QA, or provider-specific integrations are optional when available. They

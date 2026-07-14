@@ -68,7 +68,17 @@ Project capabilities in `.codex/skills/` define required repository workflows:
   artifact viewer inputs.
 - `review-ship` before completion, merge, push, or worktree cleanup.
 - `context-handoff` for checkpoints and cross-session handoff.
-- `upstream-skill-sync` only when explicitly asked to refresh project skills.
+- `find-skills` for discovering, comparing, or installing project skills.
+- `grilling` for stress-testing consequential experiment, implementation, or
+  architecture plans before action.
+- `domain-modeling` for resolved SpiroSearch terms and durable architecture
+  decisions.
+- `grill-with-docs` for combining grilling with confirmed glossary or ADR
+  records.
+- `to-spec` for drafting local implementation specifications under `plans/`.
+- `to-tickets` for splitting approved specs into local implementation tickets.
+- `upstream-skill-sync` only when explicitly asked to refresh project skills
+  from an upstream source.
 
 Global or tool-specific skills are optional enhancements when installed. They
 do not replace the project capabilities or repository governance above.

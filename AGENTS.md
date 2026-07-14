@@ -120,12 +120,20 @@ Use them whenever their trigger applies:
 - `artifact-validation`: schemas, manifests, JSONL, cache indexes, viewer input
 - `review-ship`: pre-completion review, merge, push, or cleanup
 - `context-handoff`: checkpoints, resume, handoff, compaction
-- `upstream-skill-sync`: refresh project skills only when explicitly requested
+- `find-skills`: discover, compare, or install project skills
+- `grilling`: stress-test consequential plans before action
+- `domain-modeling`: resolve domain terms or durable architecture decisions
+- `grill-with-docs`: combine grilling with confirmed glossary or ADR records
+- `to-spec`: draft local implementation specs under `plans/`
+- `to-tickets`: split approved specs into local implementation tickets
+- `upstream-skill-sync`: refresh project skills from explicit upstream sources
 
 Global skills are optional accelerators, not substitutes for repository rules.
 Recommended pairings:
 
 - large or ambiguous work: global planning/brainstorming + `codebase-memory-mcp`
+- experiment or architecture refinement: `grilling` or `grill-with-docs`
+- accepted proposal to planning artifact: `to-spec`, then `to-tickets`
 - implementation: global TDD/worktree skills + `worktree-tdd`
 - debugging: global systematic debugging + `contract-debugging`
 - completion: global verification/review skills + `review-ship`
