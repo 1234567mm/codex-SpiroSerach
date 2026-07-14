@@ -1,0 +1,281 @@
+# V20 Manifest-Native Run Evolution And Decision Audit Specification
+
+> Status: planning baseline; T20-01 through T20-08 drafted after dependency-graph approval
+> Date: 2026-07-14
+> Audited start SHA: `14d3447891c854beb832246fb0fb3618cb7627d1`
+> Prerequisite: V19 authoritative single-run screening workbench
+
+## 1. Problem Statement
+
+V19 is designed to make one screening run authoritative and useful to a
+decision-maker. It does not answer how candidates, evidence, blockers, scores,
+or policy decisions changed across runs.
+
+Without a project-level discovery and compatibility contract, a frontend would
+have to scan directories, guess which runs belong together, and compare values
+whose schemas, policies, formulas, or datasets may not be compatible. That
+would turn the browser into a second provenance and comparison engine.
+
+V20 closes this gap with a read-only, manifest-native project evolution model.
+
+## 2. Evidence And Constraints
+
+### 2.1 Existing Reusable Capabilities
+
+- Each canonical run can be discovered through `run-manifest.json`.
+- Artifact schema, hash, byte count, JSONL record count, and path integrity can
+  be validated by the existing repository and validation loop.
+- `ReadOnlyRunAPI` exposes structured available, degraded, invalid, and
+  unavailable envelopes without live calls or writes.
+- V19 defines a normalized single-run store, candidate projection, diagnostic
+  projection, and explicit identity joins.
+- Candidate status, ranking, evidence quality, review closure, and model state
+  already have versioned artifact surfaces or planned V19 surfaces.
+
+### 2.2 Missing Capabilities
+
+- No project-level run index, repository, validator, or read API exists.
+- No backend comparison policy decides whether two runs are comparable.
+- No canonical run-delta or candidate-history contract exists.
+- No frontend project store or multi-run selector exists.
+- Current paper, review, and experiment artifacts do not by themselves prove
+  stable candidate identity across runs.
+
+### 2.3 Authority Boundaries
+
+- `run-manifest.json` remains authoritative for an individual run.
+- A project run index is a catalog of run references, not a replacement run
+  manifest and not evidence that a run is scientifically valid.
+- Backend comparison contracts own compatibility and deltas. The frontend may
+  filter or sort returned deltas but must not infer scientific comparability.
+- Plans and Markdown files remain human context. They do not become run facts.
+- V20 follows `docs/adr/0001-separate-read-plane-from-command-plane.md` and
+  performs no review writeback, recompute, provider, model-training, or
+  experiment action.
+
+## 3. Solution
+
+### 3.1 Target Flow
+
+```text
+immutable run-manifest.json files
+              |
+              v
+     ProjectRunIndexBuilder
+              |
+              v
+      project-run-index.json
+              |
+       +------+------+
+       |             |
+       v             v
+ProjectRunRepository  RunCompatibilityPolicy
+       |             |
+       +------+------+
+              v
+        RunDeltaBuilder
+              |
+              v
+          run-delta.json
+              |
+       ReadOnlyProjectAPI
+              |
+              v
+   ProjectStore / evolution views
+```
+
+### 3.2 Project Run Index Contract
+
+`project-run-index.json` provides deterministic project discovery. Each run
+entry declares at least:
+
+- `run_id`, `manifest_path`, manifest hash, and generated time;
+- input hash, producer version, dataset snapshot ID when available;
+- policy, profile, formula, and schema versions required for comparison;
+- candidate count and artifact capability summary;
+- validation status and reason codes;
+- optional predecessor run ID and lineage relation.
+
+The index may also declare comparison entries containing source/target run IDs,
+delta path, schema reference, hash, bytes, and comparison-policy version.
+Readers discover persisted deltas from these entries or from exported read
+envelopes; they never guess a `run-delta.json` filename.
+
+Paths are project-root-relative, normalized, and containment-checked. Duplicate
+run IDs, conflicting manifest hashes, unsafe paths, and mixed project IDs fail
+closed. Index generation is explicit and offline; a read call never scans the
+filesystem or refreshes the index.
+
+### 3.3 Compatibility Policy
+
+`RunCompatibilityPolicy` returns one of:
+
+- `comparable`: required identity, schema, policy, and scoring versions match;
+- `partially_comparable`: only declared dimensions may be compared;
+- `non_comparable`: status, score, rank, or evidence changes would be
+  misleading.
+
+The result includes machine-readable codes and a dimension matrix. Score and
+rank deltas are unavailable when formula, weights, target profile, candidate
+pool semantics, or dataset snapshot rules are incompatible. Raw values may be
+displayed side by side only with an explicit non-comparable label.
+
+### 3.4 Run Delta Contract
+
+`run-delta.json` is generated by the backend from two validated runs. It may
+contain:
+
+- candidate appearance, disappearance, or explicit identity remapping;
+- backend screening-status transitions;
+- score/rank changes only when permitted by compatibility policy;
+- blocker opened, resolved, or changed;
+- evidence IDs added, removed, or eligibility-changed;
+- review and recompute transitions;
+- artifact capability and validation changes;
+- model activation and replay changes when comparable.
+
+Every delta records source run IDs, manifest hashes, comparison-policy version,
+generated time, and reason codes. It does not reinterpret provider payloads or
+recompute scientific policy in the frontend.
+
+Persisting a delta is an explicit offline index-build/update operation. It
+produces a new deterministic project index that declares the delta metadata;
+read calls do not create or register comparisons.
+
+### 3.5 Project Repository And Read API
+
+A project-level repository validates the index, resolves contained run
+manifests through existing run repositories, and returns structured results.
+`ReadOnlyProjectAPI` exposes project inventory, run metadata, comparison
+results, and candidate history using the same status/severity/read-only
+conventions as `ReadOnlyRunAPI`.
+
+An unavailable run or comparison degrades locally. It does not erase other
+valid project state.
+
+### 3.6 Frontend Evolution Workspace
+
+V20 extends the V19 normalized frontend with:
+
+- project bundle and exported-envelope adapters;
+- atomic `ProjectStore` replacement;
+- run timeline and run selector;
+- two-run comparison with compatibility banner;
+- candidate-history view keyed only by declared candidate identity;
+- status, evidence, blocker, score/rank, artifact, and model-change panels;
+- project-level diagnostics for missing, invalid, duplicate, unsafe, or
+  non-comparable runs.
+
+V19's Markdown Project Evolution reader remains a separate contextual view.
+Runtime history is never inferred from plan prose.
+
+## 4. User Stories
+
+- As a screening decision-maker, I can see which candidates changed status and
+  why between two compatible runs.
+- As a reviewer, I can distinguish resolved blockers from missing or invalid
+  review state.
+- As a model/data maintainer, I can see when score comparison is prohibited by
+  policy, dataset, or model-version changes.
+- As an auditor, I can trace every displayed delta to two immutable manifests
+  and a comparison-policy version.
+- As a project maintainer, I can load a project bundle without filesystem
+  scanning, basename fallback, or mixed-project state.
+
+## 5. Implementation Decisions
+
+1. Add a project repository rather than overloading `JsonArtifactRepository`
+   with mutable multi-run concerns.
+2. Keep project index generation explicit; reads remain side-effect free.
+3. Reuse V19 run adapters and stores. Do not create a second single-run parser.
+4. Generate deltas in the backend and persist/export them as schema-valid JSON.
+5. Require declared candidate identity. Name, formula, DOI, and display labels
+   are not cross-run join keys.
+6. Treat compatibility as a versioned policy with reason codes, not as a UI
+   warning assembled from ad hoc field comparisons.
+7. Preserve panel-local availability and atomic project replacement.
+8. Keep the plain HTML/CSS/JavaScript frontend unless V19 evidence proves the
+   static architecture cannot meet correctness or maintainability needs.
+
+## 6. Delivery Slices And Work Budget
+
+V20 is capped at eight implementation tickets and approximately 24–32 focused
+engineering days. Any slice estimated above five days must be split before it
+enters implementation.
+
+1. Contract and two-run fixture baseline.
+2. Project index builder, validator, and repository tracer.
+3. Compatibility policy and fail-closed score/rank behavior.
+4. Candidate, evidence, blocker, and artifact delta tracer.
+5. Read-only project envelopes and export parity.
+6. ProjectStore, run selection, and comparison workspace.
+7. Candidate history, diagnostics, accessibility, and real-browser behavior.
+8. Closure fixture, migration notes, focused gates, and full verification.
+
+Capacity within the version is reserved as 60% implementation, 25%
+verification/contract closure, and 15% uncertainty. Verification reserve may
+not be borrowed to add features.
+
+## 7. Testing Decisions
+
+Backend coverage must prove:
+
+- deterministic project index generation;
+- path containment, duplicate identity, and manifest-hash failures;
+- compatibility outcomes for schema, policy, formula, dataset, and candidate
+  identity changes;
+- delta provenance and dimension-level fail-closed behavior;
+- repository and read-only envelope round trips;
+- local degradation without mutation or live calls.
+
+Frontend coverage must prove:
+
+- bundle/envelope parity and atomic project replacement;
+- exact project-relative paths without basename fallback;
+- no fuzzy cross-run joins;
+- compatibility-gated score/rank rendering;
+- stale-project clearing and panel-local degradation;
+- keyboard, responsive, escaping, and real-browser interaction behavior.
+
+Focused commands will include the existing run artifact, repository, read-only,
+and viewer suites plus new V20 project-index, compatibility, delta, API, and
+frontend suites. Implementation completion still requires the repository full
+test gate.
+
+## 8. Acceptance Criteria
+
+V20 is complete only when:
+
+- a project index deterministically discovers two or more immutable runs;
+- every referenced run is validated through its own manifest contract;
+- comparison compatibility is backend-owned, versioned, and fail-closed;
+- candidate, evidence, blocker, and artifact changes are traceable to source
+  run IDs and manifest hashes;
+- score and rank changes are hidden or explicitly non-comparable when their
+  contracts differ;
+- bundle and exported-envelope inputs produce equivalent project state;
+- the frontend provides run selection, comparison, candidate history, and
+  project diagnostics without writes;
+- focused, browser, artifact, and full repository gates pass.
+
+## 9. Out Of Scope
+
+- Review-event submission, recompute execution, provider calls, paper ingest,
+  scoring mutation, model training, or experiment dispatch.
+- Automatic directory/Git scanning or treating commit history as run history.
+- Fuzzy candidate identity or automatic identity merge.
+- Comparing scores across incompatible formulas, weights, profiles, datasets,
+  or candidate-pool semantics.
+- Scientific external-validation claims or closure of V17/V18 data residuals.
+- A mandatory frontend framework, database service, graph store, or background
+  worker.
+
+## 10. Further Notes
+
+- V20 depends on V19's authoritative `screening_input_view`, normalized run
+  store, and explicit candidate joins. It must not create substitutes for
+  unfinished V19 contracts.
+- The approved V20 dependency graph is recorded in the integrated roadmap;
+  individual drafts live under `plans/v20-run-evolution-tickets/`.
+- V21 may consume V20 project history, but it owns candidate/paper/material
+  identity closure rather than hiding that work inside comparison code.
