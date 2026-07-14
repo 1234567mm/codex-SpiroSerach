@@ -1,0 +1,4 @@
+interface:
+  display_name: "Domain Modeling"
+  short_description: "Define SpiroSearch terms and architecture decisions"
+  default_prompt: "Use $domain-modeling to resolve a SpiroSearch term or durable architecture decision."

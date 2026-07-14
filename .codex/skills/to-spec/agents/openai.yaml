@@ -1,0 +1,4 @@
+interface:
+  display_name: "To Spec"
+  short_description: "Turn approved proposals into implementation specifications"
+  default_prompt: "Use $to-spec to turn this approved proposal into a local implementation specification."
