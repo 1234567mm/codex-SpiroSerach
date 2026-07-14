@@ -2,6 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
+from jsonschema import ValidationError, validate
 from spirosearch.contracts import TRUST_LEVELS
 
 
@@ -217,6 +218,145 @@ class ProviderSchemaTests(unittest.TestCase):
         )
         self.assertNotIn("confidence", json.dumps(schema))
         self.assertNotIn("provider_confidence", json.dumps(schema))
+
+    def test_screening_input_view_schema_requires_authoritative_candidate_diagnostics(self):
+        schema = self._schema("screening-input-view.schema.json")
+        self.assertEqual(
+            schema["properties"]["schema_version"]["const"],
+            "v19.screening_input_view.v1",
+        )
+        self.assertEqual(
+            set(schema["required"]),
+            {"schema_version", "profile_version", "candidates"},
+        )
+        self.assertEqual(
+            schema["properties"]["profile_version"]["const"],
+            "v12.htl_screening.v1",
+        )
+        candidate = schema["properties"]["candidates"]["items"]
+        self.assertFalse(candidate["additionalProperties"])
+        self.assertEqual(
+            set(candidate["required"]),
+            {
+                "candidate_id",
+                "status",
+                "codes",
+                "components",
+                "blocking_review_ids",
+                "profile_version",
+                "weights",
+                "weighted_utility",
+                "coverage",
+            },
+        )
+        component = candidate["properties"]["components"]["items"]
+        self.assertFalse(component["additionalProperties"])
+        self.assertEqual(
+            set(component["required"]),
+            {"name", "utility", "quality", "observed", "evidence_ids"},
+        )
+        components = candidate["properties"]["components"]
+        self.assertEqual(components["minItems"], 7)
+        self.assertEqual(components["maxItems"], 7)
+        self.assertEqual(
+            {
+                rule["contains"]["properties"]["name"]["const"]
+                for rule in components["allOf"]
+            },
+            {
+                "homo_alignment",
+                "lumo_alignment",
+                "band_gap",
+                "solubility",
+                "stability",
+                "cost",
+                "synthesis_complexity",
+            },
+        )
+        self.assertEqual(
+            candidate["properties"]["profile_version"]["const"],
+            "v12.htl_screening.v1",
+        )
+        weights = candidate["properties"]["weights"]
+        self.assertEqual(weights["type"], "object")
+        self.assertFalse(weights["additionalProperties"])
+        self.assertEqual(
+            set(weights["required"]),
+            {
+                "homo_alignment",
+                "lumo_alignment",
+                "band_gap",
+                "solubility",
+                "stability",
+                "cost",
+                "synthesis_complexity",
+            },
+        )
+        self.assertEqual(
+            {name: definition["const"] for name, definition in weights["properties"].items()},
+            {
+                "homo_alignment": 0.30,
+                "lumo_alignment": 0.20,
+                "band_gap": 0.10,
+                "solubility": 0.10,
+                "stability": 0.15,
+                "cost": 0.10,
+                "synthesis_complexity": 0.05,
+            },
+        )
+        self.assertNotIn("confidence", json.dumps(schema))
+        self.assertNotIn("provider_confidence", json.dumps(schema))
+
+    def test_screening_input_view_schema_rejects_unsupported_candidate_diagnostic_code(self):
+        schema = self._schema("screening-input-view.schema.json")
+        payload = {
+            "schema_version": "v19.screening_input_view.v1",
+            "profile_version": "v12.htl_screening.v1",
+            "candidates": [
+                {
+                    "candidate_id": "candidate-1",
+                    "status": "defer",
+                    "codes": ["HOMO_NOT_YET_RESOLVED"],
+                    "components": [
+                        {
+                            "name": name,
+                            "utility": 0,
+                            "quality": 0,
+                            "observed": False,
+                            "evidence_ids": [],
+                        }
+                        for name in (
+                            "homo_alignment",
+                            "lumo_alignment",
+                            "band_gap",
+                            "solubility",
+                            "stability",
+                            "cost",
+                            "synthesis_complexity",
+                        )
+                    ],
+                    "blocking_review_ids": [],
+                    "profile_version": "v12.htl_screening.v1",
+                    "weights": {
+                        "homo_alignment": 0.30,
+                        "lumo_alignment": 0.20,
+                        "band_gap": 0.10,
+                        "solubility": 0.10,
+                        "stability": 0.15,
+                        "cost": 0.10,
+                        "synthesis_complexity": 0.05,
+                    },
+                    "weighted_utility": 0,
+                    "coverage": 0,
+                }
+            ],
+        }
+        validate(instance=payload, schema=schema)
+
+        payload["candidates"][0]["codes"][0] = "UNSUPPORTED_DIAGNOSTIC"
+
+        with self.assertRaises(ValidationError):
+            validate(instance=payload, schema=schema)
 
     def test_review_closure_schemas_define_events_summary_and_recompute_markers(self):
         event = self._schema("review-event.schema.json")

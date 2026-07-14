@@ -4,34 +4,171 @@
   "title": "ScreeningInputView",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "candidates"],
+  "required": ["schema_version", "profile_version", "candidates"],
   "properties": {
-    "schema_version": { "type": "string" },
-    "profile_version": { "type": "string" },
+    "schema_version": { "const": "v19.screening_input_view.v1" },
+    "profile_version": { "const": "v12.htl_screening.v1" },
     "candidates": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["candidate_id", "status"],
+        "additionalProperties": false,
+        "required": [
+          "candidate_id",
+          "status",
+          "codes",
+          "components",
+          "blocking_review_ids",
+          "profile_version",
+          "weights",
+          "weighted_utility",
+          "coverage"
+        ],
         "properties": {
-          "candidate_id": { "type": "string" },
+          "candidate_id": { "type": "string", "minLength": 1 },
           "status": { "enum": ["pass", "defer", "reject"] },
-          "codes": { "type": "array", "items": { "type": "string" } },
+          "codes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "HOMO_NOT_YET_RESOLVED",
+                "HOMO_REFERENCE_SCALE_MISSING",
+                "HOMO_MISMATCH",
+                "LUMO_NOT_YET_RESOLVED",
+                "LUMO_REFERENCE_SCALE_MISSING",
+                "LUMO_MISMATCH",
+                "BAND_GAP_NOT_YET_RESOLVED",
+                "BAND_GAP_TOO_LOW"
+              ]
+            }
+          },
           "components": {
             "type": "array",
+            "minItems": 7,
+            "maxItems": 7,
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "homo_alignment" } }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "lumo_alignment" } }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "band_gap" } }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "solubility" } }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "stability" } }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "cost" } }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": { "name": { "const": "synthesis_complexity" } }
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ],
             "items": {
               "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "utility", "quality", "observed", "evidence_ids"],
               "properties": {
-                "name": { "type": "string" },
-                "utility": { "type": "number" },
-                "quality": { "type": "number" },
+                "name": {
+                  "enum": [
+                    "homo_alignment",
+                    "lumo_alignment",
+                    "band_gap",
+                    "solubility",
+                    "stability",
+                    "cost",
+                    "synthesis_complexity"
+                  ]
+                },
+                "utility": { "type": "number", "minimum": 0, "maximum": 1 },
+                "quality": { "type": "number", "minimum": 0, "maximum": 1 },
                 "observed": { "type": "boolean" },
-                "evidence_ids": { "type": "array", "items": { "type": "string" } }
+                "evidence_ids": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": { "type": "string", "minLength": 1 }
+                }
               }
             }
           },
-          "weighted_utility": { "type": "number" },
-          "coverage": { "type": "number" }
+          "blocking_review_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "profile_version": { "const": "v12.htl_screening.v1" },
+          "weights": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "homo_alignment",
+              "lumo_alignment",
+              "band_gap",
+              "solubility",
+              "stability",
+              "cost",
+              "synthesis_complexity"
+            ],
+            "properties": {
+              "homo_alignment": { "const": 0.3 },
+              "lumo_alignment": { "const": 0.2 },
+              "band_gap": { "const": 0.1 },
+              "solubility": { "const": 0.1 },
+              "stability": { "const": 0.15 },
+              "cost": { "const": 0.1 },
+              "synthesis_complexity": { "const": 0.05 }
+            }
+          },
+          "weighted_utility": { "type": "number", "minimum": 0, "maximum": 1 },
+          "coverage": { "type": "number", "minimum": 0, "maximum": 1 }
         }
       }
     }

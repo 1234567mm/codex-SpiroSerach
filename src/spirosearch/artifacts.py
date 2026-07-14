@@ -80,7 +80,8 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
     "screening_input_view": {
         "schema_ref": "schemas/screening-input-view.schema.json",
         "join_keys": ("candidate_id", "evidence_id", "review_item_id"),
-        "depends_on": (),
+        "depends_on": ("canonical_evidence", "scoring_view", "review_queue", "review_events"),
+        "require_declared_dependencies": True,
     },
     "training_snapshot": {
         "schema_ref": "schemas/training-snapshot.schema.json",

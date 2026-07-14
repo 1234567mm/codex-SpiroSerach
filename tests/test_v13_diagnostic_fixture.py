@@ -17,14 +17,23 @@ class V13DiagnosticFixtureTests(unittest.TestCase):
 
             report = validate_artifact_run(output_dir)
             self.assertEqual(report.status, "valid", report.to_dict())
-            self.assertEqual(report.summary["artifact_count"], 11)
+            self.assertEqual(report.summary["artifact_count"], 15)
+
+            manifest = json.loads((output_dir / "run-manifest.json").read_text(encoding="utf-8"))
+            artifact_kinds = {artifact["kind"] for artifact in manifest["artifacts"]}
+            screening_artifact = next(
+                artifact for artifact in manifest["artifacts"] if artifact["kind"] == "screening_input_view"
+            )
+            self.assertTrue(set(screening_artifact["depends_on"]) <= artifact_kinds)
 
             diagnostics = ReadOnlyRunAPI(output_dir).algorithm_diagnostics()
             self.assertEqual(diagnostics["status"], "available")
             self.assertEqual(diagnostics["payload"]["available_count"], 6)
             panels = diagnostics["payload"]["panels"]
             screening = panels["screening_input_view"]["payload"]["data"]
+            self.assertEqual(screening["schema_version"], "v19.screening_input_view.v1")
             self.assertEqual({item["status"] for item in screening["candidates"]}, {"pass", "defer", "reject"})
+            self.assertTrue(all(len(item["components"]) == 7 for item in screening["candidates"]))
             self.assertEqual(panels["model_evaluation"]["payload"]["data"]["activation_status"], "disabled")
             self.assertEqual(panels["acquisition_breakdown"]["payload"]["data"]["replay"]["status"], "non_regression")
 
@@ -32,7 +41,7 @@ class V13DiagnosticFixtureTests(unittest.TestCase):
         fixture_dir = Path("tests/fixtures/artifact_viewer/v13_algorithm_run")
         report = validate_artifact_run(fixture_dir)
         self.assertEqual(report.status, "valid", report.to_dict())
-        self.assertEqual(report.summary["artifact_count"], 11)
+        self.assertEqual(report.summary["artifact_count"], 15)
 
     def test_static_viewer_renders_screening_and_model_diagnostics(self):
         runner = r'''

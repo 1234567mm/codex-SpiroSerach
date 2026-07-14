@@ -21,6 +21,31 @@
       "sha256": "9d907eb2d3b77723917fb28bbbcdf4c0b14731d3d5f23f94ada0b1ab1d4cc0ff"
     },
     {
+      "bytes": 11145,
+      "depends_on": [
+        "enrichment_results",
+        "review_events"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "candidate_id",
+        "material_id",
+        "use_instance_id",
+        "energy_evidence_id",
+        "review_item_id"
+      ],
+      "kind": "canonical_evidence",
+      "path": "canonical-evidence.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/canonical-evidence.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "7670c7ad87ef510fbce5c0f429d87d374c6f75fce7715c3938abc9d99d00ef7a"
+    },
+    {
       "bytes": 608,
       "depends_on": [],
       "format": "json",
@@ -165,8 +190,83 @@
       "sha256": "98784f6812bad1cb0c4e64c5d944a9f5646a5a87f6d433a099a83f6195e54b7f"
     },
     {
-      "bytes": 720,
-      "depends_on": [],
+      "bytes": 0,
+      "depends_on": [
+        "review_queue"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "review_item_id",
+        "event_id",
+        "target_id"
+      ],
+      "kind": "review_events",
+      "path": "review-events.jsonl",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": 0,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/review-event.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 420,
+      "depends_on": [
+        "enrichment_results",
+        "canonical_evidence",
+        "agent_trace"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "review_item_id",
+        "candidate_id",
+        "target_id",
+        "trace_event_id"
+      ],
+      "kind": "review_queue",
+      "path": "review-queue.jsonl",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": 1,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/review-queue-item.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "a65bd17df7e25f079f6909f055dd1c098e4424f6745143cae147a5694430bc1b"
+    },
+    {
+      "bytes": 5564,
+      "depends_on": [
+        "canonical_evidence",
+        "review_queue"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-11T00:00:00+00:00",
+      "input_hash": "sha256:v13-algorithm-diagnostic-input",
+      "join_keys": [
+        "candidate_id",
+        "material_id",
+        "evidence_id"
+      ],
+      "kind": "scoring_view",
+      "path": "scoring-view.json",
+      "producer_version": "spirosearch-v13-fixture",
+      "record_count": null,
+      "run_id": "v13-algorithm-diagnostic-001",
+      "schema_ref": "schemas/scoring-view.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "594c7cb29117036dfc2428b0aa251f1a0680d53fe36d16a9d38a7c0620d5142d"
+    },
+    {
+      "bytes": 5764,
+      "depends_on": [
+        "canonical_evidence",
+        "scoring_view",
+        "review_queue",
+        "review_events"
+      ],
       "format": "json",
       "generated_at": "2026-07-11T00:00:00+00:00",
       "input_hash": "sha256:v13-algorithm-diagnostic-input",
@@ -182,7 +282,7 @@
       "run_id": "v13-algorithm-diagnostic-001",
       "schema_ref": "schemas/screening-input-view.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "3beffa7477881bb5ce615a7321009f278fc49882f495143339a576fb981e6cca"
+      "sha256": "c5486488f25ef8febd95ccd82c93871609de543d5b399224b6d7e95f42ba69b4"
     },
     {
       "bytes": 291,

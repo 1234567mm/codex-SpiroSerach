@@ -1,0 +1,173 @@
+{
+  "energy_facts": [
+    {
+      "computed": false,
+      "evidence_id": "energy:pass-1:homo_ev",
+      "material_id": "pass-1",
+      "method": "reported",
+      "property_name": "homo_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:pass-1:homo_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "pass-1:spiro_replacement_htl",
+      "value_ev": -5.2
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:pass-1:lumo_ev",
+      "material_id": "pass-1",
+      "method": "reported",
+      "property_name": "lumo_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:pass-1:lumo_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "pass-1:spiro_replacement_htl",
+      "value_ev": -2.1
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:pass-1:band_gap_ev",
+      "material_id": "pass-1",
+      "method": "reported",
+      "property_name": "band_gap_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:pass-1:band_gap_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "pass-1:spiro_replacement_htl",
+      "value_ev": 3.1
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:defer-1:lumo_ev",
+      "material_id": "defer-1",
+      "method": "reported",
+      "property_name": "lumo_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:defer-1:lumo_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "defer-1:spiro_replacement_htl",
+      "value_ev": -2.1
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:defer-1:band_gap_ev",
+      "material_id": "defer-1",
+      "method": "reported",
+      "property_name": "band_gap_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:defer-1:band_gap_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "defer-1:spiro_replacement_htl",
+      "value_ev": 3.1
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:reject-1:homo_ev",
+      "material_id": "reject-1",
+      "method": "reported",
+      "property_name": "homo_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:reject-1:homo_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "reject-1:spiro_replacement_htl",
+      "value_ev": -5.9
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:reject-1:lumo_ev",
+      "material_id": "reject-1",
+      "method": "reported",
+      "property_name": "lumo_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:reject-1:lumo_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "reject-1:spiro_replacement_htl",
+      "value_ev": -2.1
+    },
+    {
+      "computed": false,
+      "evidence_id": "energy:reject-1:band_gap_ev",
+      "material_id": "reject-1",
+      "method": "reported",
+      "property_name": "band_gap_ev",
+      "quality": {
+        "blocking_review_count": 0,
+        "blocking_review_ids": [],
+        "curation_status": "curated",
+        "eligible_for_scoring": true,
+        "evidence_id": "energy:reject-1:band_gap_ev",
+        "evidence_type": "energy_evidence",
+        "quality_score": 0.85,
+        "trust_level": "T4_literature_curated"
+      },
+      "reference_scale": "vacuum",
+      "unit": "eV",
+      "use_instance_id": "reject-1:spiro_replacement_htl",
+      "value_ev": 3.1
+    }
+  ],
+  "schema_version": "v10.scoring_view.v1"
+}

@@ -52,6 +52,7 @@ def candidate_material_to_domain(material: CandidateMaterial) -> DomainCandidate
         for item in (
             _energy_evidence(material, use_instance, provenance, "homo_ev", material.homo_ev),
             _energy_evidence(material, use_instance, provenance, "lumo_ev", material.lumo_ev),
+            _energy_evidence(material, use_instance, provenance, "band_gap_ev", material.band_gap_ev),
         )
         if item is not None
     )

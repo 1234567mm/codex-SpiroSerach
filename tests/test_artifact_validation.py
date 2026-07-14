@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from jsonschema import Draft202012Validator
 
 from spirosearch.artifact_validation import validate_artifact_run
-from spirosearch.artifacts import build_run_manifest, write_json_artifact
+from spirosearch.artifacts import build_run_manifest, write_json_artifact, write_jsonl_artifact
 from spirosearch.cli import _main_validate_artifacts
 from spirosearch.contracts import EXIT_SUCCESS, EXIT_VALIDATION_ERROR
 
@@ -114,6 +114,108 @@ class ArtifactValidationLoopTests(unittest.TestCase):
             self.assertEqual(scoring_join["missing_payload_keys"], ["candidate_id"])
             self.assertIn("canonical_evidence", scoring_join["notes"][0])
             json.dumps(report_dict, sort_keys=True)
+
+    def test_screening_input_view_requires_own_declared_manifest_dependencies(self):
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            artifact_args = {
+                "run_id": "validation-run",
+                "input_hash": "input-hash",
+                "generated_at": "2026-07-09T00:00:00+00:00",
+                "producer_version": "validation-test",
+            }
+            canonical = write_json_artifact(
+                output_dir,
+                "canonical-evidence.json",
+                {
+                    "schema_version": "v9.canonical_evidence.v1",
+                    "candidate_count": 0,
+                    "records": [],
+                },
+                kind="canonical_evidence",
+                **artifact_args,
+            )
+            scoring = write_json_artifact(
+                output_dir,
+                "scoring-view.json",
+                scoring_view_payload(),
+                kind="scoring_view",
+                **artifact_args,
+            )
+            review_queue = write_jsonl_artifact(
+                output_dir,
+                "review-queue.jsonl",
+                [],
+                kind="review_queue",
+                **artifact_args,
+            )
+            review_events = write_jsonl_artifact(
+                output_dir,
+                "review-events.jsonl",
+                [],
+                kind="review_events",
+                **artifact_args,
+            )
+            screening_payload = {
+                "schema_version": "v19.screening_input_view.v1",
+                "profile_version": "v12.htl_screening.v1",
+                "candidates": [],
+            }
+            screening_schema = json.loads(
+                Path("schemas/screening-input-view.schema.json").read_text(encoding="utf-8")
+            )
+            Draft202012Validator(screening_schema).validate(screening_payload)
+            screening = write_json_artifact(
+                output_dir,
+                "screening-input-view.json",
+                screening_payload,
+                kind="screening_input_view",
+                **artifact_args,
+            )
+            manifest = write_manifest(
+                output_dir,
+                [canonical, scoring, review_queue, review_events, screening],
+            )
+
+            screening_metadata = next(
+                artifact
+                for artifact in manifest["artifacts"]
+                if artifact["kind"] == "screening_input_view"
+            )
+            self.assertEqual(
+                screening_metadata["depends_on"],
+                ["canonical_evidence", "scoring_view", "review_queue", "review_events"],
+            )
+            screening_metadata["depends_on"].remove("scoring_view")
+            (output_dir / "run-manifest.json").write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            report = validate_artifact_run(output_dir)
+            screening_result = next(
+                artifact
+                for artifact in report.artifacts
+                if artifact.kind == "screening_input_view"
+            )
+
+            self.assertEqual(report.status, "invalid")
+            self.assertEqual(screening_result.status, "unavailable")
+            self.assertEqual(
+                screening_result.unavailable["code"],
+                "artifact_dependency_not_declared",
+            )
+            self.assertEqual(
+                screening_result.unavailable["detail"],
+                {"missing_kinds": ["scoring_view"]},
+            )
+            dependency_check = next(
+                check
+                for check in screening_result.checks
+                if check.name == "declared_dependencies"
+            )
+            self.assertEqual(dependency_check.status, "fail")
+            self.assertEqual(dependency_check.detail["missing_kinds"], ["scoring_view"])
 
     def test_hash_mismatch_is_reported_as_artifact_unavailable_without_hiding_manifest(self):
         with TemporaryDirectory() as temp_dir:
