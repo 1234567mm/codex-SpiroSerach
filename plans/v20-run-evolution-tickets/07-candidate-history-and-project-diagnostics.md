@@ -30,4 +30,3 @@ unavailable, duplicate, unsafe, stale, or non-comparable inputs.
 - Exercise the workflow with keyboard-only and representative narrow/wide
   browser widths.
 - Run HTML escaping and unsafe-path regression tests.
-

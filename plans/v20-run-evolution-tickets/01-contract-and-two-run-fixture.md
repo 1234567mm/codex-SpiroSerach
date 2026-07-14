@@ -37,4 +37,3 @@ full repository or frontend in this ticket.
 - Validate both fixture run directories with the existing artifact validator.
 - Confirm the project fixture contains no generated outputs, private data, or
   unlicensed scientific payloads.
-

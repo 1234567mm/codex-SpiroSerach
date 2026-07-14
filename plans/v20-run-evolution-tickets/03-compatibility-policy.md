@@ -32,4 +32,3 @@ diagnostic renderer using the V19 adapter/store conventions.
 - Run the focused viewer renderer test with comparable, partial, and
   non-comparable fixtures.
 - Confirm no scoring or policy function is called by the frontend/read path.
-

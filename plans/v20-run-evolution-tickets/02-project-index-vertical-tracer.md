@@ -32,4 +32,3 @@ inventory reads must not scan directories or rewrite the index.
   `tests.test_artifact_validation`.
 - Compare directory timestamps/hashes before and after read calls to prove
   side-effect freedom.
-

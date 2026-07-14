@@ -66,4 +66,3 @@ cross-run comparison would no longer be reproducible.
 - V23 or another explicitly approved command-plane version must define
   concurrency, authorization, idempotency, and failure recovery before any
   write control is enabled.
-

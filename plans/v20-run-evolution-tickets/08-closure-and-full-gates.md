@@ -37,4 +37,3 @@ V20 acceptance criteria; it does not add adjacent features.
 - Run the repository full test gate.
 - Run browser verification against the closure fixture.
 - Run agent/repository hygiene checks and inspect the complete diff.
-
