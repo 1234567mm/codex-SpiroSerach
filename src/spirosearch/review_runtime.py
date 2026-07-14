@@ -9,6 +9,27 @@ from spirosearch.orchestrator_contracts import stable_hash
 
 REVIEW_EVENT_SCHEMA_VERSION = "v10.review_event.v1"
 REVIEW_SUMMARY_SCHEMA_VERSION = "v10.review_summary.v1"
+
+
+def review_item_blocking_surface(item: dict[str, Any]) -> str:
+    reason = str(item.get("reason_code", item.get("reason", "")))
+    if reason in {"energy_levels_missing", "provider_fact_conflict"}:
+        return "scoring"
+    declared = str(item.get("blocking_surface", ""))
+    if declared:
+        return declared
+    return "provider_enrichment"
+
+
+def review_event_targets_item(event: dict[str, Any], item: dict[str, Any]) -> bool:
+    return (
+        bool(event.get("review_item_id"))
+        and str(event.get("review_item_id", "")) == str(item.get("review_item_id", ""))
+        and str(event.get("target_type", "")) == str(item.get("target_type", ""))
+        and str(event.get("target_id", "")) == str(item.get("target_id", ""))
+    )
+
+
 RECOMPUTE_MARKER_SCHEMA_VERSION = "v10.recompute_marker.v1"
 
 
@@ -122,18 +143,49 @@ class HumanReviewRouter:
             self._normalize_event(event, run_id=run_id, generated_at=generated_at)
             for event in review_events
         ]
+        self._validate_unique_event_ids(normalized_events)
         latest_events = self._latest_events(normalized_events)
 
-        events_by_review_id: dict[str, dict[str, Any]] = {
-            str(event["review_item_id"]): event for event in latest_events
+        events_by_review_target: dict[tuple[str, str, str], dict[str, Any]] = {
+            (
+                str(event["review_item_id"]),
+                str(event.get("target_type", "")),
+                str(event.get("target_id", "")),
+            ): event
+            for event in latest_events
         }
         energy_to_record = self._energy_to_record(canonical)
+        known_review_identities = {
+            (
+                str(review_item.get("review_item_id", "")),
+                str(review_item.get("target_type", "")),
+                str(review_item.get("target_id", "")),
+            )
+            for record in canonical.get("records", [])
+            for review_item in record.get("review_items", [])
+            if review_item.get("review_item_id")
+        }
+        known_review_identities.update(
+            (
+                str(item.get("review_item_id", "")),
+                str(item.get("target_type", "")),
+                str(item.get("target_id", "")),
+            )
+            for item in queue_items
+            if item.get("review_item_id")
+        )
         review_item_change_candidates: dict[str, str] = {}
         recompute_markers: list[dict[str, Any]] = []
 
         for record in canonical.get("records", []):
             for review_item in record.get("review_items", []):
-                event = events_by_review_id.get(str(review_item.get("review_item_id", "")))
+                event = events_by_review_target.get(
+                    (
+                        str(review_item.get("review_item_id", "")),
+                        str(review_item.get("target_type", "")),
+                        str(review_item.get("target_id", "")),
+                    )
+                )
                 if event is None or not self._event_targets_review_item(event, review_item):
                     continue
                 previous_status = review_item.get("resolution_status")
@@ -147,14 +199,29 @@ class HumanReviewRouter:
                     review_item_change_candidates[event["event_id"]] = str(record.get("candidate_id", ""))
 
         for event in latest_events:
+            event_identity = (
+                str(event.get("review_item_id", "")),
+                str(event.get("target_type", "")),
+                str(event.get("target_id", "")),
+            )
+            if event_identity not in known_review_identities:
+                continue
             affected_artifacts: list[str] = []
             if event["event_id"] in review_item_change_candidates:
-                affected_artifacts = ["canonical-evidence.json", "scoring-view.json"]
+                affected_artifacts = [
+                    "canonical-evidence.json",
+                    "scoring-view.json",
+                    "screening-input-view.json",
+                ]
             evidence_changed = self._apply_evidence_event(canonical, event, energy_to_record)
             if evidence_changed and not affected_artifacts:
-                affected_artifacts = ["canonical-evidence.json", "scoring-view.json"]
+                affected_artifacts = [
+                    "canonical-evidence.json",
+                    "scoring-view.json",
+                    "screening-input-view.json",
+                ]
             if not affected_artifacts and self._event_matches_queue(event, queue_items):
-                affected_artifacts = ["review-summary.json"]
+                affected_artifacts = ["review-summary.json", "screening-input-view.json"]
             if affected_artifacts:
                 recompute_markers.append(
                     self._recompute_marker(
@@ -287,7 +354,33 @@ class HumanReviewRouter:
         generated_at: str,
     ) -> dict[str, Any]:
         latest_events = self._latest_events(events)
-        event_by_review = {str(event["review_item_id"]): event for event in latest_events}
+        event_by_review_target = {
+            (
+                str(event["review_item_id"]),
+                str(event.get("target_type", "")),
+                str(event.get("target_id", "")),
+            ): event
+            for event in latest_events
+        }
+        known_review_identities = {
+            (
+                str(item.get("review_item_id", "")),
+                str(item.get("target_type", "")),
+                str(item.get("target_id", "")),
+            )
+            for record in canonical.get("records", [])
+            for item in record.get("review_items", [])
+            if item.get("review_item_id")
+        }
+        known_review_identities.update(
+            (
+                str(item.get("review_item_id", "")),
+                str(item.get("target_type", "")),
+                str(item.get("target_id", "")),
+            )
+            for item in review_queue
+            if item.get("review_item_id")
+        )
         review_states: list[dict[str, Any]] = []
         for record in canonical.get("records", []):
             for item in record.get("review_items", []):
@@ -303,7 +396,15 @@ class HumanReviewRouter:
                     }
                 )
         for item in review_queue:
-            event = event_by_review.get(str(item.get("review_item_id", "")))
+            event = event_by_review_target.get(
+                (
+                    str(item.get("review_item_id", "")),
+                    str(item.get("target_type", "")),
+                    str(item.get("target_id", "")),
+                )
+            )
+            if event is not None and not review_event_targets_item(event, item):
+                event = None
             review_states.append(
                 {
                     "review_item_id": item.get("review_item_id", ""),
@@ -318,6 +419,13 @@ class HumanReviewRouter:
         seen_review_ids = {str(item["review_item_id"]) for item in review_states if item["review_item_id"]}
         for event in latest_events:
             review_item_id = str(event.get("review_item_id", ""))
+            event_identity = (
+                review_item_id,
+                str(event.get("target_type", "")),
+                str(event.get("target_id", "")),
+            )
+            if event_identity not in known_review_identities:
+                continue
             if review_item_id in seen_review_ids:
                 continue
             review_states.append(
@@ -373,26 +481,36 @@ class HumanReviewRouter:
         return target_id.split(":", 1)[0]
 
     def _event_matches_queue(self, event: dict[str, Any], review_queue: list[dict[str, Any]]) -> bool:
-        event_review_id = str(event.get("review_item_id", ""))
-        return any(str(item.get("review_item_id", "")) == event_review_id for item in review_queue)
+        return any(review_event_targets_item(event, item) for item in review_queue)
 
     def _event_targets_review_item(self, event: dict[str, Any], review_item: dict[str, Any]) -> bool:
-        return (
-            str(event.get("target_type", "")) == str(review_item.get("target_type", ""))
-            and str(event.get("target_id", "")) == str(review_item.get("target_id", ""))
-        )
+        return review_event_targets_item(event, review_item)
 
     def _latest_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        seen: set[str] = set()
+        seen: set[tuple[str, str, str]] = set()
         latest: list[dict[str, Any]] = []
         for event in reversed(events):
-            review_item_id = str(event.get("review_item_id", ""))
-            if review_item_id in seen:
+            identity = (
+                str(event.get("review_item_id", "")),
+                str(event.get("target_type", "")),
+                str(event.get("target_id", "")),
+            )
+            if identity in seen:
                 continue
-            seen.add(review_item_id)
+            seen.add(identity)
             latest.append(event)
         latest.reverse()
         return latest
+
+    def _validate_unique_event_ids(self, events: list[dict[str, Any]]) -> None:
+        seen: set[str] = set()
+        for event in events:
+            event_id = str(event.get("event_id", ""))
+            if not event_id:
+                continue
+            if event_id in seen:
+                raise ValueError(f"duplicate review event_id: {event_id}")
+            seen.add(event_id)
 
     def _curation_status(self, event: dict[str, Any]) -> str | None:
         status = str(event.get("resolution_status", ""))
@@ -447,10 +565,7 @@ class HumanReviewRouter:
         return "triage"
 
     def _blocking_surface(self, item: dict[str, Any]) -> str:
-        reason = str(item.get("reason", ""))
-        if reason in {"energy_levels_missing", "provider_fact_conflict"}:
-            return "scoring"
-        return "provider_enrichment"
+        return review_item_blocking_surface(item)
 
     def _event_assigned_queue(self, event: dict[str, Any]) -> str:
         if event.get("target_type") == "energy_evidence":

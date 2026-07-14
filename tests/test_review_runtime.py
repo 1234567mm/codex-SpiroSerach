@@ -215,8 +215,102 @@ class ReviewRuntimeTests(unittest.TestCase):
         self.assertEqual(result.recompute_markers[0]["candidate_id"], "mat-1")
         self.assertEqual(
             result.recompute_markers[0]["affected_artifacts"],
-            ["canonical-evidence.json", "scoring-view.json"],
+            [
+                "canonical-evidence.json",
+                "scoring-view.json",
+                "screening-input-view.json",
+            ],
         )
+
+    def test_wrong_review_identity_cannot_mutate_different_energy_evidence(self):
+        payload = canonical_payload()
+        record = payload["records"][0]
+        homo_evidence = record["energy_evidence"][0]
+        record["energy_evidence"].append(
+            {
+                **homo_evidence,
+                "energy_evidence_id": "energy:mat-1:lumo_ev",
+                "property_name": "lumo_ev",
+                "value_ev": -2.1,
+                "provenance": {
+                    **homo_evidence["provenance"],
+                    "curation_status": "needs_review",
+                },
+            }
+        )
+
+        result = HumanReviewRouter().apply(
+            canonical_payload=payload,
+            review_queue=[],
+            review_events=[
+                {
+                    "event_id": "event-reused-review-id-wrong-target",
+                    "review_item_id": "review-energy-homo",
+                    "target_type": "energy_evidence",
+                    "target_id": "energy:mat-1:lumo_ev",
+                    "reviewer": "curator@example",
+                    "decision": "resolve",
+                    "resolution_status": "resolved",
+                    "reason": "wrong identity must not apply",
+                }
+            ],
+        )
+
+        result_record = result.canonical_payload["records"][0]
+        self.assertEqual(
+            result_record["energy_evidence"][1]["provenance"]["curation_status"],
+            "needs_review",
+        )
+        self.assertEqual(result_record["review_items"][0]["resolution_status"], "open")
+        self.assertIsNone(result_record["review_items"][0]["review_event_id"])
+        self.assertEqual(result.recompute_markers, [])
+        self.assertEqual(result.review_summary["applied_event_count"], 0)
+        self.assertEqual(result.review_summary["resolved_count"], 0)
+
+    def test_duplicate_event_id_across_review_identities_fails_closed(self):
+        events = [
+            {
+                "event_id": "duplicate-event-id",
+                "review_item_id": "review-energy-homo",
+                "target_type": "energy_evidence",
+                "target_id": "energy:mat-1:homo_ev",
+                "decision": "resolve",
+                "resolution_status": "resolved",
+            },
+            {
+                "event_id": "duplicate-event-id",
+                "review_item_id": "review-provider-conflict",
+                "target_type": "provider_enrichment",
+                "target_id": "mat-1",
+                "decision": "resolve",
+                "resolution_status": "resolved",
+            },
+        ]
+
+        with self.assertRaisesRegex(ValueError, "duplicate review event_id: duplicate-event-id"):
+            HumanReviewRouter().apply(
+                canonical_payload=canonical_payload(),
+                review_events=events,
+            )
+
+    def test_exact_duplicate_event_replay_fails_closed(self):
+        event = {
+            "event_id": "duplicate-replay-event-id",
+            "review_item_id": "review-energy-homo",
+            "target_type": "energy_evidence",
+            "target_id": "energy:mat-1:homo_ev",
+            "decision": "resolve",
+            "resolution_status": "resolved",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "duplicate review event_id: duplicate-replay-event-id",
+        ):
+            HumanReviewRouter().apply(
+                canonical_payload=canonical_payload(),
+                review_events=[event, dict(event)],
+            )
 
     def test_human_review_router_review_item_resolution_triggers_scoring_recompute(self):
         result = HumanReviewRouter().apply(
@@ -248,7 +342,11 @@ class ReviewRuntimeTests(unittest.TestCase):
         self.assertEqual(result.recompute_markers[0]["review_event_id"], "event-resolve-homo")
         self.assertEqual(
             result.recompute_markers[0]["affected_artifacts"],
-            ["canonical-evidence.json", "scoring-view.json"],
+            [
+                "canonical-evidence.json",
+                "scoring-view.json",
+                "screening-input-view.json",
+            ],
         )
 
     def test_human_review_router_nonterminal_events_do_not_curate_evidence(self):
@@ -310,7 +408,96 @@ class ReviewRuntimeTests(unittest.TestCase):
         self.assertEqual(result.review_summary["by_reason_code"]["energy_levels_missing"], 1)
         self.assertEqual(result.review_summary["by_resolution_status"]["resolved"], 1)
         self.assertEqual(result.review_summary["open_blocking_count"], 1)
-        self.assertEqual(result.recompute_markers[0]["affected_artifacts"], ["review-summary.json"])
+        self.assertEqual(
+            result.recompute_markers[0]["affected_artifacts"],
+            ["review-summary.json", "screening-input-view.json"],
+        )
+
+    def test_queue_event_with_wrong_target_does_not_trigger_recompute(self):
+        queue_item = ReviewQueueFinalizer().finalize_item(
+            {
+                "target_type": "provider_enrichment",
+                "target_id": "mat-1",
+                "reason": "provider_fact_conflict",
+                "severity": "needs_curator",
+                "provider": "fixture",
+            }
+        )
+
+        result = HumanReviewRouter().apply(
+            canonical_payload=canonical_payload(),
+            review_queue=[queue_item],
+            review_events=[
+                {
+                    "event_id": "event-wrong-target",
+                    "review_item_id": queue_item["review_item_id"],
+                    "target_type": queue_item["target_type"],
+                    "target_id": "different-material",
+                    "reviewer": "curator@example",
+                    "decision": "resolve",
+                    "resolution_status": "resolved",
+                    "reason": "wrong target must not apply",
+                }
+            ],
+        )
+
+        self.assertEqual(result.recompute_markers, [])
+        self.assertEqual(result.review_summary["resolved_count"], 0)
+        self.assertEqual(result.review_summary["open_blocking_count"], 2)
+
+    def test_later_wrong_target_does_not_shadow_matching_resolution(self):
+        queue_item = ReviewQueueFinalizer().finalize_item(
+            {
+                "target_type": "provider_enrichment",
+                "target_id": "mat-1",
+                "reason": "provider_fact_conflict",
+                "severity": "needs_curator",
+                "provider": "fixture",
+            }
+        )
+        matching_event = {
+            "event_id": "event-resolve-matching-target",
+            "review_item_id": queue_item["review_item_id"],
+            "target_type": queue_item["target_type"],
+            "target_id": queue_item["target_id"],
+            "reviewer": "curator@example",
+            "decision": "resolve",
+            "resolution_status": "resolved",
+            "reason": "matching target resolved",
+        }
+        wrong_target_event = {
+            **matching_event,
+            "event_id": "event-open-wrong-target",
+            "target_id": "different-material",
+            "decision": "assign",
+            "resolution_status": "open",
+            "reason": "wrong target must not shadow",
+        }
+
+        baseline = HumanReviewRouter().apply(
+            canonical_payload=canonical_payload(),
+            review_queue=[queue_item],
+            review_events=[matching_event],
+        )
+        shadowed = HumanReviewRouter().apply(
+            canonical_payload=canonical_payload(),
+            review_queue=[queue_item],
+            review_events=[matching_event, wrong_target_event],
+        )
+
+        self.assertEqual(shadowed.review_summary["resolved_count"], baseline.review_summary["resolved_count"])
+        self.assertEqual(
+            shadowed.review_summary["open_blocking_count"],
+            baseline.review_summary["open_blocking_count"],
+        )
+        self.assertEqual(
+            shadowed.review_summary["applied_event_count"],
+            baseline.review_summary["applied_event_count"],
+        )
+        self.assertEqual(
+            [marker["review_event_id"] for marker in shadowed.recompute_markers],
+            ["event-resolve-matching-target"],
+        )
 
 
 if __name__ == "__main__":

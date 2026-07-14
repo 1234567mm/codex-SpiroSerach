@@ -24,6 +24,7 @@ from spirosearch.providers.cache import JSONLProviderCache
 from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.providers.pubchem import PubChemPUGRestProvider
 from spirosearch.review_runtime import HumanReviewRouter, ReviewQueueFinalizer
+from spirosearch.screening_input_view_artifacts import ScreeningInputViewArtifactEmitter
 from spirosearch.scoring_view_artifacts import ScoringViewArtifactEmitter
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
 
@@ -211,6 +212,12 @@ def run_enrichment(
     )
     canonical_payload = review_closure.canonical_payload
     scoring_payload = ScoringViewArtifactEmitter().build_payload(canonical_payload)
+    screening_input_payload = ScreeningInputViewArtifactEmitter().build_payload(
+        canonical_payload=canonical_payload,
+        scoring_payload=scoring_payload,
+        review_queue=review_queue,
+        review_events=review_closure.review_events,
+    )
     manifest_cache_path = _manifest_cache_artifact_path(cache_path, output)
     cache_index_payload = {
         "schema_version": PROVIDER_CACHE_INDEX_SCHEMA_VERSION,
@@ -277,6 +284,16 @@ def run_enrichment(
             "scoring-view.json",
             scoring_payload,
             kind="scoring_view",
+            run_id=run_id,
+            input_hash=input_hash,
+            generated_at=generated_at,
+            producer_version=PRODUCER_VERSION,
+        ),
+        write_json_artifact(
+            output,
+            "screening-input-view.json",
+            screening_input_payload,
+            kind="screening_input_view",
             run_id=run_id,
             input_hash=input_hash,
             generated_at=generated_at,

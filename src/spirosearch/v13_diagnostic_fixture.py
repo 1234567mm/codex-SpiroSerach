@@ -5,8 +5,12 @@ from typing import Any
 
 from spirosearch.acquisition_replay import evaluate_offline_replay
 from spirosearch.artifacts import build_run_manifest, write_json_artifact, write_jsonl_artifact
+from spirosearch.canonical_artifacts import CanonicalEvidenceEmitter
 from spirosearch.model_evaluation import evaluate_grouped_snapshot
+from spirosearch.models import CandidateMaterial
 from spirosearch.prediction_dataset import build_training_snapshot
+from spirosearch.scoring_view_artifacts import ScoringViewArtifactEmitter
+from spirosearch.screening_input_view_artifacts import ScreeningInputViewArtifactEmitter
 from spirosearch.surrogate import HeuristicSurrogate
 
 
@@ -42,6 +46,29 @@ def write_v13_diagnostic_fixture(output_dir: str | Path) -> Path:
         request_id="request-v13-fixture",
         model_version="heuristic-v1",
         strategy="qlognehvi",
+    )
+    screening_materials = [
+        _screening_material("pass-1", homo_ev=-5.2),
+        _screening_material("defer-1", homo_ev=None),
+        _screening_material("reject-1", homo_ev=-5.9),
+    ]
+    canonical = CanonicalEvidenceEmitter().build_payload(screening_materials)
+    scoring_view = ScoringViewArtifactEmitter().build_payload(canonical)
+    review_queue = [
+        {
+            **item,
+            "candidate_id": record["candidate_id"],
+            "reason": item["reason_code"],
+        }
+        for record in canonical["records"]
+        for item in record["review_items"]
+    ]
+    review_events: list[dict[str, Any]] = []
+    screening_input_view = ScreeningInputViewArtifactEmitter().build_payload(
+        canonical_payload=canonical,
+        scoring_payload=scoring_view,
+        review_queue=review_queue,
+        review_events=review_events,
     )
     payloads: list[tuple[str, str, Any, str]] = [
         (
@@ -182,17 +209,33 @@ def write_v13_diagnostic_fixture(output_dir: str | Path) -> Path:
             "json",
         ),
         (
+            "canonical_evidence",
+            "canonical-evidence.json",
+            canonical,
+            "json",
+        ),
+        (
+            "scoring_view",
+            "scoring-view.json",
+            scoring_view,
+            "json",
+        ),
+        (
+            "review_queue",
+            "review-queue.jsonl",
+            review_queue,
+            "jsonl",
+        ),
+        (
+            "review_events",
+            "review-events.jsonl",
+            review_events,
+            "jsonl",
+        ),
+        (
             "screening_input_view",
             "screening-input-view.json",
-            {
-                "schema_version": "v12.screening_input_view.v1",
-                "profile_version": "v12.htl_profile.v1",
-                "candidates": [
-                    {"candidate_id": "pass-1", "status": "pass", "codes": [], "components": [], "weighted_utility": 0.8, "coverage": 1.0},
-                    {"candidate_id": "defer-1", "status": "defer", "codes": ["missing_homo"], "components": [], "weighted_utility": 0.3, "coverage": 0.5},
-                    {"candidate_id": "reject-1", "status": "reject", "codes": ["homo_out_of_window"], "components": [], "weighted_utility": 0.1, "coverage": 1.0},
-                ],
-            },
+            screening_input_view,
             "json",
         ),
         ("training_snapshot", "training-snapshot.json", snapshot.to_dict(), "json"),
@@ -204,3 +247,32 @@ def write_v13_diagnostic_fixture(output_dir: str | Path) -> Path:
         writer = write_jsonl_artifact if artifact_format == "jsonl" else write_json_artifact
         artifacts.append(writer(output_dir, path, payload, kind=kind, **common))
     return build_run_manifest(artifacts, **common).write_json(output_dir)
+
+
+def _screening_material(material_id: str, *, homo_ev: float | None) -> CandidateMaterial:
+    return CandidateMaterial.from_dict(
+        {
+            "material_id": material_id,
+            "name": f"V13 diagnostic {material_id}",
+            "category": "small_molecule_htm",
+            "homo_ev": homo_ev,
+            "lumo_ev": -2.1,
+            "band_gap_ev": 3.1,
+            "thermal_stability_c": 140.0,
+            "uv_stability": 0.8,
+            "hydrophobicity": 0.7,
+            "dopant_free": True,
+            "orthogonal_solvent": True,
+            "commercially_available": True,
+            "toxicity_flag": "low",
+            "scores": {},
+            "evidence": [
+                {
+                    "source": "fixture://v13-screening",
+                    "level": "curated",
+                    "claim": "synthetic diagnostic input",
+                }
+            ],
+            "red_flags": [],
+        }
+    )

@@ -1,34 +1,235 @@
 {
   "candidates": [
     {
+      "blocking_review_ids": [],
       "candidate_id": "pass-1",
       "codes": [],
-      "components": [],
-      "coverage": 1.0,
+      "components": [
+        {
+          "evidence_ids": [
+            "energy:pass-1:homo_ev"
+          ],
+          "name": "homo_alignment",
+          "observed": true,
+          "quality": 1.0,
+          "utility": 1.0
+        },
+        {
+          "evidence_ids": [
+            "energy:pass-1:lumo_ev"
+          ],
+          "name": "lumo_alignment",
+          "observed": true,
+          "quality": 1.0,
+          "utility": 1.0
+        },
+        {
+          "evidence_ids": [
+            "energy:pass-1:band_gap_ev"
+          ],
+          "name": "band_gap",
+          "observed": true,
+          "quality": 1.0,
+          "utility": 1.0
+        },
+        {
+          "evidence_ids": [],
+          "name": "solubility",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "stability",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "cost",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "synthesis_complexity",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        }
+      ],
+      "coverage": 0.6,
+      "profile_version": "v12.htl_screening.v1",
       "status": "pass",
-      "weighted_utility": 0.8
+      "weighted_utility": 1.0,
+      "weights": {
+        "band_gap": 0.1,
+        "cost": 0.1,
+        "homo_alignment": 0.3,
+        "lumo_alignment": 0.2,
+        "solubility": 0.1,
+        "stability": 0.15,
+        "synthesis_complexity": 0.05
+      }
     },
     {
+      "blocking_review_ids": [
+        "review:defer-1:energy_levels_missing"
+      ],
       "candidate_id": "defer-1",
       "codes": [
-        "missing_homo"
+        "HOMO_NOT_YET_RESOLVED"
       ],
-      "components": [],
-      "coverage": 0.5,
+      "components": [
+        {
+          "evidence_ids": [],
+          "name": "homo_alignment",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.0
+        },
+        {
+          "evidence_ids": [
+            "energy:defer-1:lumo_ev"
+          ],
+          "name": "lumo_alignment",
+          "observed": true,
+          "quality": 1.0,
+          "utility": 1.0
+        },
+        {
+          "evidence_ids": [
+            "energy:defer-1:band_gap_ev"
+          ],
+          "name": "band_gap",
+          "observed": true,
+          "quality": 1.0,
+          "utility": 1.0
+        },
+        {
+          "evidence_ids": [],
+          "name": "solubility",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "stability",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "cost",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "synthesis_complexity",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        }
+      ],
+      "coverage": 0.3,
+      "profile_version": "v12.htl_screening.v1",
       "status": "defer",
-      "weighted_utility": 0.3
+      "weighted_utility": 1.0,
+      "weights": {
+        "band_gap": 0.1,
+        "cost": 0.1,
+        "homo_alignment": 0.3,
+        "lumo_alignment": 0.2,
+        "solubility": 0.1,
+        "stability": 0.15,
+        "synthesis_complexity": 0.05
+      }
     },
     {
+      "blocking_review_ids": [],
       "candidate_id": "reject-1",
       "codes": [
-        "homo_out_of_window"
+        "HOMO_MISMATCH"
       ],
-      "components": [],
-      "coverage": 1.0,
+      "components": [
+        {
+          "evidence_ids": [
+            "energy:reject-1:homo_ev"
+          ],
+          "name": "homo_alignment",
+          "observed": true,
+          "quality": 0.1,
+          "utility": 0.0
+        },
+        {
+          "evidence_ids": [
+            "energy:reject-1:lumo_ev"
+          ],
+          "name": "lumo_alignment",
+          "observed": true,
+          "quality": 1.0,
+          "utility": 1.0
+        },
+        {
+          "evidence_ids": [
+            "energy:reject-1:band_gap_ev"
+          ],
+          "name": "band_gap",
+          "observed": true,
+          "quality": 1.0,
+          "utility": 1.0
+        },
+        {
+          "evidence_ids": [],
+          "name": "solubility",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "stability",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "cost",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        },
+        {
+          "evidence_ids": [],
+          "name": "synthesis_complexity",
+          "observed": false,
+          "quality": 1.0,
+          "utility": 0.5
+        }
+      ],
+      "coverage": 0.6,
+      "profile_version": "v12.htl_screening.v1",
       "status": "reject",
-      "weighted_utility": 0.1
+      "weighted_utility": 0.5,
+      "weights": {
+        "band_gap": 0.1,
+        "cost": 0.1,
+        "homo_alignment": 0.3,
+        "lumo_alignment": 0.2,
+        "solubility": 0.1,
+        "stability": 0.15,
+        "synthesis_complexity": 0.05
+      }
     }
   ],
-  "profile_version": "v12.htl_profile.v1",
-  "schema_version": "v12.screening_input_view.v1"
+  "profile_version": "v12.htl_screening.v1",
+  "schema_version": "v19.screening_input_view.v1"
 }

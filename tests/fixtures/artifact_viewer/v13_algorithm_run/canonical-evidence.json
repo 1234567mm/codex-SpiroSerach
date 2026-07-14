@@ -1,0 +1,335 @@
+{
+  "candidate_count": 3,
+  "records": [
+    {
+      "candidate_id": "pass-1",
+      "energy_evidence": [
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:pass-1:homo_ev",
+          "material_id": "pass-1",
+          "method": "reported",
+          "property_name": "homo_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "pass-1:spiro_replacement_htl",
+          "value_ev": -5.2
+        },
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:pass-1:lumo_ev",
+          "material_id": "pass-1",
+          "method": "reported",
+          "property_name": "lumo_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "pass-1:spiro_replacement_htl",
+          "value_ev": -2.1
+        },
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:pass-1:band_gap_ev",
+          "material_id": "pass-1",
+          "method": "reported",
+          "property_name": "band_gap_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "pass-1:spiro_replacement_htl",
+          "value_ev": 3.1
+        }
+      ],
+      "material": {
+        "composition": {},
+        "form_factor": "",
+        "formula": null,
+        "grade_or_batch": null,
+        "material_class": "small_molecule_htm",
+        "material_id": "pass-1",
+        "material_kind": "small_molecule",
+        "molecule_id": null,
+        "safety_flags": [],
+        "supplier_status": "available",
+        "synthesis_readiness": "commercial"
+      },
+      "review_items": [],
+      "use_instance": {
+        "contact_side": "top",
+        "material_id": "pass-1",
+        "process_window": {},
+        "profile": "htl_replacement_profile",
+        "replacement_mode": "direct_htl",
+        "required_evidence_types": [
+          "energy",
+          "device",
+          "literature"
+        ],
+        "role": "spiro_replacement_htl",
+        "status": "candidate",
+        "target_stack": "n-i-p top HTL",
+        "use_instance_id": "pass-1:spiro_replacement_htl"
+      }
+    },
+    {
+      "candidate_id": "defer-1",
+      "energy_evidence": [
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:defer-1:lumo_ev",
+          "material_id": "defer-1",
+          "method": "reported",
+          "property_name": "lumo_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "defer-1:spiro_replacement_htl",
+          "value_ev": -2.1
+        },
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:defer-1:band_gap_ev",
+          "material_id": "defer-1",
+          "method": "reported",
+          "property_name": "band_gap_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "defer-1:spiro_replacement_htl",
+          "value_ev": 3.1
+        }
+      ],
+      "material": {
+        "composition": {},
+        "form_factor": "",
+        "formula": null,
+        "grade_or_batch": null,
+        "material_class": "small_molecule_htm",
+        "material_id": "defer-1",
+        "material_kind": "small_molecule",
+        "molecule_id": null,
+        "safety_flags": [],
+        "supplier_status": "available",
+        "synthesis_readiness": "commercial"
+      },
+      "review_items": [
+        {
+          "assigned_queue": "energy",
+          "blocking_surface": "scoring",
+          "reason_code": "energy_levels_missing",
+          "resolution_status": "open",
+          "review_event_id": null,
+          "review_item_id": "review:defer-1:energy_levels_missing",
+          "severity": "medium",
+          "source_refs": [
+            "homo_ev"
+          ],
+          "suggested_action": "calculate_or_extract",
+          "target_id": "defer-1:spiro_replacement_htl",
+          "target_type": "use_instance"
+        }
+      ],
+      "use_instance": {
+        "contact_side": "top",
+        "material_id": "defer-1",
+        "process_window": {},
+        "profile": "htl_replacement_profile",
+        "replacement_mode": "direct_htl",
+        "required_evidence_types": [
+          "energy",
+          "device",
+          "literature"
+        ],
+        "role": "spiro_replacement_htl",
+        "status": "candidate",
+        "target_stack": "n-i-p top HTL",
+        "use_instance_id": "defer-1:spiro_replacement_htl"
+      }
+    },
+    {
+      "candidate_id": "reject-1",
+      "energy_evidence": [
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:reject-1:homo_ev",
+          "material_id": "reject-1",
+          "method": "reported",
+          "property_name": "homo_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "reject-1:spiro_replacement_htl",
+          "value_ev": -5.9
+        },
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:reject-1:lumo_ev",
+          "material_id": "reject-1",
+          "method": "reported",
+          "property_name": "lumo_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "reject-1:spiro_replacement_htl",
+          "value_ev": -2.1
+        },
+        {
+          "computed": false,
+          "conditions": {},
+          "eligible_for_scoring": true,
+          "energy_evidence_id": "energy:reject-1:band_gap_ev",
+          "material_id": "reject-1",
+          "method": "reported",
+          "property_name": "band_gap_ev",
+          "provenance": {
+            "contract_version": null,
+            "curation_status": "curated",
+            "doi": null,
+            "license": null,
+            "provider_name": "legacy_candidate",
+            "provider_response_id": null,
+            "raw_hash": null,
+            "retrieved_at": null,
+            "source_id": "fixture://v13-screening",
+            "trust_level": "T4_literature_curated",
+            "url": null
+          },
+          "reference_scale": "vacuum",
+          "unit": "eV",
+          "use_instance_id": "reject-1:spiro_replacement_htl",
+          "value_ev": 3.1
+        }
+      ],
+      "material": {
+        "composition": {},
+        "form_factor": "",
+        "formula": null,
+        "grade_or_batch": null,
+        "material_class": "small_molecule_htm",
+        "material_id": "reject-1",
+        "material_kind": "small_molecule",
+        "molecule_id": null,
+        "safety_flags": [],
+        "supplier_status": "available",
+        "synthesis_readiness": "commercial"
+      },
+      "review_items": [],
+      "use_instance": {
+        "contact_side": "top",
+        "material_id": "reject-1",
+        "process_window": {},
+        "profile": "htl_replacement_profile",
+        "replacement_mode": "direct_htl",
+        "required_evidence_types": [
+          "energy",
+          "device",
+          "literature"
+        ],
+        "role": "spiro_replacement_htl",
+        "status": "candidate",
+        "target_stack": "n-i-p top HTL",
+        "use_instance_id": "reject-1:spiro_replacement_htl"
+      }
+    }
+  ],
+  "schema_version": "v9.canonical_evidence.v1"
+}

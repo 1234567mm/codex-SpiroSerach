@@ -14,10 +14,12 @@ from unittest.mock import patch
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
+from spirosearch.artifact_validation import validate_artifact_run
 from spirosearch.cli import _main_enrich
 from spirosearch.enrichment_runtime import LiveProviderSource, run_enrichment
 from spirosearch.providers.base import ProviderResponse
 from spirosearch.providers.cache import JSONLProviderCache
+from spirosearch.readonly_api import ReadOnlyRunAPI
 
 
 def candidate_record(**overrides):
@@ -130,6 +132,9 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             results = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
             canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
             scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
+            screening_input_view = json.loads(
+                (output_dir / "screening-input-view.json").read_text(encoding="utf-8")
+            )
             review_queue = [
                 json.loads(line)
                 for line in (output_dir / "review-queue.jsonl").read_text(encoding="utf-8").splitlines()
@@ -180,7 +185,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(canonical_records["complete_htl"]["use_instance"]["material_id"], "complete_htl")
             self.assertEqual(
                 [item["property_name"] for item in canonical_records["complete_htl"]["energy_evidence"]],
-                ["homo_ev", "lumo_ev"],
+                ["homo_ev", "lumo_ev", "band_gap_ev"],
             )
             self.assertTrue(
                 all(item["eligible_for_scoring"] for item in canonical_records["complete_htl"]["energy_evidence"])
@@ -191,12 +196,26 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 [
                     "energy:complete_htl:homo_ev",
                     "energy:complete_htl:lumo_ev",
+                    "energy:complete_htl:band_gap_ev",
                     "energy:missing_gap_htl:homo_ev",
                     "energy:missing_gap_htl:lumo_ev",
                 ],
             )
             self.assertNotIn("confidence", json.dumps(scoring_view))
             self.assertNotIn("provider_confidence", json.dumps(scoring_view))
+
+            screening_candidates = {
+                candidate["candidate_id"]: candidate
+                for candidate in screening_input_view["candidates"]
+            }
+            self.assertEqual(screening_candidates["complete_htl"]["status"], "pass")
+            self.assertEqual(screening_candidates["complete_htl"]["blocking_review_ids"], [])
+            self.assertEqual(screening_candidates["missing_gap_htl"]["status"], "defer")
+            self.assertIn("BAND_GAP_NOT_YET_RESOLVED", screening_candidates["missing_gap_htl"]["codes"])
+            self.assertEqual(
+                screening_candidates["missing_gap_htl"]["blocking_review_ids"],
+                [review_queue[0]["review_item_id"]],
+            )
 
             self.assertEqual(len(review_queue), 1)
             self.assertEqual(review_queue[0]["target_id"], "missing_gap_htl")
@@ -223,10 +242,15 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                     "provider_cache",
                     "agent_trace",
                     "scoring_view",
+                    "screening_input_view",
                 },
             )
             scoring_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "scoring_view")
+            screening_artifact = next(
+                artifact for artifact in manifest["artifacts"] if artifact["kind"] == "screening_input_view"
+            )
             self.assertEqual(scoring_artifact["path"], "scoring-view.json")
+            self.assertEqual(screening_artifact["path"], "screening-input-view.json")
             required_manifest_fields = {
                 "schema_version",
                 "run_id",
@@ -259,11 +283,33 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(scoring_artifact["format"], "json")
             self.assertEqual(scoring_artifact["join_keys"], ["candidate_id", "material_id", "evidence_id"])
             self.assertEqual(scoring_artifact["depends_on"], ["canonical_evidence", "review_queue"])
+            self.assertEqual(screening_artifact["schema_ref"], "schemas/screening-input-view.schema.json")
+            self.assertEqual(
+                screening_artifact["depends_on"],
+                ["canonical_evidence", "scoring_view", "review_queue", "review_events"],
+            )
+            self.assertTrue(set(screening_artifact["depends_on"]) <= artifact_kinds)
             review_events_artifact = next(artifact for artifact in manifest["artifacts"] if artifact["kind"] == "review_events")
             self.assertEqual(review_events_artifact["record_count"], 0)
             self.assertEqual(review_events_artifact["join_keys"], ["review_item_id", "event_id", "target_id"])
 
-    def test_review_events_apply_before_scoring_view_and_emit_closure_artifacts(self):
+            readonly = ReadOnlyRunAPI(output_dir).artifact("screening_input_view")
+            self.assertEqual(readonly["status"], "available")
+            self.assertEqual(readonly["run_id"], manifest["run_id"])
+            self.assertEqual(readonly["payload"]["data"], screening_input_view)
+            self.assertEqual(readonly["payload"]["schema_validation"]["status"], "valid")
+
+            validation = validate_artifact_run(output_dir)
+            self.assertEqual(validation.status, "valid", validation.to_dict())
+            screening_join = next(
+                diagnostic
+                for diagnostic in validation.join_diagnostics
+                if diagnostic["kind"] == "screening_input_view"
+            )
+            self.assertEqual(screening_join["status"], "informational", screening_join)
+            self.assertEqual(screening_join["severity"], "info", screening_join)
+
+    def test_unknown_review_event_is_preserved_but_does_not_change_screening_inputs(self):
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             candidates_path = root / "candidates.json"
@@ -301,6 +347,9 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
 
             canonical = json.loads((output_dir / "canonical-evidence.json").read_text(encoding="utf-8"))
             scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
+            screening_input_view = json.loads(
+                (output_dir / "screening-input-view.json").read_text(encoding="utf-8")
+            )
             review_events = [
                 json.loads(line)
                 for line in (output_dir / "review-events.jsonl").read_text(encoding="utf-8").splitlines()
@@ -316,8 +365,8 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
 
             energy = canonical["records"][0]["energy_evidence"]
             homo = next(item for item in energy if item["property_name"] == "homo_ev")
-            self.assertEqual(homo["provenance"]["curation_status"], "rejected")
-            self.assertNotIn(
+            self.assertEqual(homo["provenance"]["curation_status"], "machine_extracted")
+            self.assertIn(
                 "energy:reviewed_htl:homo_ev",
                 [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
             )
@@ -325,14 +374,13 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 "energy:reviewed_htl:lumo_ev",
                 [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
             )
+            screening_candidate = screening_input_view["candidates"][0]
+            self.assertEqual(screening_candidate["status"], "pass")
+            self.assertEqual(screening_candidate["blocking_review_ids"], [])
             self.assertEqual(review_events[0]["event_id"], "event-reject-reviewed-homo")
-            self.assertEqual(review_summary["applied_event_count"], 1)
-            self.assertEqual(review_summary["rejected_count"], 1)
-            self.assertEqual(recompute_markers[0]["candidate_id"], "reviewed_htl")
-            self.assertEqual(
-                set(recompute_markers[0]["affected_artifacts"]),
-                {"canonical-evidence.json", "scoring-view.json"},
-            )
+            self.assertEqual(review_summary["applied_event_count"], 0)
+            self.assertEqual(review_summary["rejected_count"], 0)
+            self.assertEqual(recompute_markers, [])
             self.assertTrue(
                 {
                     "review_events",
@@ -341,7 +389,186 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 }.issubset({artifact["kind"] for artifact in manifest["artifacts"]})
             )
 
-    def test_cli_enrich_accepts_review_events_fixture(self):
+    def test_screening_readonly_fails_closed_when_own_dependency_declaration_is_missing(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            output_dir = root / "enrich"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="dependency_htl")]),
+                encoding="utf-8",
+            )
+            run_enrichment(
+                candidates_path=candidates_path,
+                output_dir=output_dir,
+                source_registry_path="data/source_registry.json",
+            )
+            manifest_path = output_dir / "run-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            screening_metadata = next(
+                artifact
+                for artifact in manifest["artifacts"]
+                if artifact["kind"] == "screening_input_view"
+            )
+            screening_metadata["depends_on"].remove("scoring_view")
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            screening = ReadOnlyRunAPI(output_dir).artifact("screening_input_view")
+
+            self.assertEqual(screening["status"], "unavailable")
+            self.assertEqual(
+                screening["unavailable"]["code"],
+                "artifact_dependency_not_declared",
+            )
+            self.assertEqual(
+                screening["unavailable"]["detail"],
+                {"missing_kinds": ["scoring_view"]},
+            )
+
+    def test_screening_readonly_reports_declared_dependency_missing_from_manifest_as_unavailable(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            output_dir = root / "enrich"
+            candidates_path.write_text(
+                json.dumps([candidate_record(material_id="dependency_htl")]),
+                encoding="utf-8",
+            )
+            run_enrichment(
+                candidates_path=candidates_path,
+                output_dir=output_dir,
+                source_registry_path="data/source_registry.json",
+            )
+            manifest_path = output_dir / "run-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["artifacts"] = [
+                artifact
+                for artifact in manifest["artifacts"]
+                if artifact["kind"] != "scoring_view"
+            ]
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            screening = ReadOnlyRunAPI(output_dir).artifact("screening_input_view")
+
+            self.assertEqual(screening["status"], "unavailable")
+            self.assertEqual(
+                screening["unavailable"]["code"],
+                "artifact_dependency_unavailable",
+            )
+            self.assertEqual(
+                screening["unavailable"]["detail"],
+                {
+                    "dependency_kind": "scoring_view",
+                    "dependency_unavailable_code": "artifact_not_declared",
+                },
+            )
+
+            validation = validate_artifact_run(output_dir)
+            screening_result = next(
+                artifact
+                for artifact in validation.artifacts
+                if artifact.kind == "screening_input_view"
+            )
+            self.assertEqual(screening_result.status, "unavailable")
+            self.assertEqual(
+                screening_result.unavailable["detail"],
+                {
+                    "dependency_kind": "scoring_view",
+                    "dependency_unavailable_code": "artifact_not_declared",
+                },
+            )
+
+    def test_screening_readonly_fails_closed_when_manifest_dependency_is_unavailable(self):
+        scenarios = (
+            ("missing_file", "artifact_missing"),
+            ("hash_mismatch", "artifact_sha256_mismatch"),
+            ("schema_invalid", "schema_validation_failed"),
+        )
+        for scenario, expected_dependency_code in scenarios:
+            with self.subTest(scenario=scenario), TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                candidates_path = root / "candidates.json"
+                output_dir = root / "enrich"
+                candidates_path.write_text(
+                    json.dumps([candidate_record(material_id="dependency_htl")]),
+                    encoding="utf-8",
+                )
+                run_enrichment(
+                    candidates_path=candidates_path,
+                    output_dir=output_dir,
+                    source_registry_path="data/source_registry.json",
+                )
+                manifest_path = output_dir / "run-manifest.json"
+                scoring_path = output_dir / "scoring-view.json"
+
+                if scenario == "missing_file":
+                    scoring_path.unlink()
+                elif scenario == "hash_mismatch":
+                    original = scoring_path.read_bytes()
+                    mutated = original.replace(
+                        b"v10.scoring_view.v1",
+                        b"v10.scoring_view.v0",
+                        1,
+                    )
+                    self.assertNotEqual(mutated, original)
+                    self.assertEqual(len(mutated), len(original))
+                    scoring_path.write_bytes(mutated)
+                else:
+                    payload = json.loads(scoring_path.read_text(encoding="utf-8"))
+                    payload["schema_version"] = "invalid"
+                    mutated = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+                    scoring_path.write_bytes(mutated)
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    scoring_metadata = next(
+                        artifact
+                        for artifact in manifest["artifacts"]
+                        if artifact["kind"] == "scoring_view"
+                    )
+                    scoring_metadata["bytes"] = len(mutated)
+                    scoring_metadata["sha256"] = hashlib.sha256(mutated).hexdigest()
+                    manifest_path.write_text(
+                        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
+
+                screening = ReadOnlyRunAPI(output_dir).artifact("screening_input_view")
+
+                self.assertEqual(screening["status"], "unavailable")
+                self.assertEqual(
+                    screening["unavailable"]["code"],
+                    "artifact_dependency_unavailable",
+                )
+                self.assertEqual(
+                    screening["unavailable"]["detail"],
+                    {
+                        "dependency_kind": "scoring_view",
+                        "dependency_unavailable_code": expected_dependency_code,
+                    },
+                )
+
+                validation = validate_artifact_run(output_dir)
+                screening_result = next(
+                    artifact
+                    for artifact in validation.artifacts
+                    if artifact.kind == "screening_input_view"
+                )
+                self.assertEqual(validation.status, "invalid")
+                self.assertEqual(screening_result.status, "unavailable")
+                self.assertEqual(
+                    screening_result.unavailable["detail"],
+                    {
+                        "dependency_kind": "scoring_view",
+                        "dependency_unavailable_code": expected_dependency_code,
+                    },
+                )
+
+    def test_cli_enrich_preserves_unknown_review_event_without_applying_it(self):
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             candidates_path = root / "candidates.json"
@@ -392,8 +619,15 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertIn("local-first enrichment", completed.stdout)
             review_summary = json.loads((output_dir / "review-summary.json").read_text(encoding="utf-8"))
             scoring_view = json.loads((output_dir / "scoring-view.json").read_text(encoding="utf-8"))
-            self.assertEqual(review_summary["applied_event_count"], 1)
-            self.assertNotIn(
+            review_events = [
+                json.loads(line)
+                for line in (output_dir / "review-events.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(review_summary["applied_event_count"], 0)
+            self.assertEqual(review_summary["rejected_count"], 0)
+            self.assertEqual(review_events[0]["event_id"], "event-cli-reject-homo")
+            self.assertIn(
                 "energy:cli_reviewed_htl:homo_ev",
                 [fact["evidence_id"] for fact in scoring_view["energy_facts"]],
             )

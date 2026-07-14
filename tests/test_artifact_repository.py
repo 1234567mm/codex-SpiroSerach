@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import json
 import unittest
 from pathlib import Path
@@ -130,6 +131,48 @@ def review_event(**overrides):
 
 
 class JsonArtifactRepositoryTests(unittest.TestCase):
+    def test_public_read_api_cannot_bypass_dependency_validation(self):
+        self.assertNotIn(
+            "_check_dependencies",
+            inspect.signature(JsonArtifactRepository.read_json).parameters,
+        )
+        self.assertNotIn(
+            "_check_dependencies",
+            inspect.signature(JsonArtifactRepository.read_jsonl).parameters,
+        )
+
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            screening = write_json_artifact(
+                output_dir,
+                "screening-input-view.json",
+                {
+                    "schema_version": "v19.screening_input_view.v1",
+                    "profile_version": "v12.htl_screening.v1",
+                    "candidates": [],
+                },
+                kind="screening_input_view",
+                run_id="repo-run",
+                input_hash="input-hash",
+                generated_at="2026-07-09T00:00:00+00:00",
+                producer_version="repo-test",
+            )
+            write_manifest(output_dir, [screening])
+            repository = JsonArtifactRepository.from_output_dir(output_dir)
+
+            result = repository.read_json("screening_input_view")
+
+            self.assertFalse(result.available)
+            self.assertEqual(result.unavailable["code"], "artifact_dependency_unavailable")
+            self.assertEqual(
+                result.unavailable["detail"]["dependency_unavailable_code"],
+                "artifact_not_declared",
+            )
+            with self.assertRaises(TypeError):
+                repository.read_json("screening_input_view", _check_dependencies=False)
+            with self.assertRaises(TypeError):
+                repository.read_jsonl("review_events", _check_dependencies=False)
+
     def test_missing_manifest_returns_run_level_unavailable(self):
         with TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir)

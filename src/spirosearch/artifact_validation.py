@@ -14,11 +14,14 @@ SAFE_UNAVAILABLE_DETAIL_KEYS = frozenset(
     {
         "actual",
         "column",
+        "dependency_kind",
+        "dependency_unavailable_code",
         "expected",
         "format",
         "json_path",
         "kind",
         "line_number",
+        "missing_kinds",
         "panel",
         "panel_id",
         "path",
@@ -178,6 +181,8 @@ def _validate_declared_artifact(
         _join_keys_check(metadata),
         _depends_on_check(metadata),
     )
+    if ARTIFACT_KIND_METADATA.get(kind, {}).get("require_declared_dependencies"):
+        checks += (_declared_dependencies_check(repository, metadata),)
     validation_result = ArtifactValidationResult(
         kind=kind,
         status=_artifact_status(read_result, checks),
@@ -381,6 +386,39 @@ def _depends_on_check(metadata: Mapping[str, Any]) -> ValidationCheck:
     )
 
 
+def _declared_dependencies_check(
+    repository: JsonArtifactRepository,
+    metadata: Mapping[str, Any],
+) -> ValidationCheck:
+    kind = str(metadata["kind"])
+    required_kinds = list(ARTIFACT_KIND_METADATA[kind].get("depends_on", ()))
+    declared_kinds = set(metadata.get("depends_on", ()))
+    missing_kinds = sorted(
+        dependency
+        for dependency in required_kinds
+        if dependency not in declared_kinds
+    )
+    detail = {
+        "required_kinds": required_kinds,
+        "missing_kinds": missing_kinds,
+    }
+    if not missing_kinds:
+        return ValidationCheck(
+            name="declared_dependencies",
+            status="pass",
+            severity="info",
+            message="Required artifact dependencies are declared in run-manifest.json.",
+            detail=detail,
+        )
+    return ValidationCheck(
+        name="declared_dependencies",
+        status="fail",
+        severity="error",
+        message="Required artifact dependencies are not declared in run-manifest.json.",
+        detail=detail,
+    )
+
+
 def _artifact_status(
     result: ArtifactReadResult,
     checks: tuple[ValidationCheck, ...],
@@ -515,6 +553,11 @@ def _join_diagnostic_notes(
 def _join_key_aliases(kind: str) -> Mapping[str, str]:
     if kind == "enrichment_results":
         return {"review_item_id": "review_item_ids"}
+    if kind == "screening_input_view":
+        return {
+            "evidence_id": "evidence_ids",
+            "review_item_id": "blocking_review_ids",
+        }
     if kind == "review_summary":
         return {
             "review_item_id": "review_item_ids",

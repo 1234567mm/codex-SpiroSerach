@@ -109,7 +109,14 @@ class JsonArtifactRepository:
         return _copy_mapping(metadata) if metadata is not None else None
 
     def read_json(self, kind: str) -> ArtifactReadResult:
-        metadata, unavailable = self._metadata_for_kind(kind, expected_format="json")
+        return self._read_json(kind, check_dependencies=True)
+
+    def _read_json(self, kind: str, *, check_dependencies: bool) -> ArtifactReadResult:
+        metadata, unavailable = self._metadata_for_kind(
+            kind,
+            expected_format="json",
+            check_dependencies=check_dependencies,
+        )
         if unavailable is not None:
             return unavailable
 
@@ -149,7 +156,14 @@ class JsonArtifactRepository:
         )
 
     def read_jsonl(self, kind: str) -> ArtifactReadResult:
-        metadata, unavailable = self._metadata_for_kind(kind, expected_format="jsonl")
+        return self._read_jsonl(kind, check_dependencies=True)
+
+    def _read_jsonl(self, kind: str, *, check_dependencies: bool) -> ArtifactReadResult:
+        metadata, unavailable = self._metadata_for_kind(
+            kind,
+            expected_format="jsonl",
+            check_dependencies=check_dependencies,
+        )
         if unavailable is not None:
             return unavailable
 
@@ -264,6 +278,7 @@ class JsonArtifactRepository:
         kind: str,
         *,
         expected_format: str,
+        check_dependencies: bool = True,
     ) -> tuple[dict[str, Any], ArtifactReadResult | None]:
         if self._manifest_unavailable is not None:
             return {}, ArtifactReadResult(
@@ -294,7 +309,8 @@ class JsonArtifactRepository:
                 detail={"expected": expected_format, "actual": metadata.get("format")},
             )
             return {}, unavailable
-        expected_schema_ref = ARTIFACT_KIND_METADATA.get(kind, {}).get("schema_ref")
+        kind_metadata = ARTIFACT_KIND_METADATA.get(kind, {})
+        expected_schema_ref = kind_metadata.get("schema_ref")
         if metadata.get("schema_ref") != expected_schema_ref:
             unavailable = self._unavailable(
                 metadata,
@@ -303,6 +319,48 @@ class JsonArtifactRepository:
                 detail={"expected": expected_schema_ref, "actual": metadata.get("schema_ref")},
             )
             return {}, unavailable
+        if check_dependencies and kind_metadata.get("require_declared_dependencies"):
+            required_kinds = tuple(kind_metadata.get("depends_on", ()))
+            declared_kinds = set(metadata.get("depends_on", ()))
+            missing_kinds = sorted(
+                dependency
+                for dependency in required_kinds
+                if dependency not in declared_kinds
+            )
+            if missing_kinds:
+                unavailable = self._unavailable(
+                    metadata,
+                    "artifact_dependency_not_declared",
+                    "Required artifact dependencies are not declared in run-manifest.json.",
+                    detail={"missing_kinds": missing_kinds},
+                )
+                return {}, unavailable
+            for dependency in required_kinds:
+                dependency_metadata = self._artifacts_by_kind.get(dependency, {})
+                if dependency_metadata.get("format") == "jsonl":
+                    dependency_result = self._read_jsonl(
+                        dependency,
+                        check_dependencies=False,
+                    )
+                else:
+                    dependency_result = self._read_json(
+                        dependency,
+                        check_dependencies=False,
+                    )
+                if not dependency_result.available:
+                    dependency_unavailable = dependency_result.unavailable or {}
+                    unavailable = self._unavailable(
+                        metadata,
+                        "artifact_dependency_unavailable",
+                        "A required artifact dependency is unavailable.",
+                        detail={
+                            "dependency_kind": dependency,
+                            "dependency_unavailable_code": str(
+                                dependency_unavailable.get("code", "artifact_unavailable")
+                            ),
+                        },
+                    )
+                    return {}, unavailable
         return _copy_mapping(metadata), None
 
     def _artifact_path(self, metadata: Mapping[str, Any]) -> tuple[Path, ArtifactReadResult | None]:
