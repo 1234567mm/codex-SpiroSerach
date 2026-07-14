@@ -1,54 +1,60 @@
 const state = {
   manifest: null,
   artifacts: new Map(),
+  snapshot: null,
+  selectedCandidateId: null,
 };
 
-const ARTIFACT_REGISTRY = {
-  recommendations: { legacyFileName: "recommendations.json" },
-  agent_trace: { legacyFileName: "agent-trace.jsonl" },
-  enrichment_results: { legacyFileName: "enrichment-results.json" },
-  canonical_evidence: { legacyFileName: "canonical-evidence.json" },
-  provider_cache_index: { legacyFileName: "provider-cache-index.json" },
-  review_queue: { legacyFileName: "review-queue.jsonl" },
-  scoring_view: { legacyFileName: "" },
-  screening_input_view: { legacyFileName: "" },
-  model_evaluation: { legacyFileName: "" },
-  review_events: { legacyFileName: "review-events.jsonl" },
-  review_summary: { legacyFileName: "review-summary.json" },
-  recompute_markers: { legacyFileName: "recompute-markers.jsonl" },
-};
+const runDataStore = globalThis.SpiroRunData
+  ? new globalThis.SpiroRunData.RunDataStore()
+  : null;
 
-document.getElementById("manifestFile").addEventListener("change", async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    clearError();
-    state.manifest = JSON.parse(await file.text());
-    renderManifest(state.manifest);
-    renderKnownArtifacts();
-  } catch (error) {
-    showError(`manifest ${error.message}`);
+document.getElementById("bundleFiles").addEventListener("change", async (event) => {
+  if (!runDataStore) {
+    showError("Load failed: run data store is unavailable");
+    return;
   }
+  const result = await runDataStore.replace(event.target.files);
+  if (!result.ok) {
+    showLoadFailure(result);
+    return;
+  }
+  applyCommittedSnapshot(result.snapshot);
+  clearError();
+  renderKnownArtifacts();
 });
 
-document.getElementById("artifactFiles").addEventListener("change", async (event) => {
-  try {
-    clearError();
-    state.artifacts.clear();
-    for (const file of event.target.files) {
-      const text = await file.text();
-      const artifactName = file.webkitRelativePath || file.name;
-      const parsed = parseArtifact(artifactName, text);
-      state.artifacts.set(artifactName, parsed);
-      if (artifactName !== file.name && !state.artifacts.has(file.name)) {
-        state.artifacts.set(file.name, parsed);
-      }
-    }
-    renderKnownArtifacts();
-  } catch (error) {
-    showError(error.message);
-  }
+document.getElementById("candidateTable").addEventListener("click", (event) => {
+  const row = event.target.closest?.("[data-candidate-id]");
+  if (!row) return;
+  state.selectedCandidateId = row.dataset.candidateId;
+  renderCandidateTracer(
+    getKnownArtifact("screening_input_view"),
+    getKnownArtifact("canonical_evidence")
+  );
 });
+
+function applyCommittedSnapshot(snapshot) {
+  state.snapshot = snapshot;
+  state.manifest = snapshot.manifest;
+  state.artifacts = new Map(
+    Object.values(snapshot.artifacts).map((artifact) => [artifact.path, artifact.payload])
+  );
+  state.selectedCandidateId = null;
+}
+
+function showLoadFailure(result) {
+  const retained = result.retainedRunId
+    ? `; retained prior run ${result.retainedRunId}`
+    : "";
+  const details = result.diagnostics
+    .map((item) => `${item.code}: ${item.message}`)
+    .join(" | ");
+  showError(`Load failed${retained}. Failed input diagnostics: ${details || "unknown error"}`);
+  document.getElementById("loadState").textContent = result.retainedRunId
+    ? `Load failed; retained prior run ${result.retainedRunId}`
+    : "Load failed; no run committed";
+}
 
 function parseArtifact(name, text) {
   if (name.endsWith(".jsonl")) {
@@ -92,17 +98,31 @@ function renderManifest(manifest) {
 
   const rows = (manifest.artifacts || []).map((artifact) => {
     const hash = artifact.sha256 ? artifact.sha256.slice(0, 12) : "-";
+    const availability = state.snapshot?.availability?.[artifact.kind];
+    const artifactDiagnostics = (state.snapshot?.diagnostics || [])
+      .filter((item) => item.kind === artifact.kind)
+      .map((item) => item.code)
+      .join(", ");
     return `<tr>
       <td>${escapeHtml(artifact.kind || "-")}</td>
       <td>${escapeHtml(artifact.path || "-")}</td>
+      <td>${escapeHtml(availability?.status || (state.artifacts.has(artifact.path) ? "available" : "not loaded"))}</td>
+      <td>${escapeHtml(artifactDiagnostics || "-")}</td>
       <td>${escapeHtml(String(artifact.bytes ?? "-"))}</td>
       <td>${escapeHtml(hash)}</td>
     </tr>`;
   });
-  document.getElementById("artifactTable").innerHTML = rows.join("") || `<tr><td colspan="4">No artifacts</td></tr>`;
-  document.getElementById("loadState").textContent = state.artifacts.size
-    ? `${state.artifacts.size} files loaded`
-    : "Manifest loaded";
+  document.getElementById("artifactTable").innerHTML = rows.join("") || `<tr><td colspan="6">No artifacts</td></tr>`;
+  if (state.snapshot) {
+    const availableCount = Object.values(state.snapshot.availability)
+      .filter((item) => item.status === "available").length;
+    document.getElementById("loadState").textContent =
+      `${availableCount} available / ${state.snapshot.diagnostics.length} diagnostics`;
+  } else {
+    document.getElementById("loadState").textContent = state.artifacts.size
+      ? `${state.artifacts.size} files loaded`
+      : "Manifest loaded";
+  }
 }
 
 function renderKnownArtifacts() {
@@ -130,25 +150,88 @@ function renderKnownArtifacts() {
   renderModelEvaluation(modelEvaluation);
   renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
   renderReviewQueue(reviewQueue);
+  renderCandidateTracer(screeningInputView, canonicalEvidence);
 }
 
 function getKnownArtifact(kind) {
-  return getArtifact(ARTIFACT_REGISTRY[kind]?.legacyFileName || "", kind);
+  return getArtifact(kind);
 }
 
-function getArtifact(fileName, kind) {
+function getArtifact(kind) {
   const artifact = (state.manifest?.artifacts || []).find((item) => item.kind === kind);
-  if (artifact?.path) {
-    const pathName = artifact.path.split(/[\\/]/).pop();
-    if (state.artifacts.has(artifact.path)) {
-      return state.artifacts.get(artifact.path);
-    }
-    if (artifact.path === pathName) {
-      return state.artifacts.get(pathName) || null;
-    }
-    return null;
+  if (!artifact?.path) return null;
+  return state.artifacts.get(artifact.path) || null;
+}
+
+function renderCandidateTracer(screeningInputView, canonicalEvidence) {
+  const table = document.getElementById("candidateTable");
+  const candidates = screeningInputView?.candidates || [];
+  const canonicalByCandidate = new Map(
+    (canonicalEvidence?.records || []).map((record) => [record.candidate_id, record])
+  );
+  if (!candidates.length) {
+    state.selectedCandidateId = null;
+    table.innerHTML = `<div class="empty">No candidates loaded</div>`;
+    document.getElementById("candidateDetail").innerHTML =
+      `<div class="empty">Select a coherent run bundle to inspect a candidate</div>`;
+    return;
   }
-  return state.artifacts.get(fileName) || null;
+
+  if (!candidates.some((candidate) => candidate.candidate_id === state.selectedCandidateId)) {
+    state.selectedCandidateId = candidates[0].candidate_id;
+  }
+  table.innerHTML = candidates
+    .map((candidate) => `<button
+      type="button"
+      class="candidate-row"
+      data-candidate-id="${escapeHtml(candidate.candidate_id || "")}"
+      aria-pressed="${candidate.candidate_id === state.selectedCandidateId}">
+      <span>${escapeHtml(candidate.candidate_id || "-")}</span>
+      <span class="gate-status gate-${escapeHtml(candidate.status || "defer")}">${escapeHtml(candidate.status || "defer")}</span>
+    </button>`)
+    .join("");
+
+  const selected = candidates.find(
+    (candidate) => candidate.candidate_id === state.selectedCandidateId
+  );
+  renderCandidateDetail(selected, canonicalByCandidate.get(state.selectedCandidateId));
+  document.getElementById("candidateCount").textContent = String(candidates.length);
+  document.getElementById("needsReviewCount").textContent = String(
+    candidates.filter((candidate) => candidate.status === "defer").length
+  );
+}
+
+function renderCandidateDetail(candidate, canonicalRecord) {
+  const detail = document.getElementById("candidateDetail");
+  if (!candidate) {
+    detail.innerHTML = `<div class="empty">No candidate selected</div>`;
+    return;
+  }
+  const material = canonicalRecord?.material || {};
+  const useInstance = canonicalRecord?.use_instance || {};
+  const energyEvidence = canonicalRecord?.energy_evidence || [];
+  detail.innerHTML = `<section>
+    <div class="item-title">
+      <span>${escapeHtml(candidate.candidate_id || "-")}</span>
+      <span class="status">${escapeHtml(material.material_kind || "canonical evidence unavailable")}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["status", candidate.status],
+        ["utility", formatNumber(candidate.weighted_utility)],
+        ["coverage", formatNumber(candidate.coverage)],
+        ["profile", candidate.profile_version],
+        ["use", useInstance.role],
+        ["supplier", material.supplier_status],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${energyEvidence.map(renderEnergyEvidenceChip).join("") || `<span class="chip muted">no energy evidence</span>`}
+    </div>
+    <div class="review-inline">
+      ${(candidate.codes || []).map((code) => `<span class="chip review-chip">${escapeHtml(code)}</span>`).join("") || `<span class="muted">No blocking codes</span>`}
+    </div>
+  </section>`;
 }
 
 function renderRecommendations(recommendations) {
@@ -641,6 +724,8 @@ function clearError() {
   errorState.style.display = "none";
 }
 
+document.getElementById("runSummary").textContent = "No run loaded";
+document.getElementById("loadState").textContent = "Waiting for bundle";
 renderRecommendations(null);
 renderTimeline([]);
 renderEnrichmentFlow(null, null, [], []);
@@ -650,3 +735,4 @@ renderScreeningEligibility(null);
 renderModelEvaluation(null);
 renderReviewClosure([], null, []);
 renderReviewQueue([]);
+renderCandidateTracer(null, null);

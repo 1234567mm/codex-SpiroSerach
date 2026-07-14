@@ -14,12 +14,8 @@
       </div>
       <div class="filebar">
         <label class="file-control">
-          <span>Manifest</span>
-          <input id="manifestFile" type="file" accept=".json,application/json">
-        </label>
-        <label class="file-control">
-          <span>Artifacts</span>
-          <input id="artifactFiles" type="file" multiple accept=".json,.jsonl,application/json">
+          <span>Run bundle directory</span>
+          <input id="bundleFiles" type="file" webkitdirectory directory multiple accept=".json,.jsonl,application/json">
         </label>
       </div>
     </header>
@@ -49,7 +45,18 @@
 
         <div class="panel wide">
           <div class="panel-head">
-            <h2>Artifacts</h2>
+            <h2>Candidate Tracer</h2>
+            <span>Authoritative screening input</span>
+          </div>
+          <div class="candidate-workbench">
+            <div id="candidateTable" class="candidate-table" aria-label="Screening candidates"></div>
+            <div id="candidateDetail" class="candidate-detail" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="panel wide">
+          <div class="panel-head">
+            <h2>Artifact Diagnostics</h2>
             <span id="loadState">Waiting for files</span>
           </div>
           <div class="table-wrap">
@@ -58,6 +65,8 @@
                 <tr>
                   <th>Kind</th>
                   <th>Path</th>
+                  <th>Status</th>
+                  <th>Diagnostics</th>
                   <th>Bytes</th>
                   <th>Hash</th>
                 </tr>
@@ -141,6 +150,7 @@
       </section>
     </main>
 
+    <script src="run-data-store.js"></script>
     <script src="viewer.js"></script>
   </body>
 </html>
