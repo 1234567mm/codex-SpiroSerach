@@ -45,13 +45,43 @@
 
         <div class="panel wide">
           <div class="panel-head">
-            <h2>Candidate Tracer</h2>
-            <span>Authoritative screening input</span>
+            <h2>Candidate Triage Workspace</h2>
+            <span>Authoritative screening disposition</span>
           </div>
+          <div class="candidate-controls" aria-label="Candidate controls">
+            <label>
+              <span>Search</span>
+              <input id="candidateSearch" type="search" placeholder="Candidate, material, use or role">
+            </label>
+            <label>
+              <span>Status</span>
+              <select id="candidateStatusFilter">
+                <option value="all">All four groups</option>
+                <option value="continue">Continue</option>
+                <option value="review">Review</option>
+                <option value="reject">Reject</option>
+                <option value="insufficient-data">Insufficient data</option>
+              </select>
+            </label>
+            <label>
+              <span>Sort</span>
+              <select id="candidateSort">
+                <option value="group">Triage group</option>
+                <option value="candidate-asc">Candidate A–Z</option>
+                <option value="candidate-desc">Candidate Z–A</option>
+                <option value="coverage-desc">Evidence coverage</option>
+              </select>
+            </label>
+          </div>
+          <div id="candidateGroups" class="candidate-groups" aria-label="Triage group counts"></div>
           <div class="candidate-workbench">
             <div id="candidateTable" class="candidate-table" aria-label="Screening candidates"></div>
             <div id="candidateDetail" class="candidate-detail" aria-live="polite"></div>
           </div>
+          <details class="candidate-diagnostics-panel">
+            <summary>Projection diagnostics</summary>
+            <div id="candidateDiagnostics"></div>
+          </details>
         </div>
 
         <div class="panel wide">
@@ -151,6 +181,7 @@
     </main>
 
     <script src="run-data-store.js"></script>
+    <script src="candidate-projection.js"></script>
     <script src="viewer.js"></script>
   </body>
 </html>

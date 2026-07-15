@@ -3,6 +3,8 @@ const state = {
   artifacts: new Map(),
   snapshot: null,
   selectedCandidateId: null,
+  candidateProjection: null,
+  candidateControls: {search: "", statuses: [], sort: "group"},
 };
 
 const runDataStore = globalThis.SpiroRunData
@@ -28,10 +30,29 @@ document.getElementById("candidateTable").addEventListener("click", (event) => {
   const row = event.target.closest?.("[data-candidate-id]");
   if (!row) return;
   state.selectedCandidateId = row.dataset.candidateId;
-  renderCandidateTracer(
-    getKnownArtifact("screening_input_view"),
-    getKnownArtifact("canonical_evidence")
-  );
+  if (state.candidateProjection && globalThis.SpiroCandidateProjection) {
+    renderCandidateWorkspace();
+  } else {
+    renderCandidateTracer(
+      getKnownArtifact("screening_input_view"),
+      getKnownArtifact("canonical_evidence")
+    );
+  }
+});
+
+document.getElementById("candidateSearch").addEventListener("input", (event) => {
+  state.candidateControls.search = event.target.value || "";
+  renderCandidateWorkspace();
+});
+
+document.getElementById("candidateStatusFilter").addEventListener("change", (event) => {
+  state.candidateControls.statuses = event.target.value === "all" ? [] : [event.target.value];
+  renderCandidateWorkspace();
+});
+
+document.getElementById("candidateSort").addEventListener("change", (event) => {
+  state.candidateControls.sort = event.target.value || "candidate-asc";
+  renderCandidateWorkspace();
 });
 
 function applyCommittedSnapshot(snapshot) {
@@ -41,6 +62,7 @@ function applyCommittedSnapshot(snapshot) {
     Object.values(snapshot.artifacts).map((artifact) => [artifact.path, artifact.payload])
   );
   state.selectedCandidateId = null;
+  state.candidateProjection = null;
 }
 
 function showLoadFailure(result) {
@@ -124,7 +146,153 @@ function renderKnownArtifacts() {
   renderModelEvaluation(modelEvaluation);
   renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
   renderReviewQueue(reviewQueue);
-  renderCandidateTracer(screeningInputView, canonicalEvidence);
+  if (globalThis.SpiroCandidateProjection) {
+    state.candidateProjection = globalThis.SpiroCandidateProjection.project(
+      state.snapshot || projectionSnapshotFromViewerState()
+    );
+    renderCandidateWorkspace();
+  } else {
+    renderCandidateTracer(screeningInputView, canonicalEvidence);
+  }
+}
+
+function projectionSnapshotFromViewerState() {
+  const artifacts = Object.create(null);
+  const availability = Object.create(null);
+  for (const metadata of state.manifest?.artifacts || []) {
+    if (!metadata?.kind || !metadata.path || !state.artifacts.has(metadata.path)) continue;
+    artifacts[metadata.kind] = {
+      kind: metadata.kind,
+      path: metadata.path,
+      metadata,
+      payload: state.artifacts.get(metadata.path),
+    };
+    availability[metadata.kind] = {kind: metadata.kind, path: metadata.path, status: "available"};
+  }
+  return {
+    manifest: state.manifest,
+    manifestMetadata: {
+      runId: state.manifest?.run_id || null,
+      schemaVersion: state.manifest?.schema_version || null,
+      generatedAt: state.manifest?.generated_at || null,
+    },
+    artifacts,
+    availability,
+    diagnostics: [],
+  };
+}
+
+function renderCandidateWorkspace() {
+  if (!state.candidateProjection || !globalThis.SpiroCandidateProjection) {
+    renderCandidateTracer(
+      getKnownArtifact("screening_input_view"),
+      getKnownArtifact("canonical_evidence")
+    );
+    return;
+  }
+  const projection = state.candidateProjection;
+  const candidates = globalThis.SpiroCandidateProjection.query(
+    projection,
+    state.candidateControls
+  );
+  const table = document.getElementById("candidateTable");
+  const detail = document.getElementById("candidateDetail");
+  const groupLabels = {
+    continue: "Continue",
+    review: "Review",
+    reject: "Reject",
+    "insufficient-data": "Insufficient data",
+  };
+  document.getElementById("candidateGroups").innerHTML = globalThis.SpiroCandidateProjection.GROUPS
+    .map((group) => `<div class="triage-group group-${escapeHtml(group)}">
+      <strong>${escapeHtml(groupLabels[group])}</strong>
+      <span>${projection.groups[group].length}</span>
+    </div>`)
+    .join("");
+  document.getElementById("candidateDiagnostics").innerHTML = projection.diagnostics.length
+    ? projection.diagnostics.map((item) => `<div class="projection-diagnostic">
+        <strong>${escapeHtml(item.code)}</strong>
+        ${escapeHtml(item.candidateId || "run")}: ${escapeHtml(item.message || "projection diagnostic")}
+      </div>`).join("")
+    : `<div class="muted">No projection diagnostics</div>`;
+
+  if (!candidates.length) {
+    state.selectedCandidateId = null;
+    table.innerHTML = `<div class="empty">No candidates match the current controls</div>`;
+    detail.innerHTML = `<div class="empty">Adjust search or status filters to inspect a candidate</div>`;
+    document.getElementById("candidateCount").textContent = "0";
+    document.getElementById("needsReviewCount").textContent = String(projection.groups.review.length);
+    return;
+  }
+  if (!candidates.some((candidate) => candidate.candidateId === state.selectedCandidateId)) {
+    state.selectedCandidateId = candidates[0].candidateId;
+  }
+  table.innerHTML = candidates.map((candidate) => `<button
+      type="button"
+      class="candidate-row candidate-${escapeHtml(candidate.group)}"
+      data-candidate-id="${escapeHtml(candidate.candidateId)}"
+      aria-pressed="${candidate.candidateId === state.selectedCandidateId}">
+      <span>${escapeHtml(candidate.candidateId)}</span>
+      <span class="gate-status gate-${escapeHtml(candidate.group)}">${escapeHtml(candidate.group)}</span>
+    </button>`).join("");
+  renderProjectedCandidateDetail(candidates.find(
+    (candidate) => candidate.candidateId === state.selectedCandidateId
+  ));
+  document.getElementById("candidateCount").textContent = String(candidates.length);
+  document.getElementById("needsReviewCount").textContent = String(projection.groups.review.length);
+}
+
+function renderProjectedCandidateDetail(candidate) {
+  const detail = document.getElementById("candidateDetail");
+  if (!candidate) {
+    detail.innerHTML = `<div class="empty">No candidate selected</div>`;
+    return;
+  }
+  const requests = candidate.recommendation?.requests || [];
+  const events = candidate.lineage?.events || [];
+  const coverage = candidate.evidenceCoverage || {};
+  detail.innerHTML = `<section>
+    <div class="item-title">
+      <span>${escapeHtml(candidate.candidateId)}</span>
+      <span class="status">${escapeHtml(candidate.group)}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["status", candidate.backendStatus],
+        ["material", candidate.identity?.materialId],
+        ["material_kind", candidate.identity?.materialKind],
+        ["use_instance", candidate.identity?.useInstanceId],
+        ["role", candidate.identity?.role],
+        ["supplier", candidate.identity?.supplierStatus],
+        ["profile", candidate.screening?.profileVersion],
+      ])}
+    </div>
+    <div class="context-block">
+      <strong>Blockers</strong>
+      <div class="chip-row">
+        ${(candidate.blockers?.codes || []).map((code) => `<span class="chip review-chip">${escapeHtml(code)}</span>`).join("") || `<span class="muted">No declared blocker codes</span>`}
+      </div>
+    </div>
+    <div class="context-block">
+      <strong>Evidence coverage</strong>
+      <div class="item-meta">evidence coverage ${escapeHtml(String(coverage.joined ?? 0))} / ${escapeHtml(String(coverage.declared ?? 0))}</div>
+    </div>
+    <div class="context-block">
+      <strong>Lineage</strong>
+      <div class="item-meta">lineage ${escapeHtml(candidate.lineage?.capability || "unavailable")}; ${events.length} explicit events</div>
+    </div>
+    <div class="context-block recommendation-context">
+      <strong>Recommendation context</strong>
+      <div class="item-meta">recommendation context only; never changes screening disposition</div>
+      ${requests.map((request) => `<div class="chip">
+        ${escapeHtml(request.request_id || "request")} score ${formatNumber(request.acquisition_score)}
+      </div>`).join("") || `<div class="muted">No recommendation joined</div>`}
+    </div>
+    ${candidate.diagnostic ? `<div class="projection-diagnostic">
+      <strong>Insufficient data</strong>
+      source ${escapeHtml(candidate.diagnostic.source || "unknown")}: ${escapeHtml(candidate.diagnostic.reason || "unknown")}
+    </div>` : ""}
+  </section>`;
 }
 
 function getKnownArtifact(kind) {

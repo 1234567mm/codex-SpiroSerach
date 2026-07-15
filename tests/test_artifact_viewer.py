@@ -13,11 +13,17 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="bundleFiles"', html)
         self.assertIn("webkitdirectory", html)
         self.assertIn('<script src="run-data-store.js"></script>', html)
+        self.assertIn('<script src="candidate-projection.js"></script>', html)
         self.assertNotIn('id="manifestFile"', html)
         self.assertNotIn('id="artifactFiles"', html)
         self.assertIn('id="artifactTable"', html)
         self.assertIn('id="candidateTable"', html)
         self.assertIn('id="candidateDetail"', html)
+        self.assertIn('id="candidateSearch"', html)
+        self.assertIn('id="candidateStatusFilter"', html)
+        self.assertIn('id="candidateSort"', html)
+        self.assertIn('id="candidateGroups"', html)
+        self.assertIn('id="candidateDiagnostics"', html)
         self.assertIn('id="recommendationList"', html)
         self.assertIn('id="timeline"', html)
         self.assertIn('id="candidateFlow"', html)
@@ -31,6 +37,316 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="cacheSummary"', html)
         self.assertIn('id="errorState"', html)
         self.assertNotIn("landing", html.casefold())
+
+    def test_candidate_projection_maps_authoritative_screening_and_fails_closed(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+function artifact(payload) { return {payload, metadata: {}}; }
+const canonical = {records: [
+  {candidate_id: "continue-c", material: {material_id: "material-c"}, use_instance: {material_id: "material-c", use_instance_id: "use-c", role: "HTL"}, energy_evidence: [{energy_evidence_id: "e-c", material_id: "material-c", use_instance_id: "use-c"}], review_items: []},
+  {candidate_id: "review-c", material: {material_id: "material-r"}, use_instance: {material_id: "material-r", use_instance_id: "use-r", role: "HTL"}, energy_evidence: [], review_items: [{review_item_id: "r-c", target_id: "use-r"}]},
+  {candidate_id: "reject-c", material: {material_id: "material-x"}, use_instance: {material_id: "material-x", use_instance_id: "use-x", role: "HTL"}, energy_evidence: [], review_items: []},
+  {candidate_id: "missing-c", material: {material_id: "material-m"}, use_instance: {material_id: "material-m", use_instance_id: "use-m"}, energy_evidence: [], review_items: []},
+  {candidate_id: "unknown-c", material: {material_id: "material-u"}, use_instance: {material_id: "material-u", use_instance_id: "use-u"}, energy_evidence: [], review_items: []},
+  {candidate_id: "invalid-c", material: {material_id: "material-i"}, use_instance: {material_id: "material-i", use_instance_id: "use-i"}, energy_evidence: [], review_items: []},
+  {candidate_id: "duplicate-c", material: {material_id: "material-d"}, use_instance: {material_id: "material-d", use_instance_id: "use-d"}, energy_evidence: [], review_items: []},
+  {candidate_id: "mapping-c", material: {material_id: "material-a"}, use_instance: {material_id: "material-b", use_instance_id: "use-map"}, energy_evidence: [], review_items: []},
+  {candidate_id: "evidence-c", material: {material_id: "material-e"}, use_instance: {material_id: "material-e", use_instance_id: "use-e"}, energy_evidence: [], review_items: []},
+  {candidate_id: "review-ref-c", material: {material_id: "material-rr"}, use_instance: {material_id: "material-rr", use_instance_id: "use-rr"}, energy_evidence: [], review_items: []},
+  {candidate_id: "review-map-c", material: {material_id: "material-rm"}, use_instance: {material_id: "material-rm", use_instance_id: "use-rm"}, energy_evidence: [], review_items: [{review_item_id: "r-wrong", target_id: "other-use"}]},
+  {candidate_id: "canonical-duplicate", material: {material_id: "material-one"}, use_instance: {material_id: "material-one", use_instance_id: "use-one"}, energy_evidence: [], review_items: []},
+  {candidate_id: "canonical-duplicate", material: {material_id: "material-two"}, use_instance: {material_id: "material-two", use_instance_id: "use-two"}, energy_evidence: [], review_items: []},
+]};
+const componentNames = ["homo_alignment", "lumo_alignment", "band_gap", "solubility", "stability", "cost", "synthesis_complexity"];
+function screeningRow(candidateId, status, options = {}) {
+  return {
+    candidate_id: candidateId,
+    status,
+    codes: options.codes || [],
+    components: componentNames.map((name) => ({
+      name, utility: 0.5, quality: 1, observed: false,
+      evidence_ids: options.evidence?.[name] || [],
+    })),
+    blocking_review_ids: options.reviewIds || [],
+    profile_version: "v12.htl_screening.v1",
+    weights: {homo_alignment: 0.3, lumo_alignment: 0.2, band_gap: 0.1, solubility: 0.1, stability: 0.15, cost: 0.1, synthesis_complexity: 0.05},
+    weighted_utility: 0.5,
+    coverage: options.coverage ?? 0.5,
+  };
+}
+const screening = {candidates: [
+  screeningRow("continue-c", "pass", {evidence: {homo_alignment: ["e-c"]}, coverage: 0.9}),
+  screeningRow("review-c", "defer", {reviewIds: ["r-c"]}),
+  screeningRow("reject-c", "reject"),
+  screeningRow("unknown-c", "maybe"),
+  {...screeningRow("invalid-c", "pass"), components: {not: "an array"}},
+  screeningRow("duplicate-c", "pass"),
+  screeningRow("duplicate-c", "reject"),
+  screeningRow("mapping-c", "pass"),
+  screeningRow("evidence-c", "pass", {evidence: {homo_alignment: ["not-there"]}}),
+  screeningRow("review-ref-c", "defer", {reviewIds: ["missing-review"]}),
+  screeningRow("review-map-c", "defer", {reviewIds: ["r-wrong"]}),
+  screeningRow("canonical-duplicate", "pass"),
+  screeningRow("screening-only", "pass"),
+]};
+const snapshot = {
+  manifest: {run_id: "run-1", artifacts: [{kind: "canonical_evidence"}, {kind: "screening_input_view"}, {kind: "recommendations"}]},
+  manifestMetadata: {runId: "run-1", schemaVersion: "manifest-v1"},
+  availability: {canonical_evidence: {status: "available"}, screening_input_view: {status: "available"}, recommendations: {status: "available"}},
+  artifacts: {
+    canonical_evidence: artifact(canonical),
+    screening_input_view: artifact(screening),
+    recommendations: artifact({requests: [
+      {candidate_id: "review-c", request_id: "request-review", acquisition_score: 99, rank: 1},
+      {candidate_id: "reject-c", request_id: "request-reject", acquisition_score: 100, rank: 0},
+    ]}),
+  },
+  diagnostics: [],
+};
+const projection = context.SpiroCandidateProjection.project(snapshot);
+const unavailableProjection = context.SpiroCandidateProjection.project({
+  manifest: {run_id: "run-unavailable", artifacts: [{kind: "canonical_evidence"}, {kind: "screening_input_view"}]},
+  manifestMetadata: {runId: "run-unavailable"},
+  availability: {canonical_evidence: {status: "available"}, screening_input_view: {status: "parse_error"}},
+  artifacts: {canonical_evidence: artifact({records: [canonical.records[0]]})},
+  diagnostics: [],
+});
+const invalidProjection = context.SpiroCandidateProjection.project({
+  manifest: {run_id: "run-invalid", artifacts: [{kind: "canonical_evidence"}, {kind: "screening_input_view"}]},
+  manifestMetadata: {runId: "run-invalid"},
+  availability: {canonical_evidence: {status: "available"}, screening_input_view: {status: "available"}},
+  artifacts: {canonical_evidence: artifact({records: [canonical.records[0]]}), screening_input_view: artifact({candidates: {bad: true}})},
+  diagnostics: [],
+});
+snapshot.artifacts.screening_input_view.payload.candidates[0].status = "reject";
+let mutationBlocked = false;
+try { projection.groups.continue[0].candidateId = "mutated"; } catch (error) { mutationBlocked = true; }
+const all = Object.values(projection.groups).flat();
+const byId = Object.fromEntries(all.map((candidate) => [candidate.candidateId, candidate]));
+process.stdout.write(JSON.stringify({
+  groupIds: Object.fromEntries(Object.entries(projection.groups).map(([key, value]) => [key, value.map((candidate) => candidate.candidateId)])),
+  diagnostics: projection.diagnostics.map((item) => item.code),
+  reasons: Object.fromEntries(all.map((candidate) => [candidate.candidateId, candidate.diagnostic?.reason || null])),
+  continueBackendStatus: byId["continue-c"].backendStatus,
+  reviewBackendStatus: byId["review-c"].backendStatus,
+  rejectBackendStatus: byId["reject-c"].backendStatus,
+  reviewRecommendation: byId["review-c"].recommendation.requests[0],
+  rejectRecommendation: byId["reject-c"].recommendation.requests[0],
+  continueMaterial: byId["continue-c"].identity.materialId,
+  evidenceCoverage: byId["continue-c"].evidenceCoverage,
+  frozen: Object.isFrozen(projection) && Object.isFrozen(projection.groups.continue[0]),
+  mutationBlocked,
+  unavailableGroup: unavailableProjection.groups["insufficient-data"].map((candidate) => candidate.candidateId),
+  unavailableReason: unavailableProjection.groups["insufficient-data"][0].diagnostic,
+  unavailableCapability: unavailableProjection.capabilities.screening_input_view.status,
+  invalidGroup: invalidProjection.groups["insufficient-data"].map((candidate) => candidate.candidateId),
+  invalidCodes: invalidProjection.diagnostics.map((item) => item.code),
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/candidate-projection.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        projected = json.loads(result.stdout)
+        self.assertEqual(projected["groupIds"]["continue"], ["continue-c"])
+        self.assertEqual(projected["groupIds"]["review"], ["review-c"])
+        self.assertEqual(projected["groupIds"]["reject"], ["reject-c"])
+        self.assertCountEqual(
+            projected["groupIds"]["insufficient-data"],
+            ["missing-c", "unknown-c", "invalid-c", "duplicate-c", "mapping-c", "evidence-c", "review-ref-c", "review-map-c", "canonical-duplicate"],
+        )
+        self.assertEqual(projected["continueBackendStatus"], "pass")
+        self.assertEqual(projected["reviewBackendStatus"], "defer")
+        self.assertEqual(projected["rejectBackendStatus"], "reject")
+        self.assertEqual(projected["continueMaterial"], "material-c")
+        self.assertEqual(projected["evidenceCoverage"]["joined"], 1)
+        self.assertEqual(projected["reviewRecommendation"]["acquisition_score"], 99)
+        self.assertEqual(projected["rejectRecommendation"]["acquisition_score"], 100)
+        self.assertIn("screening_only_identity_contradiction", projected["diagnostics"])
+        self.assertIn("duplicate_screening_candidate_id", projected["diagnostics"])
+        self.assertIn("screening_row_invalid", projected["diagnostics"])
+        self.assertIn("duplicate_canonical_candidate_id", projected["diagnostics"])
+        self.assertIn("canonical_mapping_conflict", projected["diagnostics"])
+        self.assertIn("unjoinable_evidence_reference", projected["diagnostics"])
+        self.assertIn("unjoinable_review_reference", projected["diagnostics"])
+        self.assertTrue(projected["frozen"])
+        self.assertEqual(projected["unavailableGroup"], ["continue-c"])
+        self.assertEqual(projected["unavailableCapability"], "parse_error")
+        self.assertIn("screening_row_missing", projected["unavailableReason"]["codes"])
+        self.assertEqual(projected["invalidGroup"], ["continue-c"])
+        self.assertIn("screening_unavailable_or_invalid", projected["invalidCodes"])
+
+    def test_candidate_projection_query_is_deterministic_and_non_mutating(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+const candidates = [
+  {candidateId: "beta", group: "review", backendStatus: "defer", identity: {materialId: "mat-b", role: "HTL"}, evidenceCoverage: {ratio: 0.5}},
+  {candidateId: "Alpha", group: "continue", backendStatus: "pass", identity: {materialId: "mat-a", role: "ETL"}, evidenceCoverage: {ratio: 1}},
+  {candidateId: "gamma", group: "reject", backendStatus: "reject", identity: {materialId: "mat-g", role: "HTL"}, evidenceCoverage: {ratio: 0}},
+];
+const projection = {groups: {continue: [candidates[1]], review: [candidates[0]], reject: [candidates[2]], "insufficient-data": []}};
+const first = context.SpiroCandidateProjection.query(projection, {search: "htl", statuses: ["review", "reject"], sort: "candidate-desc"});
+const second = context.SpiroCandidateProjection.query(projection, {search: "htl", statuses: ["review", "reject"], sort: "candidate-desc"});
+const empty = context.SpiroCandidateProjection.query(projection, {search: "no-match", statuses: [], sort: "candidate-asc"});
+process.stdout.write(JSON.stringify({
+  first: first.map((candidate) => candidate.candidateId),
+  second: second.map((candidate) => candidate.candidateId),
+  empty: empty.length,
+  original: projection.groups.review[0].candidateId,
+  inputFrozen: Object.isFrozen(projection.groups.review[0]),
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/candidate-projection.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        queried = json.loads(result.stdout)
+        self.assertEqual(queried["first"], ["gamma", "beta"])
+        self.assertEqual(queried["second"], queried["first"])
+        self.assertEqual(queried["empty"], 0)
+        self.assertEqual(queried["original"], "beta")
+        self.assertFalse(queried["inputFrozen"])
+
+    def test_candidate_workspace_renders_groups_controls_selection_and_empty_state(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for workspace test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      value: id === "candidateStatusFilter" ? "all" : id === "candidateSort" ? "candidate-asc" : "",
+      style: {},
+      dataset: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+const context = {
+  console, JSON, Map, Set, Object, Array, String, Number, Error,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
+
+function candidate(candidateId, group, backendStatus, materialId, ratio) {
+  return {
+    candidateId, group, backendStatus,
+    identity: {materialId, useInstanceId: `use-${candidateId}`, role: "HTL", materialKind: "small_molecule", supplierStatus: "available"},
+    blockers: {codes: group === "review" ? ["NEEDS_REVIEW"] : [], reviewIds: [], missingReviewIds: []},
+    evidenceCoverage: {declared: 2, joined: ratio * 2, ratio, evidenceIds: [], missingEvidenceIds: []},
+    screening: {coverage: ratio, weightedUtility: 0.9, profileVersion: "profile-v1"},
+    recommendation: {capability: "available", requests: [{request_id: `request-${candidateId}`, acquisition_score: 0.99}]},
+    lineage: {capability: "available", events: [{eventId: `event-${candidateId}`, eventType: "screened", provider: "fixture", outcome: "ok"}]},
+    diagnostic: group === "insufficient-data" ? {source: "screening_input_view", reason: "missing row", codes: ["screening_row_missing"]} : null,
+  };
+}
+context.workspaceProjection = {
+  capabilities: {scoring_view: {status: "available"}, review_queue: {status: "available"}, recommendations: {status: "available"}, agent_trace: {status: "available"}},
+  diagnostics: [{code: "screening_only_identity_contradiction", candidateId: "outside", message: "not actionable", source: "screening_input_view"}],
+  groups: {
+    continue: [candidate("Alpha", "continue", "pass", "material-a", 1), candidate("unsafe-<script>alert(1)</script>", "continue", "pass", "material-safe", 1)],
+    review: [candidate("beta", "review", "defer", "material-b", 0.5)],
+    reject: [candidate("gamma", "reject", "reject", "material-g", 0)],
+    "insufficient-data": [candidate("delta", "insufficient-data", null, "material-d", 0)],
+  },
+};
+vm.runInContext("state.candidateProjection = workspaceProjection; renderCandidateWorkspace();", context);
+const initialGroups = element("candidateGroups").innerHTML;
+const initialTable = element("candidateTable").innerHTML;
+const initialDetail = element("candidateDetail").innerHTML;
+context.selected = vm.runInContext("state.selectedCandidateId", context);
+
+vm.runInContext(`
+state.selectedCandidateId = "beta";
+state.candidateControls = {search: "", statuses: ["review"], sort: "candidate-asc"};
+renderCandidateWorkspace();
+`, context);
+const preservedSelection = vm.runInContext("state.selectedCandidateId", context);
+
+vm.runInContext(`
+state.candidateControls = {search: "no-match", statuses: [], sort: "candidate-asc"};
+renderCandidateWorkspace();
+`, context);
+const emptyTable = element("candidateTable").innerHTML;
+const emptyDetail = element("candidateDetail").innerHTML;
+
+process.stdout.write(JSON.stringify({
+  initialGroups,
+  initialTable,
+  initialDetail,
+  selected: context.selected,
+  preservedSelection,
+  emptyTable,
+  emptyDetail,
+  diagnostics: element("candidateDiagnostics").innerHTML,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/candidate-projection.js",
+                    "frontend/artifact-viewer/viewer.js",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        rendered = json.loads(result.stdout)
+        for label in ["Continue", "Review", "Reject", "Insufficient data"]:
+            self.assertIn(label, rendered["initialGroups"])
+        self.assertIn("Alpha", rendered["initialTable"])
+        self.assertIn("recommendation context", rendered["initialDetail"])
+        self.assertIn("evidence coverage", rendered["initialDetail"])
+        self.assertIn("lineage", rendered["initialDetail"])
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered["initialTable"])
+        self.assertNotIn("<script>alert(1)</script>", rendered["initialTable"])
+        self.assertEqual(rendered["selected"], "Alpha")
+        self.assertEqual(rendered["preservedSelection"], "beta")
+        self.assertIn("No candidates match", rendered["emptyTable"])
+        self.assertIn("Adjust search or status filters", rendered["emptyDetail"])
+        self.assertIn("screening_only_identity_contradiction", rendered["diagnostics"])
 
     def test_run_data_store_commits_exact_manifest_bundle_atomically(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
@@ -640,6 +956,7 @@ const context = {
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
 vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[4], "utf8"), context);
 
 function selectedFile(relativePath, text) {
   return {
@@ -676,7 +993,7 @@ async function main() {
     error: element("errorState").textContent,
   };
 
-  const files = fixtureFiles(process.argv[4]);
+  const files = fixtureFiles(process.argv[5]);
   await load({target: {files}});
   const committed = {
     runSummary: element("runSummary").textContent,
@@ -730,6 +1047,7 @@ main().catch((error) => {
                     "node",
                     str(runner_path),
                     "frontend/artifact-viewer/run-data-store.js",
+                    "frontend/artifact-viewer/candidate-projection.js",
                     "frontend/artifact-viewer/viewer.js",
                     "tests/fixtures/artifact_viewer/v13_algorithm_run",
                 ],
