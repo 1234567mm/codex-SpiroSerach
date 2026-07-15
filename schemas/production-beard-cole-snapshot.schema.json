@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/production-beard-cole-snapshot.schema.json",
+  "title": "ProductionBeardColeSnapshot",
+  "$comment": "V22 production snapshot contract. Fixture/source-shaped data must not be cited as scientific closure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "source_ledger_id",
+    "dataset_kind",
+    "scientific_closure_status",
+    "scientific_closure_claimed",
+    "records"
+  ],
+  "properties": {
+    "schema_version": { "const": "v22.production_beard_cole_snapshot.v1" },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "source_ledger_id": { "type": "string", "minLength": 1 },
+    "dataset_kind": { "enum": ["licensed_production", "fixture_source_shaped"] },
+    "scientific_closure_status": { "enum": ["fixture_only", "blocked", "failed", "passed"] },
+    "scientific_closure_claimed": { "const": false },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/record" }
+    }
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "candidate_id",
+        "material_id",
+        "use_instance_id",
+        "source_id",
+        "license_id",
+        "identity",
+        "energy_evidence",
+        "lineage"
+      ],
+      "properties": {
+        "record_id": { "type": "string", "minLength": 1 },
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "material_id": { "type": "string", "minLength": 1 },
+        "use_instance_id": { "type": "string", "minLength": 1 },
+        "source_id": { "type": "string", "minLength": 1 },
+        "license_id": { "type": "string", "minLength": 1 },
+        "identity": { "$ref": "#/$defs/identity" },
+        "energy_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/energy_evidence" }
+        },
+        "lineage": { "$ref": "#/$defs/lineage" }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stable_identity_id", "identity_review_state"],
+      "properties": {
+        "stable_identity_id": { "type": "string", "minLength": 1 },
+        "identity_review_state": { "enum": ["accepted", "blocked", "proposed"] }
+      }
+    },
+    "energy_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "property_name", "value_ev", "unit", "method", "reference_scale"],
+      "properties": {
+        "evidence_id": { "type": "string", "minLength": 1 },
+        "property_name": { "enum": ["homo", "lumo", "band_gap"] },
+        "value_ev": { "type": "number" },
+        "unit": { "const": "eV" },
+        "method": { "type": "string", "minLength": 1 },
+        "reference_scale": { "enum": ["vacuum", "ferrocene", "sce", "ag_agcl"] }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_ledger_id",
+        "provider_response_id",
+        "raw_hash",
+        "retrieved_at",
+        "source_artifact_kinds"
+      ],
+      "properties": {
+        "source_ledger_id": { "type": "string", "minLength": 1 },
+        "provider_response_id": { "type": "string", "minLength": 1 },
+        "raw_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "source_artifact_kinds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

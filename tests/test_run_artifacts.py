@@ -160,6 +160,14 @@ class RunArtifactContractTests(unittest.TestCase):
                 "paper_vault_summary",
                 "paper_cross_ref_report",
                 "obsidian_notes",
+                "production_beard_cole_snapshot",
+                "scientific_source_ledger",
+                "v22_quality_report",
+                "v22_zero_leakage_report",
+                "v22_independent_snapshot_report",
+                "v22_model_activation_report",
+                "v22_scientific_closure_report",
+                "v22_literature_benchmark_report",
             },
         )
 

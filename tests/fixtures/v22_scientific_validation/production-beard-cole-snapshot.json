@@ -1,0 +1,41 @@
+{
+  "schema_version": "v22.production_beard_cole_snapshot.v1",
+  "snapshot_id": "v22-beard-cole-fixture",
+  "source_ledger_id": "v22-source-ledger-fixture",
+  "dataset_kind": "fixture_source_shaped",
+  "scientific_closure_status": "fixture_only",
+  "scientific_closure_claimed": false,
+  "records": [
+    {
+      "record_id": "beard-cole-fixture-record-001",
+      "candidate_id": "candidate-fixture-001",
+      "material_id": "material-fixture-001",
+      "use_instance_id": "use-fixture-001",
+      "source_id": "beard-cole-fixture-source",
+      "license_id": "fixture-license",
+      "identity": {
+        "stable_identity_id": "stable-fixture-001",
+        "identity_review_state": "accepted"
+      },
+      "energy_evidence": [
+        {
+          "evidence_id": "energy-fixture-001",
+          "property_name": "homo",
+          "value_ev": -5.1,
+          "unit": "eV",
+          "method": "fixture-dft",
+          "reference_scale": "vacuum"
+        }
+      ],
+      "lineage": {
+        "source_ledger_id": "v22-source-ledger-fixture",
+        "provider_response_id": "provider-response-fixture-001",
+        "raw_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "retrieved_at": "2026-07-15T10:00:00Z",
+        "source_artifact_kinds": [
+          "provider_cache"
+        ]
+      }
+    }
+  ]
+}

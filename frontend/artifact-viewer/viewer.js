@@ -230,6 +230,8 @@ function renderKnownArtifacts() {
   const scoringView = getKnownArtifact("scoring_view");
   const screeningInputView = getKnownArtifact("screening_input_view");
   const modelEvaluation = getKnownArtifact("model_evaluation");
+  const v22ScientificClosure = getKnownArtifact("v22_scientific_closure_report");
+  const v22ModelActivation = getKnownArtifact("v22_model_activation_report");
   const reviewEvents = getKnownArtifact("review_events") || [];
   const reviewSummary = getKnownArtifact("review_summary");
   const recomputeMarkers = getKnownArtifact("recompute_markers") || [];
@@ -250,6 +252,7 @@ function renderKnownArtifacts() {
   renderScoringView(scoringView);
   renderScreeningEligibility(screeningInputView);
   renderModelEvaluation(modelEvaluation);
+  renderV22ScientificClosure(v22ScientificClosure, v22ModelActivation);
   renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
   renderPaperDiagnostics(
     sourceAssets,
@@ -1255,6 +1258,64 @@ function renderModelEvaluation(modelEvaluation) {
   </section>`;
 }
 
+function renderV22ScientificClosure(closureReport, activationReport) {
+  const list = document.getElementById("v22ScientificClosureList");
+  const status = closureReport?.closure_gate_status || "unavailable";
+  document.getElementById("v22ScientificClosureStatus").textContent = status;
+  if (!closureReport && !activationReport) {
+    list.innerHTML = `<div class="empty">No V22 scientific closure reports loaded</div>`;
+    return;
+  }
+  const gates = closureReport?.gates || [];
+  const gateHtml = gates.map((gate) => `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(gate.gate_id || "gate")}</span>
+      <span class="gate-status gate-${escapeHtml(gate.status || "unavailable")}">${escapeHtml(gate.status || "unavailable")}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["type", gate.decision_type],
+        ["impact", gate.downstream_impact],
+        ["artifacts", (gate.source_artifacts || []).map((artifact) => artifact.kind).join(", ")],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${(gate.reason_codes || []).map((reason) => `<span class="chip review-chip">${escapeHtml(reason)}</span>`).join("") || `<span class="chip">pass</span>`}
+    </div>
+  </section>`).join("");
+  const activationReasons = activationReport?.activation_reasons || [];
+  const activationHtml = activationReport ? `<section class="flow-item">
+    <div class="item-title">
+      <span>model activation</span>
+      <span class="gate-status gate-${escapeHtml(activationReport.activation_status || "unavailable")}">${escapeHtml(activationReport.activation_status || "unavailable")}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["model", activationReport.model_version],
+        ["objective", activationReport.objective_name],
+        ["v24", activationReport.disabled_model_state?.may_rank_candidates ? "may rank" : "disabled"],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${activationReasons.map((reason) => `<span class="chip review-chip">${escapeHtml(reason)}</span>`).join("") || `<span class="chip">activation enabled</span>`}
+    </div>
+  </section>` : "";
+  const summaryHtml = closureReport ? `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(closureReport.closure_id || "v22 closure")}</span>
+      <span class="gate-status gate-${escapeHtml(status)}">${escapeHtml(status)}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["software", closureReport.validation_scope?.software_validation?.status],
+        ["scientific", closureReport.validation_scope?.scientific_validation?.status],
+        ["impact", closureReport.downstream_impact],
+      ])}
+    </div>
+  </section>` : "";
+  list.innerHTML = [summaryHtml, gateHtml, activationHtml].filter(Boolean).join("");
+}
+
 function renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers) {
   const list = document.getElementById("reviewClosureList");
   const events = reviewEvents || [];
@@ -1602,6 +1663,7 @@ renderCanonicalEvidence(null);
 renderScoringView(null);
 renderScreeningEligibility(null);
 renderModelEvaluation(null);
+renderV22ScientificClosure(null, null);
 renderReviewClosure([], null, []);
 renderPaperDiagnostics([], [], null, null, null);
 renderProjectEvolution();

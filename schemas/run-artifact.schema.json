@@ -49,6 +49,7 @@
         "paper_cross_ref_report",
         "paper_vault_summary",
         "posterior",
+        "production_beard_cole_snapshot",
         "provider_cache",
         "provider_cache_index",
         "provider_capabilities",
@@ -60,7 +61,14 @@
         "scoring_view",
         "screening_input_view",
         "source_assets",
-        "training_snapshot"
+        "scientific_source_ledger",
+        "training_snapshot",
+        "v22_independent_snapshot_report",
+        "v22_literature_benchmark_report",
+        "v22_model_activation_report",
+        "v22_quality_report",
+        "v22_scientific_closure_report",
+        "v22_zero_leakage_report"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },

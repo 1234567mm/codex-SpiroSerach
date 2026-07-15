@@ -1,0 +1,53 @@
+{
+  "schema_version": "v6.run_manifest.v1",
+  "run_id": "v22-scientific-validation-fixture",
+  "input_hash": "sha256:v22-scientific-validation-fixture",
+  "generated_at": "2026-07-15T10:00:00+00:00",
+  "producer_version": "spirosearch-v22",
+  "artifacts": [
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v22-scientific-validation-fixture",
+      "input_hash": "sha256:v22-scientific-validation-fixture",
+      "generated_at": "2026-07-15T10:00:00+00:00",
+      "producer_version": "spirosearch-v22",
+      "path": "scientific-source-ledger.json",
+      "kind": "scientific_source_ledger",
+      "format": "json",
+      "schema_ref": "schemas/scientific-source-ledger.schema.json",
+      "sha256": "5adb693e03c5e36dc34d7e7311a8e264a05d3ed2bf6699d79869b639f1b52960",
+      "bytes": 701,
+      "record_count": null,
+      "join_keys": [
+        "source_id",
+        "license_id",
+        "provider_response_id"
+      ],
+      "depends_on": []
+    },
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v22-scientific-validation-fixture",
+      "input_hash": "sha256:v22-scientific-validation-fixture",
+      "generated_at": "2026-07-15T10:00:00+00:00",
+      "producer_version": "spirosearch-v22",
+      "path": "production-beard-cole-snapshot.json",
+      "kind": "production_beard_cole_snapshot",
+      "format": "json",
+      "schema_ref": "schemas/production-beard-cole-snapshot.schema.json",
+      "sha256": "46e01bec56bbcfe6441bbd0228b5427164dbdb67ee04f5ce8cf0e3a8a2c96fda",
+      "bytes": 1346,
+      "record_count": null,
+      "join_keys": [
+        "snapshot_id",
+        "record_id",
+        "candidate_id",
+        "material_id",
+        "source_id"
+      ],
+      "depends_on": [
+        "scientific_source_ledger"
+      ]
+    }
+  ]
+}

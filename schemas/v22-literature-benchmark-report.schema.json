@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v22-literature-benchmark-report.schema.json",
+  "title": "V22LiteratureBenchmarkReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "benchmark_id", "lane", "reported_separately_from", "scientific_closure_claimed", "model_version", "prompt_version", "quality", "cost", "latency", "failure_modes", "review", "htl_pilot", "downstream_impact"],
+  "properties": {
+    "schema_version": { "const": "v22.literature_benchmark_report.v1" },
+    "benchmark_id": { "type": "string", "minLength": 1 },
+    "lane": { "const": "engineering_literature_extraction_support" },
+    "reported_separately_from": { "const": "v22_scientific_closure_report" },
+    "scientific_closure_claimed": { "const": false },
+    "model_version": { "type": "string", "minLength": 1 },
+    "prompt_version": { "type": "string", "minLength": 1 },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold_count", "prediction_count", "micro_precision", "micro_recall", "micro_f1", "pce_mae", "gate_status"],
+      "properties": {
+        "gold_count": { "type": "integer", "minimum": 0 },
+        "prediction_count": { "type": "integer", "minimum": 0 },
+        "micro_precision": { "type": "number", "minimum": 0, "maximum": 1 },
+        "micro_recall": { "type": "number", "minimum": 0, "maximum": 1 },
+        "micro_f1": { "type": "number", "minimum": 0, "maximum": 1 },
+        "pce_mae": { "type": ["number", "null"], "minimum": 0 },
+        "gate_status": { "enum": ["eligible", "blocked"] }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_usd"],
+      "properties": { "total_usd": { "type": "number", "minimum": 0 } }
+    },
+    "latency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p50_ms"],
+      "properties": { "p50_ms": { "type": "number", "minimum": 0 } }
+    },
+    "failure_modes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason_code", "count"],
+        "properties": {
+          "reason_code": { "type": "string", "minLength": 1 },
+          "count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["throughput_per_hour", "closed_fulltext_policy", "manual_tasks"],
+      "properties": {
+        "throughput_per_hour": { "type": "number", "minimum": 0 },
+        "closed_fulltext_policy": { "const": "manual_review_task" },
+        "manual_tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task_id", "reason_code"],
+            "properties": {
+              "task_id": { "type": "string", "minLength": 1 },
+              "reason_code": { "type": "string", "minLength": 1 },
+              "doi": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "htl_pilot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "blockers"],
+      "properties": {
+        "status": { "enum": ["parked", "ready"] },
+        "blockers": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "downstream_impact": { "const": "does_not_enable_scientific_closure" }
+  }
+}

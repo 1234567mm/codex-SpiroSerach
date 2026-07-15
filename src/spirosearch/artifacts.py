@@ -41,6 +41,14 @@ V4_ARTIFACT_KINDS = {
     "paper_vault_summary",
     "paper_cross_ref_report",
     "obsidian_notes",
+    "production_beard_cole_snapshot",
+    "scientific_source_ledger",
+    "v22_quality_report",
+    "v22_zero_leakage_report",
+    "v22_independent_snapshot_report",
+    "v22_model_activation_report",
+    "v22_literature_benchmark_report",
+    "v22_scientific_closure_report",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -199,6 +207,52 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/obsidian-notes.schema.json",
         "join_keys": ("doi", "note_path"),
         "depends_on": ("paper_vault_summary", "literature_claims"),
+    },
+    "scientific_source_ledger": {
+        "schema_ref": "schemas/scientific-source-ledger.schema.json",
+        "join_keys": ("source_id", "license_id", "provider_response_id"),
+        "depends_on": (),
+    },
+    "production_beard_cole_snapshot": {
+        "schema_ref": "schemas/production-beard-cole-snapshot.schema.json",
+        "join_keys": ("snapshot_id", "record_id", "candidate_id", "material_id", "source_id"),
+        "depends_on": ("scientific_source_ledger",),
+    },
+    "v22_quality_report": {
+        "schema_ref": "schemas/v22-quality-report.schema.json",
+        "join_keys": ("snapshot_id", "record_id", "reason_code"),
+        "depends_on": ("production_beard_cole_snapshot",),
+    },
+    "v22_zero_leakage_report": {
+        "schema_ref": "schemas/v22-zero-leakage-report.schema.json",
+        "join_keys": ("snapshot_id", "dimension", "value"),
+        "depends_on": ("production_beard_cole_snapshot",),
+    },
+    "v22_independent_snapshot_report": {
+        "schema_ref": "schemas/v22-independent-snapshot-report.schema.json",
+        "join_keys": ("production_snapshot_id", "independent_snapshot_id", "record_id", "dimension"),
+        "depends_on": ("production_beard_cole_snapshot", "scientific_source_ledger"),
+    },
+    "v22_model_activation_report": {
+        "schema_ref": "schemas/v22-model-activation-report.schema.json",
+        "join_keys": ("snapshot_id", "model_version", "reason_code"),
+        "depends_on": ("model_evaluation", "v22_independent_snapshot_report"),
+    },
+    "v22_literature_benchmark_report": {
+        "schema_ref": "schemas/v22-literature-benchmark-report.schema.json",
+        "join_keys": ("benchmark_id", "model_version", "prompt_version", "reason_code"),
+        "depends_on": ("extraction_evaluation",),
+    },
+    "v22_scientific_closure_report": {
+        "schema_ref": "schemas/v22-scientific-closure-report.schema.json",
+        "join_keys": ("closure_id", "gate_id", "artifact_kind"),
+        "depends_on": (
+            "production_beard_cole_snapshot",
+            "v22_quality_report",
+            "v22_zero_leakage_report",
+            "v22_independent_snapshot_report",
+            "v22_model_activation_report",
+        ),
     },
 }
 

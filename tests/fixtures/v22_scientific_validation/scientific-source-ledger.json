@@ -1,0 +1,26 @@
+{
+  "schema_version": "v22.scientific_source_ledger.v1",
+  "ledger_id": "v22-source-ledger-fixture",
+  "sources": [
+    {
+      "source_id": "beard-cole-fixture-source",
+      "source_name": "Beard/Cole source-shaped fixture",
+      "source_kind": "fixture",
+      "license": {
+        "license_id": "fixture-license",
+        "status": "licensed",
+        "usage_scope": "repository test fixture only"
+      },
+      "provider_response_ids": [
+        "provider-response-fixture-001"
+      ],
+      "lineage": {
+        "generated_by": "v22_contract_fixture",
+        "retrieved_at": "2026-07-15T10:00:00Z",
+        "source_artifact_kinds": [
+          "provider_cache"
+        ]
+      }
+    }
+  ]
+}

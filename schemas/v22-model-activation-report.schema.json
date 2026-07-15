@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v22-model-activation-report.schema.json",
+  "title": "V22ModelActivationReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "model_version", "objective_name", "closure_gate_status", "activation_status", "activation_reasons", "disabled_model_state", "grouped_evaluation", "independent_validation"],
+  "properties": {
+    "schema_version": { "const": "v22.model_activation_report.v1" },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "model_version": { "type": "string", "minLength": 1 },
+    "objective_name": { "type": "string", "minLength": 1 },
+    "closure_gate_status": { "enum": ["pass", "blocked"] },
+    "activation_status": { "enum": ["eligible", "disabled"] },
+    "activation_reasons": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "disabled_model_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "may_rank_candidates", "downstream_consumer"],
+      "properties": {
+        "status": { "enum": ["eligible", "disabled"] },
+        "may_rank_candidates": { "type": "boolean" },
+        "downstream_consumer": { "const": "v24_admission" }
+      }
+    },
+    "grouped_evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["split_policy", "surrogate_type", "feature_count", "metrics", "baselines", "calibration", "replay_status", "folds"],
+      "properties": {
+        "split_policy": { "const": "fold_id_grouped_cross_validation" },
+        "surrogate_type": { "type": "string" },
+        "feature_count": { "type": "integer", "minimum": 0 },
+        "metrics": { "type": "object" },
+        "baselines": { "type": "object" },
+        "calibration": { "type": "object" },
+        "replay_status": { "type": "string" },
+        "folds": { "type": "array", "minItems": 2 }
+      }
+    },
+    "independent_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_status", "retained_record_count", "minimum_retained_records"],
+      "properties": {
+        "report_status": { "enum": ["pass", "blocked"] },
+        "retained_record_count": { "type": "integer", "minimum": 0 },
+        "minimum_retained_records": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

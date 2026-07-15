@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v22-scientific-closure-report.schema.json",
+  "title": "V22ScientificClosureReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "closure_id", "closure_gate_status", "validation_scope", "claims", "gates", "downstream_impact"],
+  "properties": {
+    "schema_version": { "const": "v22.scientific_closure_report.v1" },
+    "closure_id": { "type": "string", "minLength": 1 },
+    "closure_gate_status": { "enum": ["pass", "blocked"] },
+    "validation_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["software_validation", "scientific_validation"],
+      "properties": {
+        "software_validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "meaning"],
+          "properties": {
+            "status": { "enum": ["pass", "blocked"] },
+            "meaning": { "const": "schemas_artifacts_and_readers_are_software_validated" }
+          }
+        },
+        "scientific_validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "meaning"],
+          "properties": {
+            "status": { "enum": ["pass", "blocked"] },
+            "meaning": { "const": "scientific_claims_are_limited_to_accepted_v22_datasets" }
+          }
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scientific_validation_claimed", "model_activation_claimed", "external_validation_claimed", "accepted_dataset_scope"],
+      "properties": {
+        "scientific_validation_claimed": { "type": "boolean" },
+        "model_activation_claimed": { "type": "boolean" },
+        "external_validation_claimed": { "const": false },
+        "accepted_dataset_scope": {
+          "enum": ["production_snapshot", "production_and_retained_independent_snapshot"]
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate_id", "decision_type", "status", "source_artifacts", "reason_codes", "downstream_impact"],
+        "properties": {
+          "gate_id": { "type": "string", "minLength": 1 },
+          "decision_type": { "enum": ["software", "scientific"] },
+          "status": { "enum": ["pass", "blocked"] },
+          "source_artifacts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "path"],
+              "properties": {
+                "kind": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 },
+                "sha256": { "type": "string" }
+              }
+            }
+          },
+          "reason_codes": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "downstream_impact": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "downstream_impact": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "closure_gate_status": { "const": "blocked" } },
+        "required": ["closure_gate_status"]
+      },
+      "then": {
+        "properties": {
+          "claims": {
+            "properties": {
+              "scientific_validation_claimed": { "const": false },
+              "model_activation_claimed": { "const": false }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
