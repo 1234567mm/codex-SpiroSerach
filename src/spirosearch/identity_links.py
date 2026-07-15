@@ -5,6 +5,7 @@ from typing import Any, Iterable, Mapping
 
 
 IDENTITY_LINK_PROPOSAL_SCHEMA_VERSION = "v21.identity_link_proposals.v1"
+IDENTITY_REVIEW_DIAGNOSTICS_SCHEMA_VERSION = "v21.identity_review_diagnostics.v1"
 
 
 def normalize_doi(value: str | None) -> str | None:
@@ -64,6 +65,49 @@ def build_candidate_evidence_link_proposals(
     }
 
 
+def build_identity_review_diagnostics(
+    registry: Mapping[str, Any],
+    link_records: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    links = [dict(link) for link in link_records]
+    accepted_conflict_keys = _accepted_conflict_keys(links)
+    displayable_links: list[dict[str, Any]] = []
+    link_diagnostics: list[dict[str, Any]] = []
+
+    for link in sorted(links, key=_link_sort_key):
+        state = str(link.get("reviewer_state", ""))
+        conflict_key = _accepted_conflict_key(link)
+        if state == "accepted" and conflict_key not in accepted_conflict_keys:
+            displayable_links.append(dict(link))
+            continue
+        reason_code = (
+            "conflicting_accepted_identity_link"
+            if state == "accepted" and conflict_key in accepted_conflict_keys
+            else f"identity_link_{state or 'unknown'}"
+        )
+        link_diagnostics.append(
+            {
+                "link_id": str(link.get("link_id", "")),
+                "candidate_id": str(link.get("candidate_id", "")),
+                "evidence_id": str(link.get("evidence_id", "")),
+                "reviewer_state": state or "unknown",
+                "reason_codes": [reason_code],
+                "blocking_review_ids": _string_list(link.get("blocking_review_ids", [])),
+            }
+        )
+
+    candidate_diagnostics = [_candidate_diagnostic(record) for record in registry.get("records", []) if isinstance(record, Mapping)]
+    candidate_diagnostics.sort(key=lambda item: str(item["candidate_id"]))
+    link_diagnostics.sort(key=lambda item: (str(item["link_id"]), str(item["evidence_id"])))
+    displayable_links.sort(key=_link_sort_key)
+    return {
+        "schema_version": IDENTITY_REVIEW_DIAGNOSTICS_SCHEMA_VERSION,
+        "candidate_diagnostics": candidate_diagnostics,
+        "link_diagnostics": link_diagnostics,
+        "displayable_links": displayable_links,
+    }
+
+
 def _identity_index(registry: Mapping[str, Any]) -> dict[tuple[str, str], list[Mapping[str, Any]]]:
     index: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for record in registry.get("records", []):
@@ -83,6 +127,43 @@ def _identity_index(registry: Mapping[str, Any]) -> dict[tuple[str, str], list[M
             if isinstance(use_instance_id, str) and use_instance_id:
                 index.setdefault(("use_instance_id", use_instance_id), []).append(record)
     return index
+
+
+def _candidate_diagnostic(record: Mapping[str, Any]) -> dict[str, Any]:
+    state = str(record.get("reviewer_state", ""))
+    reason_codes = [] if state == "accepted" else [f"identity_state_{state or 'unknown'}"]
+    return {
+        "candidate_id": str(record.get("candidate_id", "")),
+        "stable_identity_id": str(record.get("stable_identity_id", "")),
+        "reviewer_state": state or "unknown",
+        "reason_codes": reason_codes,
+        "blocking_review_ids": _string_list(record.get("blocking_review_ids", [])),
+        "identity_history": [dict(event) for event in record.get("identity_history", []) if isinstance(event, Mapping)],
+    }
+
+
+def _accepted_conflict_keys(links: list[Mapping[str, Any]]) -> set[tuple[str, str]]:
+    accepted_counts: dict[tuple[str, str], int] = {}
+    for link in links:
+        if link.get("reviewer_state") != "accepted":
+            continue
+        key = _accepted_conflict_key(link)
+        accepted_counts[key] = accepted_counts.get(key, 0) + 1
+    return {key for key, count in accepted_counts.items() if count > 1}
+
+
+def _accepted_conflict_key(link: Mapping[str, Any]) -> tuple[str, str]:
+    return (str(link.get("candidate_id", "")), str(link.get("evidence_id", "")))
+
+
+def _link_sort_key(link: Mapping[str, Any]) -> tuple[str, str, str]:
+    return (str(link.get("candidate_id", "")), str(link.get("evidence_id", "")), str(link.get("link_id", "")))
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _proposal_bases(evidence: Mapping[str, Any]) -> list[dict[str, str]]:
