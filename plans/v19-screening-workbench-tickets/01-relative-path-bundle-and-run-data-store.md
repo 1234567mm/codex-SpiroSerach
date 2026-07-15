@@ -26,7 +26,9 @@ HTML/CSS/JavaScript delivery model.
   resolves artifacts only through `run-manifest.json` declarations.
 - The run-level commit minimum is a parseable manifest with unique kinds, safe
   exact paths, consistent manifest/artifact `run_id` metadata, and available
-  `canonical_evidence` containing unique non-empty `candidate_id` values.
+  `canonical_evidence` whose present records contain unique non-empty
+  `candidate_id` values. An empty records array (`candidate_count = 0`) is a
+  coherent empty run, consistent with the canonical schema.
 - Duplicate manifest artifact kinds, duplicate relative paths, unsafe paths,
   a missing/unavailable run-level minimum, and artifact metadata whose `run_id`
   conflicts with the manifest fail closed with structured local diagnostics.

@@ -1,79 +1,182 @@
 const state = {
   manifest: null,
   artifacts: new Map(),
+  snapshot: null,
+  selectedCandidateId: null,
+  selectedCandidateTab: "overview",
+  candidateProjection: null,
+  candidateControls: {search: "", statuses: [], sort: "group"},
+  projectEvolution: {documents: [], diagnostics: []},
+  projectSnapshot: null,
+  projectSelection: null,
 };
 
-const ARTIFACT_REGISTRY = {
-  recommendations: { legacyFileName: "recommendations.json" },
-  agent_trace: { legacyFileName: "agent-trace.jsonl" },
-  enrichment_results: { legacyFileName: "enrichment-results.json" },
-  canonical_evidence: { legacyFileName: "canonical-evidence.json" },
-  provider_cache_index: { legacyFileName: "provider-cache-index.json" },
-  review_queue: { legacyFileName: "review-queue.jsonl" },
-  scoring_view: { legacyFileName: "" },
-  screening_input_view: { legacyFileName: "" },
-  model_evaluation: { legacyFileName: "" },
-  review_events: { legacyFileName: "review-events.jsonl" },
-  review_summary: { legacyFileName: "review-summary.json" },
-  recompute_markers: { legacyFileName: "recompute-markers.jsonl" },
-};
+const CANDIDATE_DETAIL_TABS = Object.freeze([
+  {id: "overview", label: "Overview"},
+  {id: "explanation", label: "Explanation"},
+  {id: "diagnostics", label: "Diagnostics"},
+  {id: "paper", label: "Paper Evidence"},
+]);
 
-document.getElementById("manifestFile").addEventListener("change", async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    clearError();
-    state.manifest = JSON.parse(await file.text());
-    renderManifest(state.manifest);
-    renderKnownArtifacts();
-  } catch (error) {
-    showError(`manifest ${error.message}`);
+const runDataStore = globalThis.SpiroRunData
+  ? new globalThis.SpiroRunData.RunDataStore()
+  : null;
+const projectStore = globalThis.SpiroRunData
+  ? new globalThis.SpiroRunData.ProjectStore()
+  : null;
+
+document.getElementById("bundleFiles").addEventListener("change", async (event) => {
+  if (!runDataStore) {
+    showError("Load failed: run data store is unavailable");
+    return;
   }
+  const result = await runDataStore.replace(event.target.files);
+  if (!result.ok) {
+    showLoadFailure(result);
+    return;
+  }
+  applyCommittedSnapshot(result.snapshot);
+  clearError();
+  renderKnownArtifacts();
 });
 
-document.getElementById("artifactFiles").addEventListener("change", async (event) => {
-  try {
-    clearError();
-    state.artifacts.clear();
-    for (const file of event.target.files) {
-      const text = await file.text();
-      const artifactName = file.webkitRelativePath || file.name;
-      const parsed = parseArtifact(artifactName, text);
-      state.artifacts.set(artifactName, parsed);
-      if (artifactName !== file.name && !state.artifacts.has(file.name)) {
-        state.artifacts.set(file.name, parsed);
-      }
+document.getElementById("projectBundleFiles").addEventListener("change", async (event) => {
+  if (!projectStore) {
+    showError("Load failed: project store is unavailable");
+    return;
+  }
+  const result = await projectStore.replace(event.target.files);
+  state.projectSnapshot = result.snapshot;
+  state.projectSelection = result.selection;
+  if (!result.ok) {
+    showError(`Project load failed: ${result.diagnostics.map((item) => item.code).join(", ") || "unknown error"}`);
+    renderProjectSelector();
+    renderCandidateHistory();
+    return;
+  }
+  const runIds = result.snapshot.runIds || [];
+  if (runIds.length) {
+    state.projectSelection = projectStore.selectRuns(runIds[0], runIds[1] || runIds[0]);
+    const sourceRun = result.snapshot.runs.find((run) => run.runId === state.projectSelection.sourceRunId);
+    if (sourceRun?.snapshot) {
+      applyCommittedSnapshot(sourceRun.snapshot);
+      renderKnownArtifacts();
     }
+  }
+  clearError();
+  renderProjectSelector();
+  renderCandidateHistory();
+});
+
+document.getElementById("projectEvolutionFiles").addEventListener("change", async (event) => {
+  const result = await loadProjectEvolutionFiles(event.target.files);
+  state.projectEvolution = result;
+  renderProjectEvolution(result);
+});
+
+document.getElementById("projectRunSelector").addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-run-id]");
+  if (!button || !projectStore) return;
+  const sourceRunId = button.dataset.runId;
+  const targetRunId = (state.projectSnapshot?.runIds || []).find((runId) => runId !== sourceRunId) || sourceRunId;
+  state.projectSelection = projectStore.selectRuns(sourceRunId, targetRunId);
+  const sourceRun = state.projectSnapshot?.runs?.find((run) => run.runId === sourceRunId);
+  if (sourceRun?.snapshot) {
+    applyCommittedSnapshot(sourceRun.snapshot);
     renderKnownArtifacts();
-  } catch (error) {
-    showError(error.message);
+  }
+  renderProjectSelector();
+  renderCandidateHistory();
+});
+
+document.getElementById("projectRunSelector").addEventListener("keydown", (event) => {
+  const button = event.target.closest?.("[data-run-id]");
+  if (!button || !globalThis.SpiroRunData?.ProjectSelectorProjection) return;
+  const nextRunId = globalThis.SpiroRunData.ProjectSelectorProjection.nextRunId(
+    state.projectSnapshot?.runIds || [],
+    button.dataset.runId,
+    event.key
+  );
+  if (!nextRunId || nextRunId === button.dataset.runId) return;
+  event.preventDefault?.();
+  const next = Array.from(document.querySelectorAll?.("[data-run-id]") || [])
+    .find((item) => item.dataset?.runId === nextRunId);
+  next?.focus?.();
+});
+
+document.getElementById("candidateTable").addEventListener("click", (event) => {
+  const row = event.target.closest?.("[data-candidate-id]");
+  if (!row) return;
+  state.selectedCandidateId = row.dataset.candidateId;
+  if (state.candidateProjection && globalThis.SpiroCandidateProjection) {
+    renderCandidateWorkspace();
+  } else {
+    renderCandidateTracer(
+      getKnownArtifact("screening_input_view"),
+      getKnownArtifact("canonical_evidence")
+    );
   }
 });
 
-function parseArtifact(name, text) {
-  if (name.endsWith(".jsonl")) {
-    return parseJsonl(text, name);
-  }
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new Error(`${name} JSON parse failed: ${error.message}`);
-  }
+document.getElementById("candidateDetail").addEventListener("click", (event) => {
+  const tab = event.target.closest?.("[data-candidate-tab]");
+  if (!tab) return;
+  selectCandidateTab(tab.dataset.candidateTab);
+});
+
+document.getElementById("candidateDetail").addEventListener("keydown", (event) => {
+  const tab = event.target.closest?.("[data-candidate-tab]");
+  if (!tab) return;
+  const currentIndex = CANDIDATE_DETAIL_TABS.findIndex((item) => item.id === tab.dataset.candidateTab);
+  if (currentIndex < 0) return;
+  let nextIndex = currentIndex;
+  if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % CANDIDATE_DETAIL_TABS.length;
+  else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + CANDIDATE_DETAIL_TABS.length) % CANDIDATE_DETAIL_TABS.length;
+  else if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = CANDIDATE_DETAIL_TABS.length - 1;
+  else if (event.key === "Enter" || event.key === " ") nextIndex = currentIndex;
+  else return;
+  event.preventDefault?.();
+  selectCandidateTab(CANDIDATE_DETAIL_TABS[nextIndex].id, {focus: true});
+});
+
+document.getElementById("candidateSearch").addEventListener("input", (event) => {
+  state.candidateControls.search = event.target.value || "";
+  renderCandidateWorkspace();
+});
+
+document.getElementById("candidateStatusFilter").addEventListener("change", (event) => {
+  state.candidateControls.statuses = event.target.value === "all" ? [] : [event.target.value];
+  renderCandidateWorkspace();
+});
+
+document.getElementById("candidateSort").addEventListener("change", (event) => {
+  state.candidateControls.sort = event.target.value || "candidate-asc";
+  renderCandidateWorkspace();
+});
+
+function applyCommittedSnapshot(snapshot) {
+  state.snapshot = snapshot;
+  state.manifest = snapshot.manifest;
+  state.artifacts = new Map(
+    Object.values(snapshot.artifacts).map((artifact) => [artifact.path, artifact.payload])
+  );
+  state.selectedCandidateId = null;
+  state.selectedCandidateTab = "overview";
+  state.candidateProjection = null;
 }
 
-function parseJsonl(text, name = "jsonl") {
-  const records = [];
-  const lines = text.split(/\r?\n/);
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-    try {
-      records.push(JSON.parse(trimmed));
-    } catch (error) {
-      throw new Error(`${name} line ${index + 1}: ${error.message}`);
-    }
-  });
-  return records;
+function showLoadFailure(result) {
+  const retained = result.retainedRunId
+    ? `; retained prior run ${result.retainedRunId}`
+    : "";
+  const details = result.diagnostics
+    .map((item) => `${item.code}: ${item.message}`)
+    .join(" | ");
+  showError(`Load failed${retained}. Failed input diagnostics: ${details || "unknown error"}`);
+  document.getElementById("loadState").textContent = result.retainedRunId
+    ? `Load failed; retained prior run ${result.retainedRunId}`
+    : "Load failed; no run committed";
 }
 
 function renderManifest(manifest) {
@@ -92,17 +195,31 @@ function renderManifest(manifest) {
 
   const rows = (manifest.artifacts || []).map((artifact) => {
     const hash = artifact.sha256 ? artifact.sha256.slice(0, 12) : "-";
+    const availability = state.snapshot?.availability?.[artifact.kind];
+    const artifactDiagnostics = (state.snapshot?.diagnostics || [])
+      .filter((item) => item.kind === artifact.kind)
+      .map((item) => item.code)
+      .join(", ");
     return `<tr>
       <td>${escapeHtml(artifact.kind || "-")}</td>
       <td>${escapeHtml(artifact.path || "-")}</td>
+      <td>${escapeHtml(availability?.status || (state.artifacts.has(artifact.path) ? "available" : "not loaded"))}</td>
+      <td>${escapeHtml(artifactDiagnostics || "-")}</td>
       <td>${escapeHtml(String(artifact.bytes ?? "-"))}</td>
       <td>${escapeHtml(hash)}</td>
     </tr>`;
   });
-  document.getElementById("artifactTable").innerHTML = rows.join("") || `<tr><td colspan="4">No artifacts</td></tr>`;
-  document.getElementById("loadState").textContent = state.artifacts.size
-    ? `${state.artifacts.size} files loaded`
-    : "Manifest loaded";
+  document.getElementById("artifactTable").innerHTML = rows.join("") || `<tr><td colspan="6">No artifacts</td></tr>`;
+  if (state.snapshot) {
+    const availableCount = Object.values(state.snapshot.availability)
+      .filter((item) => item.status === "available").length;
+    document.getElementById("loadState").textContent =
+      `${availableCount} available / ${state.snapshot.diagnostics.length} diagnostics`;
+  } else {
+    document.getElementById("loadState").textContent = state.artifacts.size
+      ? `${state.artifacts.size} files loaded`
+      : "Manifest loaded";
+  }
 }
 
 function renderKnownArtifacts() {
@@ -116,6 +233,11 @@ function renderKnownArtifacts() {
   const reviewEvents = getKnownArtifact("review_events") || [];
   const reviewSummary = getKnownArtifact("review_summary");
   const recomputeMarkers = getKnownArtifact("recompute_markers") || [];
+  const sourceAssets = getKnownArtifact("source_assets") || [];
+  const literatureClaims = getKnownArtifact("literature_claims") || [];
+  const paperVaultSummary = getKnownArtifact("paper_vault_summary");
+  const paperCrossRefReport = getKnownArtifact("paper_cross_ref_report");
+  const obsidianNotes = getKnownArtifact("obsidian_notes");
   const cacheIndex = getKnownArtifact("provider_cache_index");
   const reviewQueue = getKnownArtifact("review_queue") || [];
   if (state.manifest) {
@@ -129,26 +251,731 @@ function renderKnownArtifacts() {
   renderScreeningEligibility(screeningInputView);
   renderModelEvaluation(modelEvaluation);
   renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
+  renderPaperDiagnostics(
+    sourceAssets,
+    literatureClaims,
+    paperVaultSummary,
+    paperCrossRefReport,
+    obsidianNotes
+  );
   renderReviewQueue(reviewQueue);
+  if (globalThis.SpiroCandidateProjection) {
+    state.candidateProjection = globalThis.SpiroCandidateProjection.project(
+      state.snapshot || projectionSnapshotFromViewerState()
+    );
+    renderCandidateWorkspace();
+  } else {
+    renderCandidateTracer(screeningInputView, canonicalEvidence);
+  }
 }
+
+async function loadProjectEvolutionFiles(files) {
+  const documents = [];
+  const diagnostics = [];
+  for (const file of Array.from(files || [])) {
+    const name = file?.name || "selected document";
+    if (!/\.(md|markdown)$/i.test(name)) {
+      diagnostics.push({
+        code: "project_evolution_unsupported_file",
+        severity: "warning",
+        message: `${name} was skipped because only Markdown files are imported`,
+      });
+      continue;
+    }
+    let text;
+    try {
+      text = await file.text();
+    } catch (error) {
+      diagnostics.push({
+        code: "project_evolution_read_error",
+        severity: "warning",
+        message: `${name} could not be read: ${error.message}`,
+      });
+      continue;
+    }
+    const parsed = parseProjectEvolutionMarkdown(name, text);
+    diagnostics.push(...parsed.diagnostics);
+    if (parsed.document) documents.push(parsed.document);
+  }
+  return {documents, diagnostics};
+}
+
+function parseProjectEvolutionMarkdown(filename, text) {
+  const diagnostics = [];
+  const source = typeof text === "string" ? text : "";
+  if (!source.trim()) {
+    return {
+      document: null,
+      diagnostics: [{
+        code: "project_evolution_empty_document",
+        severity: "warning",
+        message: `${filename} is empty and was not imported`,
+      }],
+    };
+  }
+
+  const lines = source.split(/\r?\n/);
+  const frontMatter = parseFrontMatter(lines);
+  const titleLine = lines.find((line) => /^#\s+/.test(line));
+  const headings = lines
+    .filter((line) => /^#{1,6}\s+/.test(line))
+    .slice(0, 18)
+    .map((line) => {
+      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      return {level: match[1].length, text: match[2].trim()};
+    });
+  if (!headings.length) {
+    diagnostics.push({
+      code: "project_evolution_no_headings",
+      severity: "warning",
+      message: `${filename} has no Markdown headings; imported as context only`,
+    });
+  }
+  const metadata = {
+    version: frontMatter.version || findDeclaredValue(lines, "version"),
+    status: frontMatter.status || findDeclaredValue(lines, "status"),
+  };
+  const gateLanguage = lines
+    .filter((line) => /\b(gate|exit|acceptance|verification|completion|complete)\b/i.test(line))
+    .slice(0, 8)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    document: {
+      filename,
+      title: titleLine ? titleLine.replace(/^#\s+/, "").trim() : filename,
+      metadata,
+      headings,
+      gateLanguage,
+      lineCount: lines.length,
+    },
+    diagnostics,
+  };
+}
+
+function parseFrontMatter(lines) {
+  if (lines[0]?.trim() !== "---") return {};
+  const metadata = {};
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (line === "---") break;
+    const match = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+)$/);
+    if (match) metadata[match[1].toLowerCase()] = match[2].trim();
+  }
+  return metadata;
+}
+
+function findDeclaredValue(lines, key) {
+  const pattern = new RegExp(`^\\\\s*${key}\\\\s*:\\\\s*(.+)$`, "i");
+  const line = lines.find((item) => pattern.test(item));
+  return line ? line.match(pattern)[1].trim() : "";
+}
+
+function renderProjectEvolution(projectEvolution = state.projectEvolution) {
+  const documents = projectEvolution?.documents || [];
+  const diagnostics = projectEvolution?.diagnostics || [];
+  document.getElementById("projectEvolutionCount").textContent =
+    `${documents.length} documents / ${diagnostics.length} diagnostics`;
+  const list = document.getElementById("projectEvolutionList");
+  const documentHtml = documents.map(renderProjectEvolutionDocument).join("");
+  const diagnosticHtml = diagnostics.map((item) => `<div class="projection-diagnostic">
+    ${escapeHtml(item.code || "project_evolution_diagnostic")}: ${escapeHtml(item.message || "")}
+  </div>`).join("");
+  list.innerHTML = documentHtml || `<div class="empty">No project evolution Markdown imported</div>`;
+  if (diagnosticHtml) list.innerHTML += diagnosticHtml;
+}
+
+function renderProjectEvolutionDocument(document) {
+  return `<section class="flow-item project-evolution-document">
+    <div class="item-title">
+      <span>${escapeHtml(document.title || document.filename)}</span>
+      <span class="status">human context only</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["file", document.filename],
+        ["version", document.metadata?.version],
+        ["declared status", document.metadata?.status],
+        ["lines", document.lineCount],
+      ])}
+    </div>
+    <p class="muted">This imported Markdown is separated from immutable run facts and does not prove implementation completion.</p>
+    <div class="chip-row">
+      ${(document.headings || []).map((heading) =>
+        `<span class="chip">h${escapeHtml(heading.level)} ${escapeHtml(heading.text)}</span>`
+      ).join("") || `<span class="chip review-chip">no headings declared</span>`}
+    </div>
+    ${(document.gateLanguage || []).length ? `<div class="context-block">
+      <strong>Gate language found in human context</strong>
+      ${(document.gateLanguage || []).map((line) => `<p class="item-meta">${escapeHtml(line)}</p>`).join("")}
+    </div>` : ""}
+  </section>`;
+}
+
+function renderProjectSelector() {
+  const selector = globalThis.SpiroRunData?.ProjectSelectorProjection?.project(
+    state.projectSnapshot,
+    state.projectSelection
+  );
+  const container = document.getElementById("projectRunSelector");
+  const count = document.getElementById("projectRunSelectorCount");
+  if (!selector || !globalThis.SpiroRunData?.ProjectSelectorProjection) {
+    container.innerHTML = `<div class="empty">Project store is unavailable</div>`;
+    count.textContent = "No project loaded";
+    return;
+  }
+  container.innerHTML = globalThis.SpiroRunData.ProjectSelectorProjection.render(selector);
+  count.textContent = selector.projectId
+    ? `${selector.projectId}: ${selector.runs.length} runs / ${selector.comparisons.length} comparisons`
+    : "No project loaded";
+}
+
+function renderCandidateHistory() {
+  const historyProjection = globalThis.SpiroRunData?.CandidateHistoryProjection?.project(
+    state.projectSnapshot,
+    state.projectSelection
+  );
+  const diagnosticsProjection = globalThis.SpiroRunData?.ProjectDiagnosticsProjection?.project(
+    state.projectSnapshot
+  );
+  const historyList = document.getElementById("candidateHistoryList");
+  const diagnosticsList = document.getElementById("projectDiagnosticsList");
+  const count = document.getElementById("candidateHistoryCount");
+  if (!historyProjection || !globalThis.SpiroRunData?.CandidateHistoryProjection) {
+    historyList.innerHTML = `<div class="empty">Candidate history is unavailable</div>`;
+    diagnosticsList.innerHTML = "";
+    count.textContent = "No comparison selected";
+    return;
+  }
+  historyList.innerHTML = globalThis.SpiroRunData.CandidateHistoryProjection.render(historyProjection);
+  diagnosticsList.innerHTML = globalThis.SpiroRunData.ProjectDiagnosticsProjection?.render(diagnosticsProjection) || "";
+  count.textContent = historyProjection.candidates.length
+    ? `${historyProjection.candidates.length} candidate deltas`
+    : "No candidate deltas";
+}
+
+function projectionSnapshotFromViewerState() {
+  const artifacts = Object.create(null);
+  const availability = Object.create(null);
+  for (const metadata of state.manifest?.artifacts || []) {
+    if (!metadata?.kind || !metadata.path || !state.artifacts.has(metadata.path)) continue;
+    artifacts[metadata.kind] = {
+      kind: metadata.kind,
+      path: metadata.path,
+      metadata,
+      payload: state.artifacts.get(metadata.path),
+    };
+    availability[metadata.kind] = {kind: metadata.kind, path: metadata.path, status: "available"};
+  }
+  return {
+    manifest: state.manifest,
+    manifestMetadata: {
+      runId: state.manifest?.run_id || null,
+      schemaVersion: state.manifest?.schema_version || null,
+      generatedAt: state.manifest?.generated_at || null,
+    },
+    artifacts,
+    availability,
+    diagnostics: [],
+  };
+}
+
+function renderCandidateWorkspace() {
+  if (!state.candidateProjection || !globalThis.SpiroCandidateProjection) {
+    renderCandidateTracer(
+      getKnownArtifact("screening_input_view"),
+      getKnownArtifact("canonical_evidence")
+    );
+    return;
+  }
+  const projection = state.candidateProjection;
+  const candidates = globalThis.SpiroCandidateProjection.query(
+    projection,
+    state.candidateControls
+  );
+  const table = document.getElementById("candidateTable");
+  const detail = document.getElementById("candidateDetail");
+  const groupLabels = {
+    continue: "Continue",
+    review: "Review",
+    reject: "Reject",
+    "insufficient-data": "Insufficient data",
+  };
+  document.getElementById("candidateGroups").innerHTML = globalThis.SpiroCandidateProjection.GROUPS
+    .map((group) => `<div class="triage-group group-${escapeHtml(group)}">
+      <strong>${escapeHtml(groupLabels[group])}</strong>
+      <span>${projection.groups[group].length}</span>
+    </div>`)
+    .join("");
+  document.getElementById("candidateDiagnostics").innerHTML = projection.diagnostics.length
+    ? projection.diagnostics.map((item) => `<div class="projection-diagnostic">
+        <strong>${escapeHtml(item.code)}</strong>
+        ${escapeHtml(item.candidateId || "run")}: ${escapeHtml(item.message || "projection diagnostic")}
+      </div>`).join("")
+    : `<div class="muted">No projection diagnostics</div>`;
+
+  if (!candidates.length) {
+    state.selectedCandidateId = null;
+    table.innerHTML = `<div class="empty">No candidates match the current controls</div>`;
+    detail.innerHTML = `<div class="empty">Adjust search or status filters to inspect a candidate</div>`;
+    document.getElementById("candidateCount").textContent = "0";
+    document.getElementById("needsReviewCount").textContent = String(projection.groups.review.length);
+    return;
+  }
+  if (!candidates.some((candidate) => candidate.candidateId === state.selectedCandidateId)) {
+    state.selectedCandidateId = candidates[0].candidateId;
+  }
+  table.innerHTML = candidates.map((candidate) => `<button
+      type="button"
+      class="candidate-row candidate-${escapeHtml(candidate.group)}"
+      data-candidate-id="${escapeHtml(candidate.candidateId)}"
+      aria-pressed="${candidate.candidateId === state.selectedCandidateId}">
+      <span>${escapeHtml(candidate.candidateId)}</span>
+      <span class="gate-status gate-${escapeHtml(candidate.group)}">${escapeHtml(candidate.group)}</span>
+    </button>`).join("");
+  renderProjectedCandidateDetail(candidates.find(
+    (candidate) => candidate.candidateId === state.selectedCandidateId
+  ));
+  document.getElementById("candidateCount").textContent = String(candidates.length);
+  document.getElementById("needsReviewCount").textContent = String(projection.groups.review.length);
+}
+
+function renderProjectedCandidateDetail(candidate) {
+  const detail = document.getElementById("candidateDetail");
+  if (!candidate) {
+    detail.innerHTML = `<div class="empty">No candidate selected</div>`;
+    return;
+  }
+  if (!CANDIDATE_DETAIL_TABS.some((tab) => tab.id === state.selectedCandidateTab)) {
+    state.selectedCandidateTab = "overview";
+  }
+  const activeTab = state.selectedCandidateTab;
+  const panelId = `candidate-panel-${activeTab}`;
+  const tabHtml = CANDIDATE_DETAIL_TABS.map((tab) => `<button
+      id="candidate-tab-${escapeHtml(tab.id)}"
+      class="candidate-detail-tab"
+      type="button"
+      role="tab"
+      data-candidate-tab="${escapeHtml(tab.id)}"
+      aria-selected="${tab.id === activeTab}"
+      aria-controls="candidate-panel-${escapeHtml(tab.id)}"
+      tabindex="${tab.id === activeTab ? "0" : "-1"}">${escapeHtml(tab.label)}</button>`)
+    .join("");
+  detail.innerHTML = `<section>
+    <div class="item-title">
+      <span>${escapeHtml(candidate.candidateId)}</span>
+      <span class="status">${escapeHtml(candidate.group)}</span>
+    </div>
+    <div class="candidate-detail-tabs" role="tablist" aria-label="Candidate detail sections">
+      ${tabHtml}
+    </div>
+    <div
+      id="${escapeHtml(panelId)}"
+      class="candidate-detail-panel"
+      role="tabpanel"
+      aria-labelledby="candidate-tab-${escapeHtml(activeTab)}">
+      ${renderCandidateDetailTab(candidate, activeTab)}
+    </div>
+  </section>`;
+}
+
+function selectCandidateTab(tabId, options = {}) {
+  if (!CANDIDATE_DETAIL_TABS.some((tab) => tab.id === tabId)) return;
+  state.selectedCandidateTab = tabId;
+  if (state.candidateProjection && globalThis.SpiroCandidateProjection) {
+    renderCandidateWorkspace();
+  }
+  if (options.focus) {
+    focusCandidateTab(tabId);
+  }
+}
+
+function focusCandidateTab(tabId) {
+  document.getElementById(`candidate-tab-${tabId}`)?.focus?.();
+}
+
+function renderCandidateDetailTab(candidate, tabId) {
+  if (tabId === "explanation") return renderCandidateExplanationTab(candidate);
+  if (tabId === "diagnostics") return renderCandidateDiagnosticsTab(candidate);
+  if (tabId === "paper") return renderCandidatePaperEvidenceTab(candidate);
+  return renderCandidateOverviewTab(candidate);
+}
+
+function renderCandidateOverviewTab(candidate) {
+  const requests = candidate.recommendation?.requests || [];
+  const events = candidate.lineage?.events || candidate.detail?.diagnostics?.lineageEvents || [];
+  const coverage = candidate.evidenceCoverage || {};
+  const availability = candidate.detail?.overview?.availability || [];
+  return `
+    <div class="item-meta">
+      ${compactMeta([
+        ["status", candidate.backendStatus],
+        ["material", candidate.identity?.materialId],
+        ["material_kind", candidate.identity?.materialKind],
+        ["use_instance", candidate.identity?.useInstanceId],
+        ["role", candidate.identity?.role],
+        ["supplier", candidate.identity?.supplierStatus],
+        ["profile", candidate.screening?.profileVersion],
+        ["source", candidate.detail?.overview?.artifactKind],
+      ])}
+    </div>
+    <div class="context-block">
+      <strong>Blockers</strong>
+      <div class="item-meta">
+        blocker codes ${escapeHtml(String((candidate.blockers?.codes || []).length))} /
+        blocking reviews ${escapeHtml(String((candidate.blockers?.reviewIds || []).length))}
+      </div>
+      <div class="chip-row">
+        ${(candidate.blockers?.codes || []).map((code) => `<span class="chip review-chip">${escapeHtml(code)}</span>`).join("") || `<span class="muted">No declared blocker codes</span>`}
+      </div>
+      <div class="chip-row">
+        ${(candidate.blockers?.reviewIds || []).map((reviewId) => `<span class="chip review-chip">${escapeHtml(reviewId)}</span>`).join("") || `<span class="muted">No blocking review IDs</span>`}
+      </div>
+    </div>
+    <div class="context-block">
+      <strong>Evidence coverage</strong>
+      <div class="item-meta">evidence coverage ${escapeHtml(String(coverage.joined ?? 0))} / ${escapeHtml(String(coverage.declared ?? 0))}</div>
+    </div>
+    <div class="context-block">
+      <strong>Lineage</strong>
+      <div class="item-meta">lineage ${escapeHtml(candidate.lineage?.capability || "unavailable")}; ${events.length} explicit events</div>
+    </div>
+    <div class="context-block recommendation-context">
+      <strong>Recommendation context</strong>
+      <div class="item-meta">recommendation context only; never changes screening disposition</div>
+      ${requests.map((request) => `<div class="chip">
+        ${escapeHtml(request.request_id || "request")} score ${formatNumber(request.acquisition_score)}
+      </div>`).join("") || `<div class="muted">No recommendation joined</div>`}
+    </div>
+    <div class="context-block">
+      <strong>Availability summary</strong>
+      <div class="chip-row">
+        ${availability.map((item) => `<span class="chip">${escapeHtml(item.kind)} ${escapeHtml(item.status)}</span>`).join("") || `<span class="muted">No detail availability metadata</span>`}
+      </div>
+    </div>
+    ${candidate.diagnostic ? `<div class="projection-diagnostic">
+      <strong>Insufficient data</strong>
+      source ${escapeHtml(candidate.diagnostic.source || "unknown")}: ${escapeHtml(candidate.diagnostic.reason || "unknown")}
+    </div>` : ""}
+  `;
+}
+
+function renderCandidateExplanationTab(candidate) {
+  const explanation = candidate.detail?.explanation || {};
+  const components = explanation.components || candidate.screening?.components || [];
+  const evidence = explanation.eligibleScoringEvidence || [];
+  const unavailable = explanation.unavailableEvidenceIds || candidate.evidenceCoverage?.missingEvidenceIds || [];
+  const diagnostics = explanation.diagnostics || [];
+  const acquisition = explanation.acquisition;
+  return `
+    <div class="context-block">
+      <strong>Frozen screening components</strong>
+      <div class="item-meta">backend output from screening_input_view; frontend does not recompute weighted utility</div>
+      ${components.map((component) => `<div class="detail-row">
+        <strong>${escapeHtml(component.name || "component")}</strong>
+        <span>${compactMeta([
+          ["source", component.artifactKind || "screening_input_view"],
+          ["utility", formatNumber(component.utility)],
+          ["quality", formatNumber(component.quality)],
+          ["observed", component.observed === null || component.observed === undefined ? null : String(component.observed)],
+          ["evidence", (component.evidenceIds || []).join(", ")],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No screening components joined</div>`}
+    </div>
+    <div class="context-block">
+      <strong>ScoringView eligible evidence</strong>
+      <div class="item-meta">Only policy-admitted scoring_view facts are described as eligible scoring evidence</div>
+      ${evidence.map((fact) => `<div class="detail-row">
+        <strong>${escapeHtml(fact.evidenceId || "evidence")}</strong>
+        <span>${compactMeta([
+          ["source", fact.artifactKind || "scoring_view"],
+          ["property", fact.propertyName],
+          ["value_ev", formatNumber(fact.valueEv)],
+          ["unit", fact.unit],
+          ["method", fact.method],
+          ["reference", fact.referenceScale],
+          ["trust", fact.quality?.trust_level],
+          ["curation", fact.quality?.curation_status],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No eligible ScoringView facts joined for this candidate</div>`}
+      ${unavailable.length ? `<div class="projection-diagnostic">
+        <strong>Evidence not described as eligible</strong>
+        ${unavailable.map((id) => `<span class="chip review-chip">${escapeHtml(id)}</span>`).join("")}
+      </div>` : ""}
+    </div>
+    <div class="context-block">
+      <strong>Acquisition context</strong>
+      ${acquisition ? `<div class="item-meta">${compactMeta([
+        ["source", acquisition.artifactKind],
+        ["request", acquisition.requestId],
+        ["model", acquisition.modelVersion],
+        ["strategy", acquisition.strategy],
+        ["model_score", formatNumber(acquisition.modelScore)],
+        ["heuristic_score", formatNumber(acquisition.heuristicScore)],
+        ["model_selected", acquisition.modelSelected === null || acquisition.modelSelected === undefined ? null : String(acquisition.modelSelected)],
+      ])}</div>` : `<div class="muted">No acquisition breakdown joined</div>`}
+    </div>
+    ${renderProjectionDiagnostics(diagnostics)}
+  `;
+}
+
+function renderCandidateDiagnosticsTab(candidate) {
+  const diagnostics = candidate.detail?.diagnostics || {};
+  const blockingReviews = diagnostics.blockingReviews || (candidate.blockers?.joinedReviews || []);
+  const appliedEvents = diagnostics.appliedReviewEvents || [];
+  const auditEvents = diagnostics.auditReviewEvents || [];
+  const markers = diagnostics.recomputeMarkers || [];
+  const artifactStatuses = diagnostics.artifactStatuses || [];
+  const contradictions = diagnostics.contradictions || [];
+  const reviewSummary = diagnostics.reviewSummary;
+  return `
+    <div class="context-block">
+      <strong>Blocking reviews</strong>
+      ${blockingReviews.map((review) => `<div class="detail-row">
+        <strong>${escapeHtml(review.reviewItemId || review.review_item_id || "review")}</strong>
+        <span>${compactMeta([
+          ["source", review.artifactKind || "review_queue"],
+          ["target_type", review.targetType || review.target_type],
+          ["target_id", review.targetId || review.target_id],
+          ["status", review.resolutionStatus || review.resolution_status],
+          ["reason", review.reason || review.reason_code],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No joined blocking reviews</div>`}
+    </div>
+    <div class="context-block">
+      <strong>Applied review events</strong>
+      <div class="item-meta">Applied closure requires exact review_item_id, target_type, and target_id</div>
+      ${appliedEvents.map((event) => `<div class="detail-row">
+        <strong>${escapeHtml(event.eventId || "event")}</strong>
+        <span>${compactMeta([
+          ["source", event.artifactKind],
+          ["review", event.reviewItemId],
+          ["target_type", event.targetType],
+          ["target_id", event.targetId],
+          ["decision", event.decision],
+          ["status", event.resolutionStatus],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No applied review events</div>`}
+      ${auditEvents.length ? `<div class="projection-diagnostic">
+        <strong>Wrong-target review events</strong>
+        ${auditEvents.map((event) => `<span class="chip review-chip">${escapeHtml(event.eventId || event.reviewItemId || "event")}</span>`).join("")}
+      </div>` : ""}
+    </div>
+    <div class="context-block">
+      <strong>Observed immutable recompute markers</strong>
+      <div class="item-meta">Viewer displays recompute markers as artifacts only; it cannot execute recompute</div>
+      ${markers.map((marker) => `<div class="detail-row">
+        <strong>${escapeHtml(marker.markerId || "marker")}</strong>
+        <span>${compactMeta([
+          ["source", marker.artifactKind],
+          ["event", marker.reviewEventId],
+          ["review", marker.reviewItemId],
+          ["target_type", marker.targetType],
+          ["target_id", marker.targetId],
+          ["status", marker.status],
+          ["affected", (marker.affectedArtifacts || []).join(", ")],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No recompute markers observed for this candidate</div>`}
+    </div>
+    <div class="context-block">
+      <strong>Review summary</strong>
+      ${reviewSummary ? `<div class="item-meta">${compactMeta([
+        ["source", reviewSummary.artifactKind],
+        ["reviews", reviewSummary.reviewCount],
+        ["events", reviewSummary.eventCount],
+        ["applied", reviewSummary.appliedEventCount],
+        ["open_blocking", reviewSummary.openBlockingCount],
+      ])}</div>` : `<div class="muted">No review summary artifact joined</div>`}
+    </div>
+    <div class="context-block">
+      <strong>Artifact/schema status</strong>
+      <div class="chip-row">
+        ${artifactStatuses.map((item) => `<span class="chip">${escapeHtml(item.kind)} ${escapeHtml(item.status || "unknown")}</span>`).join("") || `<span class="muted">No artifact status metadata</span>`}
+      </div>
+    </div>
+    ${renderProjectionDiagnostics(contradictions)}
+  `;
+}
+
+function renderCandidatePaperEvidenceTab(candidate) {
+  const paper = candidate.detail?.paperEvidence || {
+    status: "unavailable",
+    message: "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.",
+    records: [],
+    runArtifacts: [],
+  };
+  return `
+    <div class="context-block">
+      <strong>Paper Evidence</strong>
+      <div class="item-meta">status ${escapeHtml(paper.status || "unavailable")}</div>
+      <p>${escapeHtml(paper.message || "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.")}</p>
+      ${(paper.records || []).map((record) => `<div class="detail-row">
+        <strong>${escapeHtml(record.claim_id || record.asset_id || record.doi || "paper-record")}</strong>
+        <span>${compactMeta([
+          ["source", record.artifactKind || "candidate_paper_evidence"],
+          ["doi", record.doi],
+          ["asset", record.asset_id],
+          ["chunk", record.chunk_id],
+        ])}</span>
+      </div>`).join("")}
+    </div>
+    <div class="context-block">
+      <strong>Run/DOI-scope literature artifacts</strong>
+      <div class="chip-row">
+        ${(paper.runArtifacts || []).map((item) => `<span class="chip">${escapeHtml(item.kind)} ${escapeHtml(item.status || "unknown")}</span>`).join("") || `<span class="muted">No run-level paper artifacts declared</span>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderProjectionDiagnostics(items) {
+  const diagnostics = items || [];
+  if (!diagnostics.length) return "";
+  return `<div class="context-block">
+    <strong>Detail diagnostics</strong>
+    ${diagnostics.map((item) => `<div class="projection-diagnostic">
+      <strong>${escapeHtml(item.code || "diagnostic")}</strong>
+      ${compactMeta([
+        ["source", item.source],
+        ["candidate", item.candidateId],
+        ["evidence", item.evidenceId],
+        ["review", item.reviewItemId],
+      ])}
+      ${escapeHtml(item.message || "")}
+    </div>`).join("")}
+  </div>`;
+}
+
+function renderRunCompatibilityDiagnostics(compatibility) {
+  if (!compatibility) {
+    return `<div class="empty">No run compatibility loaded</div>`;
+  }
+  const dimensions = Array.isArray(compatibility.dimensions) ? compatibility.dimensions : [];
+  const reasonCodes = Array.isArray(compatibility.reason_codes) ? compatibility.reason_codes : [];
+  const rows = dimensions.map((dimension) => {
+    const codes = Array.isArray(dimension.reason_codes) ? dimension.reason_codes : [];
+    const label = dimension.status === "non_comparable" ? "non-comparable raw values only" : "comparable";
+    return `<tr>
+      <td>${escapeHtml(dimension.dimension || "-")}</td>
+      <td>${escapeHtml(dimension.status || "-")}</td>
+      <td>${escapeHtml(label)}</td>
+      <td>${escapeHtml(codes.join(", ") || "-")}</td>
+    </tr>`;
+  }).join("");
+  return `<section class="panel compatibility-panel">
+    <h3>Run Compatibility</h3>
+    <p>Status: <strong>${escapeHtml(compatibility.status || "unknown")}</strong></p>
+    <p>Reason codes: ${escapeHtml(reasonCodes.join(", ") || "-")}</p>
+    <table>
+      <thead><tr><th>Dimension</th><th>Status</th><th>Display rule</th><th>Codes</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4">No dimensions declared</td></tr>`}</tbody>
+    </table>
+  </section>`;
+}
+
+globalThis.renderRunCompatibilityDiagnostics = renderRunCompatibilityDiagnostics;
 
 function getKnownArtifact(kind) {
-  return getArtifact(ARTIFACT_REGISTRY[kind]?.legacyFileName || "", kind);
+  return getArtifact(kind);
 }
 
-function getArtifact(fileName, kind) {
+function getArtifact(kind) {
   const artifact = (state.manifest?.artifacts || []).find((item) => item.kind === kind);
-  if (artifact?.path) {
-    const pathName = artifact.path.split(/[\\/]/).pop();
-    if (state.artifacts.has(artifact.path)) {
-      return state.artifacts.get(artifact.path);
-    }
-    if (artifact.path === pathName) {
-      return state.artifacts.get(pathName) || null;
-    }
-    return null;
+  if (!artifact?.path) return null;
+  return state.artifacts.get(artifact.path) || null;
+}
+
+function screeningStatusDisplay(value) {
+  if (value === "pass" || value === "defer" || value === "reject") {
+    return {status: value, reason: "Evidence eligibility status"};
   }
-  return state.artifacts.get(fileName) || null;
+  const missing = value === undefined || value === null ||
+    (typeof value === "string" && !value.trim());
+  return {
+    status: "unavailable",
+    reason: missing
+      ? "Screening status was not provided"
+      : `Unsupported screening status: ${String(value)}`,
+  };
+}
+
+function renderScreeningStatusBadge(value) {
+  const display = screeningStatusDisplay(value);
+  return `<span class="gate-status gate-${escapeHtml(display.status)}" title="${escapeHtml(display.reason)}">${escapeHtml(display.status)}</span>`;
+}
+
+function renderCandidateTracer(screeningInputView, canonicalEvidence) {
+  const table = document.getElementById("candidateTable");
+  const candidates = screeningInputView?.candidates || [];
+  const canonicalByCandidate = new Map(
+    (canonicalEvidence?.records || []).map((record) => [record.candidate_id, record])
+  );
+  if (!candidates.length) {
+    state.selectedCandidateId = null;
+    table.innerHTML = `<div class="empty">No candidates loaded</div>`;
+    document.getElementById("candidateDetail").innerHTML =
+      `<div class="empty">Select a coherent run bundle to inspect a candidate</div>`;
+    return;
+  }
+
+  if (!candidates.some((candidate) => candidate.candidate_id === state.selectedCandidateId)) {
+    state.selectedCandidateId = candidates[0].candidate_id;
+  }
+  table.innerHTML = candidates
+    .map((candidate) => `<button
+      type="button"
+      class="candidate-row"
+      data-candidate-id="${escapeHtml(candidate.candidate_id || "")}"
+      aria-pressed="${candidate.candidate_id === state.selectedCandidateId}">
+      <span>${escapeHtml(candidate.candidate_id || "-")}</span>
+      ${renderScreeningStatusBadge(candidate.status)}
+    </button>`)
+    .join("");
+
+  const selected = candidates.find(
+    (candidate) => candidate.candidate_id === state.selectedCandidateId
+  );
+  renderCandidateDetail(selected, canonicalByCandidate.get(state.selectedCandidateId));
+  document.getElementById("candidateCount").textContent = String(candidates.length);
+  document.getElementById("needsReviewCount").textContent = String(
+    candidates.filter((candidate) => screeningStatusDisplay(candidate.status).status === "defer").length
+  );
+}
+
+function renderCandidateDetail(candidate, canonicalRecord) {
+  const detail = document.getElementById("candidateDetail");
+  if (!candidate) {
+    detail.innerHTML = `<div class="empty">No candidate selected</div>`;
+    return;
+  }
+  const material = canonicalRecord?.material || {};
+  const useInstance = canonicalRecord?.use_instance || {};
+  const energyEvidence = canonicalRecord?.energy_evidence || [];
+  const statusDisplay = screeningStatusDisplay(candidate.status);
+  detail.innerHTML = `<section>
+    <div class="item-title">
+      <span>${escapeHtml(candidate.candidate_id || "-")}</span>
+      <span class="status">${escapeHtml(material.material_kind || "canonical evidence unavailable")}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["status", statusDisplay.status],
+        ["status_reason", statusDisplay.status === "unavailable" ? statusDisplay.reason : null],
+        ["utility", formatNumber(candidate.weighted_utility)],
+        ["coverage", formatNumber(candidate.coverage)],
+        ["profile", candidate.profile_version],
+        ["use", useInstance.role],
+        ["supplier", material.supplier_status],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${energyEvidence.map(renderEnergyEvidenceChip).join("") || `<span class="chip muted">no energy evidence</span>`}
+    </div>
+    <div class="review-inline">
+      ${(candidate.codes || []).map((code) => `<span class="chip review-chip">${escapeHtml(code)}</span>`).join("") || `<span class="muted">No blocking codes</span>`}
+    </div>
+  </section>`;
 }
 
 function renderRecommendations(recommendations) {
@@ -371,7 +1198,7 @@ function renderScreeningEligibility(screeningInputView) {
     .map((candidate) => `<section class="flow-item">
       <div class="item-title">
         <span>${escapeHtml(candidate.candidate_id || "-")}</span>
-        <span class="gate-status gate-${escapeHtml(candidate.status || "defer")}" title="Evidence eligibility status">${escapeHtml(candidate.status || "defer")}</span>
+        ${renderScreeningStatusBadge(candidate.status)}
       </div>
       <div class="item-meta">
         ${compactMeta([
@@ -437,6 +1264,117 @@ function renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers) {
   const eventHtml = events.map((event) => renderReviewEvent(event, markerIdsByEvent.get(event.event_id) || [])).join("");
   const markerHtml = markers.map(renderRecomputeMarker).join("");
   list.innerHTML = [summaryHtml, eventHtml, markerHtml].filter(Boolean).join("");
+}
+
+function renderPaperDiagnostics(
+  sourceAssets,
+  literatureClaims,
+  paperVaultSummary,
+  paperCrossRefReport,
+  obsidianNotes
+) {
+  const list = document.getElementById("paperDiagnosticsList");
+  const assets = Array.isArray(sourceAssets) ? sourceAssets : [];
+  const claims = Array.isArray(literatureClaims) ? literatureClaims : [];
+  document.getElementById("paperDiagnosticsCount").textContent =
+    `${assets.length} source assets / ${claims.length} claims`;
+
+  const contextSections = [
+    renderPaperContext("paper vault summary", paperVaultSummary),
+    renderPaperContext("paper cross-ref report", paperCrossRefReport),
+    renderPaperContext("obsidian notes", obsidianNotes),
+  ].filter(Boolean);
+
+  const sections = [
+    ...assets.map(renderPaperSourceAsset),
+    ...claims.map(renderLiteratureClaim),
+    ...contextSections,
+    renderCandidatePaperUnavailableNotice(),
+  ];
+
+  if (!assets.length && !claims.length && !contextSections.length) {
+    list.innerHTML = `<div class="empty">No paper diagnostics loaded</div>${renderCandidatePaperUnavailableNotice()}`;
+    return;
+  }
+  list.innerHTML = sections.join("");
+}
+
+function renderPaperSourceAsset(asset) {
+  const hashes = [
+    asset.sha256,
+    asset.content_sha256,
+    asset.raw_hash,
+    asset.source_hash,
+  ].filter(Boolean);
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(asset.asset_id || asset.source_asset_id || "source asset")}</span>
+      <span class="status">source asset</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["doi", asset.doi],
+        ["chunk", asset.chunk_id],
+        ["license", asset.license || asset.rights_license],
+        ["rights", asset.rights || asset.rights_status],
+        ["hash", hashes.join(", ")],
+        ["path", asset.path || asset.file_path],
+        ["url", asset.url || asset.source_url],
+      ])}
+    </div>
+  </section>`;
+}
+
+function renderLiteratureClaim(claim) {
+  const reviewLabel = claim.review_required || claim.requires_review ? "review required" : "";
+  const lineage = claim.lineage ? stableJson(claim.lineage) : "";
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(claim.claim_id || "literature claim")}</span>
+      <span class="status">claim</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["asset", claim.asset_id || claim.source_asset_id],
+        ["chunk", claim.chunk_id],
+        ["doi", claim.doi],
+        ["property", claim.property_name || claim.property],
+        ["value", claim.value],
+        ["unit", claim.unit],
+        ["confidence", claim.confidence],
+        ["review", reviewLabel],
+        ["lineage", lineage],
+      ])}
+    </div>
+    ${renderClaimSpan(claim)}
+  </section>`;
+}
+
+function renderClaimSpan(claim) {
+  const span = claim.text_span || claim.extracted_span || claim.excerpt || claim.text;
+  if (!span) return "";
+  return `<p>${escapeHtml(span)}</p>`;
+}
+
+function renderPaperContext(title, payload) {
+  if (!payload) return "";
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(title)}</span>
+      <span class="status">internal diagnostic context</span>
+    </div>
+    <pre>${escapeHtml(stableJson(payload))}</pre>
+  </section>`;
+}
+
+function renderCandidatePaperUnavailableNotice() {
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>candidate paper tab remains unavailable</span>
+      <span class="status">fail closed</span>
+    </div>
+    <p>No backend candidate-to-paper join artifact is loaded for this run.</p>
+  </section>`;
 }
 
 function renderReviewSummary(summary) {
@@ -598,6 +1536,14 @@ function compactMeta(pairs) {
     .join(" / ");
 }
 
+function stableJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    return String(value);
+  }
+}
+
 function shortId(value) {
   if (!value) return "";
   return String(value).slice(0, 12);
@@ -641,6 +1587,8 @@ function clearError() {
   errorState.style.display = "none";
 }
 
+document.getElementById("runSummary").textContent = "No run loaded";
+document.getElementById("loadState").textContent = "Waiting for bundle";
 renderRecommendations(null);
 renderTimeline([]);
 renderEnrichmentFlow(null, null, [], []);
@@ -649,4 +1597,9 @@ renderScoringView(null);
 renderScreeningEligibility(null);
 renderModelEvaluation(null);
 renderReviewClosure([], null, []);
+renderPaperDiagnostics([], [], null, null, null);
+renderProjectEvolution();
+renderProjectSelector();
+renderCandidateHistory();
 renderReviewQueue([]);
+renderCandidateTracer(null, null);

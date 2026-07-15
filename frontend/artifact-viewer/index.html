@@ -14,12 +14,16 @@
       </div>
       <div class="filebar">
         <label class="file-control">
-          <span>Manifest</span>
-          <input id="manifestFile" type="file" accept=".json,application/json">
+          <span>Run bundle directory</span>
+          <input id="bundleFiles" type="file" webkitdirectory directory multiple accept=".json,.jsonl,application/json">
         </label>
         <label class="file-control">
-          <span>Artifacts</span>
-          <input id="artifactFiles" type="file" multiple accept=".json,.jsonl,application/json">
+          <span>Project bundle directory</span>
+          <input id="projectBundleFiles" type="file" webkitdirectory directory multiple accept=".json,.jsonl,application/json">
+        </label>
+        <label class="file-control">
+          <span>Project evolution Markdown</span>
+          <input id="projectEvolutionFiles" type="file" multiple accept=".md,.markdown,text/markdown,text/plain" aria-describedby="projectEvolutionHelp">
         </label>
       </div>
     </header>
@@ -43,13 +47,77 @@
           <strong id="needsReviewCount">0</strong>
         </div>
       </section>
+      <nav class="view-nav" aria-label="Viewer sections">
+        <a href="#candidateWorkspace">Candidate triage</a>
+        <a href="#artifactDiagnostics">Artifact diagnostics</a>
+        <a href="#paperDiagnosticsPanel">Paper diagnostics</a>
+        <a href="#projectEvolutionPanel">Project evolution</a>
+      </nav>
 
       <section class="content-grid">
         <div id="errorState" class="error-state" role="alert"></div>
 
-        <div class="panel wide">
+        <div id="projectRunSelectorPanel" class="panel wide">
           <div class="panel-head">
-            <h2>Artifacts</h2>
+            <h2>Project Run Selector</h2>
+            <span id="projectRunSelectorCount">No project loaded</span>
+          </div>
+          <div id="projectRunSelector" aria-live="polite"></div>
+        </div>
+
+        <div id="candidateHistoryPanel" class="panel wide">
+          <div class="panel-head">
+            <h2>Candidate History</h2>
+            <span id="candidateHistoryCount">No comparison selected</span>
+          </div>
+          <div id="candidateHistoryList" aria-live="polite"></div>
+          <div id="projectDiagnosticsList" aria-live="polite"></div>
+        </div>
+
+        <div id="candidateWorkspace" class="panel wide">
+          <div class="panel-head">
+            <h2>Candidate Triage Workspace</h2>
+            <span>Authoritative screening disposition</span>
+          </div>
+          <div class="candidate-controls" aria-label="Candidate controls">
+            <label>
+              <span>Search</span>
+              <input id="candidateSearch" type="search" placeholder="Candidate, material, use or role">
+            </label>
+            <label>
+              <span>Status</span>
+              <select id="candidateStatusFilter">
+                <option value="all">All four groups</option>
+                <option value="continue">Continue</option>
+                <option value="review">Review</option>
+                <option value="reject">Reject</option>
+                <option value="insufficient-data">Insufficient data</option>
+              </select>
+            </label>
+            <label>
+              <span>Sort</span>
+              <select id="candidateSort">
+                <option value="group">Triage group</option>
+                <option value="candidate-asc">Candidate A–Z</option>
+                <option value="candidate-desc">Candidate Z–A</option>
+                <option value="coverage-desc">Evidence coverage</option>
+              </select>
+            </label>
+          </div>
+          <div id="candidateGroups" class="candidate-groups" aria-label="Triage group counts"></div>
+          <div class="candidate-workbench">
+            <div id="candidateTable" class="candidate-table" aria-label="Screening candidates"></div>
+            <div id="candidateDetail" class="candidate-detail" aria-live="polite"></div>
+          </div>
+          <details class="candidate-diagnostics-panel">
+            <summary>Projection diagnostics</summary>
+            <div id="candidateDiagnostics"></div>
+          </details>
+        </div>
+
+        <div id="artifactDiagnostics" class="panel wide">
+          <div class="panel-head">
+            <h2>Artifact Diagnostics</h2>
             <span id="loadState">Waiting for files</span>
           </div>
           <div class="table-wrap">
@@ -58,6 +126,8 @@
                 <tr>
                   <th>Kind</th>
                   <th>Path</th>
+                  <th>Status</th>
+                  <th>Diagnostics</th>
                   <th>Bytes</th>
                   <th>Hash</th>
                 </tr>
@@ -115,6 +185,25 @@
           <div id="reviewClosureList" class="flow-list"></div>
         </div>
 
+        <div id="paperDiagnosticsPanel" class="panel wide">
+          <div class="panel-head">
+            <h2>Paper Diagnostics</h2>
+            <span id="paperDiagnosticsCount">0 source assets / 0 claims</span>
+          </div>
+          <div id="paperDiagnosticsList" class="flow-list"></div>
+        </div>
+
+        <div id="projectEvolutionPanel" class="panel wide">
+          <div class="panel-head">
+            <h2>Project Evolution</h2>
+            <span id="projectEvolutionCount">0 documents</span>
+          </div>
+          <p id="projectEvolutionHelp" class="panel-note">
+            Human context only. Markdown imports never change run facts, validation status, scoring, or candidate decisions.
+          </p>
+          <div id="projectEvolutionList" class="flow-list"></div>
+        </div>
+
         <div class="panel">
           <div class="panel-head">
             <h2>Review Queue</h2>
@@ -141,6 +230,8 @@
       </section>
     </main>
 
+    <script src="run-data-store.js"></script>
+    <script src="candidate-projection.js"></script>
     <script src="viewer.js"></script>
   </body>
 </html>

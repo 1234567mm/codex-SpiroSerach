@@ -1,0 +1,1 @@
+{"schema_version":"v10.review_event.v1","event_id":"event-resolve-transition","event_type":"review_resolved","run_id":"run-002","generated_at":"2026-07-15T00:00:00Z","review_item_id":"review-transition","target_type":"use_instance","target_id":"mat-transition-use","reviewer":"fixture","decision":"accept","resolution_status":"resolved","reason":"fixture blocker resolved"}
