@@ -1416,6 +1416,129 @@ main().catch((error) => {
         self.assertFalse(whitespace_kind["normalizedArtifactOwn"])
         self.assertFalse(whitespace_kind["viewerResolvable"])
 
+    def test_diagnostic_projection_lifecycle_and_stale_load_guard(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for run store lifecycle test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error, Promise};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+const {RunDataStore, DiagnosticProjection} = context.SpiroRunData;
+
+function artifact(kind, path, format = "json") {
+  return {kind, path, format, run_id: "run-1"};
+}
+const snapshot = {
+  manifest: {run_id: "run-1", artifacts: [
+    artifact("canonical_evidence", "canonical.json"),
+    artifact("screening_input_view", "screening.json"),
+    artifact("review_events", "review-events.jsonl", "jsonl"),
+    artifact("optional_missing", "optional.json"),
+    artifact("optional_bad", "optional-bad.json"),
+  ]},
+  manifestMetadata: {runId: "run-1"},
+  artifacts: {
+    canonical_evidence: {payload: {records: [{candidate_id: "c-1"}]}},
+    screening_input_view: {payload: {candidates: []}},
+    review_events: {payload: []},
+  },
+  availability: {
+    canonical_evidence: {kind: "canonical_evidence", status: "available", path: "canonical.json"},
+    screening_input_view: {kind: "screening_input_view", status: "available", path: "screening.json"},
+    review_events: {kind: "review_events", status: "available", path: "review-events.jsonl"},
+    optional_missing: {kind: "optional_missing", status: "missing", path: "optional.json", diagnosticCodes: ["artifact_missing"]},
+    optional_bad: {kind: "optional_bad", status: "parse_error", path: "optional-bad.json", diagnosticCodes: ["artifact_parse_error"]},
+  },
+  diagnostics: [
+    {code: "artifact_missing", severity: "warning", kind: "optional_missing", path: "optional.json", message: "missing optional"},
+    {code: "artifact_parse_error", severity: "warning", kind: "optional_bad", path: "optional-bad.json", message: "bad optional"},
+  ],
+};
+const lifecycle = DiagnosticProjection.project(snapshot);
+
+function file(relativePath, payload) {
+  return {
+    relativePath,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+function manifest(runId) {
+  return {
+    run_id: runId,
+    artifacts: [{kind: "canonical_evidence", path: "canonical.json", format: "json", run_id: runId}],
+  };
+}
+class DelayedAdapter {
+  constructor() {
+    this.calls = [];
+  }
+  async index(files) {
+    const call = files[0];
+    this.calls.push(call.label);
+    await call.delay;
+    return {
+      ok: true,
+      paths: ["run-manifest.json", "canonical.json"],
+      manifestPath: "run-manifest.json",
+      entries: {
+        "run-manifest.json": {path: "run-manifest.json", text: JSON.stringify(manifest(call.runId))},
+        "canonical.json": {path: "canonical.json", text: JSON.stringify({records: [{candidate_id: call.runId}]})},
+      },
+      diagnostics: [],
+    };
+  }
+}
+let releaseSlow;
+let releaseFast;
+const slowDelay = new Promise((resolve) => { releaseSlow = resolve; });
+const fastDelay = new Promise((resolve) => { releaseFast = resolve; });
+const adapter = new DelayedAdapter();
+const store = new RunDataStore(adapter);
+const slow = store.replace([{label: "slow", runId: "slow-run", delay: slowDelay}]);
+const fast = store.replace([{label: "fast", runId: "fast-run", delay: fastDelay}]);
+releaseFast();
+fast.then(() => releaseSlow());
+Promise.all([slow, fast]).then(([slowResult, fastResult]) => {
+  process.stdout.write(JSON.stringify({
+    available: lifecycle.panels.canonical_evidence,
+    empty: lifecycle.panels.review_events,
+    degraded: lifecycle.panels.optional_missing,
+    invalid: lifecycle.panels.optional_bad,
+    unavailable: lifecycle.panels.model_evaluation,
+    fastOk: fastResult.ok,
+    slowOk: slowResult.ok,
+    slowCodes: slowResult.diagnostics.map((item) => item.code),
+    committedRunId: store.snapshot().manifest.run_id,
+  }));
+}).catch((error) => {
+  console.error(error.stack || error.message);
+  process.exit(1);
+});
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/run-data-store.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["available"]["state"], "available")
+        self.assertEqual(observed["empty"]["state"], "empty")
+        self.assertEqual(observed["degraded"]["state"], "degraded")
+        self.assertEqual(observed["invalid"]["state"], "invalid")
+        self.assertEqual(observed["unavailable"]["state"], "unavailable")
+        self.assertTrue(observed["fastOk"])
+        self.assertFalse(observed["slowOk"])
+        self.assertIn("stale_load_generation", observed["slowCodes"])
+        self.assertEqual(observed["committedRunId"], "fast-run")
+
     def test_viewer_script_renders_manifest_artifacts(self):
         script = Path("frontend/artifact-viewer/viewer.js").read_text(encoding="utf-8")
 
