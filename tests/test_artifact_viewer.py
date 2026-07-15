@@ -450,7 +450,8 @@ process.stdout.write(JSON.stringify({
         self.assertIn("duplicate_owned_evidence_id", observed["unreferencedEvidenceDuplicate"]["codes"])
         for name in ["duplicateReviewForward", "duplicateReviewReverse"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
-            self.assertIn("ambiguous_review_reference", observed[name]["codes"], name)
+            self.assertIn("duplicate_owned_review_id", observed[name]["codes"], name)
+            self.assertNotIn("ambiguous_review_reference", observed[name]["codes"], name)
         self.assertEqual(observed["unreferencedReviewDuplicate"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("duplicate_owned_review_id", observed["unreferencedReviewDuplicate"]["codes"])
         self.assertEqual(observed["unrelatedQueueDuplicate"]["groups"]["continue"], ["candidate-c"])
@@ -462,6 +463,8 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(canonical_duplicate["source"], "canonical_evidence")
         self.assertNotIn("declared blocking", canonical_duplicate["message"])
         self.assertNotIn("review_queue", canonical_duplicate["message"])
+        canonical_only_diagnostics = observed["canonicalOnlyReviewDuplicate"]["diagnostics"]
+        self.assertEqual(len(canonical_only_diagnostics), 1)
 
     def test_candidate_projection_preserves_v13_review_representation_across_canonical_and_queue(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for projection test")

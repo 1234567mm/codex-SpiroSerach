@@ -494,13 +494,20 @@
           "review_queue"
         );
       }
-      const reviewResolutions = new Map(reviewValidationIds.map((id) => [
+      const sameSourceDuplicateReviewIds = uniqueIdentifiers([
+        ...canonicalDuplicateReviewIds,
+        ...queueDuplicateReviewIds,
+      ]);
+      const reviewResolutionIds = reviewValidationIds.filter((id) =>
+        !sameSourceDuplicateReviewIds.includes(id)
+      );
+      const reviewResolutions = new Map(reviewResolutionIds.map((id) => [
         id,
         reviewResolution(reviewsById.get(id), candidateId, identity, evidenceById),
       ]));
-      const missingReviewIds = reviewValidationIds.filter((id) => reviewResolutions.get(id).status === "missing");
-      const ambiguousReviewIds = reviewValidationIds.filter((id) => reviewResolutions.get(id).status === "ambiguous");
-      const conflictingReviewIds = reviewValidationIds.filter((id) => reviewResolutions.get(id).status === "conflict");
+      const missingReviewIds = reviewResolutionIds.filter((id) => reviewResolutions.get(id).status === "missing");
+      const ambiguousReviewIds = reviewResolutionIds.filter((id) => reviewResolutions.get(id).status === "ambiguous");
+      const conflictingReviewIds = reviewResolutionIds.filter((id) => reviewResolutions.get(id).status === "conflict");
       if (ambiguousReviewIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
@@ -547,8 +554,11 @@
         blockers: {
           codes: uniqueRawStrings(Array.isArray(row?.codes) ? row.codes : []),
           reviewIds,
-          joinedReviews: reviewIds.filter((id) => reviewResolutions.get(id).status === "valid").map((id) => cloneJson(reviewResolutions.get(id).review)),
-          missingReviewIds: declaredUnjoinableReviewIds,
+          joinedReviews: reviewIds.filter((id) => reviewResolutions.get(id)?.status === "valid").map((id) => cloneJson(reviewResolutions.get(id).review)),
+          missingReviewIds: uniqueIdentifiers([
+            ...declaredUnjoinableReviewIds,
+            ...reviewIds.filter((id) => sameSourceDuplicateReviewIds.includes(id)),
+          ]),
         },
         evidenceCoverage: {
           declared: evidenceIds.length,
