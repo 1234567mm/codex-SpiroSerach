@@ -78,6 +78,22 @@ REST_SURFACES: tuple[dict[str, Any], ...] = (
         "response_schema": READONLY_API_ENVELOPE_SCHEMA_REF,
     },
     {
+        "surface_id": "candidate_identity_registry",
+        "method": "GET",
+        "path": "/runs/{run_id}/candidate-identity-registry",
+        "mcp_tool": "read_candidate_identity_registry",
+        "read_only": True,
+        "response_schema": READONLY_API_ENVELOPE_SCHEMA_REF,
+    },
+    {
+        "surface_id": "candidate_evidence_links",
+        "method": "GET",
+        "path": "/runs/{run_id}/candidate-evidence-links",
+        "mcp_tool": "read_candidate_evidence_links",
+        "read_only": True,
+        "response_schema": READONLY_API_ENVELOPE_SCHEMA_REF,
+    },
+    {
         "surface_id": "artifact_validation",
         "method": "GET",
         "path": "/runs/{run_id}/artifact-validation",
@@ -96,6 +112,8 @@ MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "read_scoring_view": "Read the policy-filtered scoring view artifact.",
     "read_review_summary": "Read the review summary artifact.",
     "read_provider_lineage": "Read provider cache index, provider cache, and agent trace lineage artifacts.",
+    "read_candidate_identity_registry": "Read the V21 candidate identity registry artifact.",
+    "read_candidate_evidence_links": "Read V21 candidate-to-evidence link records.",
     "read_artifact_validation_report": "Read a frontend-ready artifact validation report.",
 }
 
@@ -215,6 +233,14 @@ class ReadOnlyRunAPI:
     def review_summary(self) -> dict[str, Any]:
         result = self.repository.review_summary()
         return _result_envelope(surface="review_summary", result=result, run_id=self._run_id(), payload=result.payload)
+
+    def candidate_identity_registry(self) -> dict[str, Any]:
+        envelope = self.artifact("candidate_identity_registry")
+        return _retarget_artifact_envelope(envelope, surface="candidate_identity_registry")
+
+    def candidate_evidence_links(self) -> dict[str, Any]:
+        envelope = self.artifact("candidate_evidence_links")
+        return _retarget_artifact_envelope(envelope, surface="candidate_evidence_links")
 
     def provider_lineage(self) -> dict[str, Any]:
         lineage = self.repository.provider_lineage()
@@ -353,6 +379,12 @@ def _lineage_payload(result: ArtifactReadResult) -> dict[str, Any]:
         "records": list(result.records) if result.format == "jsonl" else [],
         "record_count": len(result.records) if result.format == "jsonl" else None,
     }
+
+
+def _retarget_artifact_envelope(envelope: Mapping[str, Any], *, surface: str) -> dict[str, Any]:
+    retargeted = dict(envelope)
+    retargeted["surface"] = surface
+    return retargeted
 
 
 def _run_id_from_manifest_result(result: ArtifactReadResult) -> str | None:

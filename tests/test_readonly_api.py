@@ -171,6 +171,8 @@ class ReadOnlyApiTests(unittest.TestCase):
                 "artifact_by_kind",
                 "artifact_index",
                 "artifact_validation",
+                "candidate_evidence_links",
+                "candidate_identity_registry",
                 "manifest",
                 "provider_lineage",
                 "review_summary",
@@ -187,6 +189,8 @@ class ReadOnlyApiTests(unittest.TestCase):
             [
                 "read_algorithm_diagnostics",
                 "read_artifact_validation_report",
+                "read_candidate_evidence_links",
+                "read_candidate_identity_registry",
                 "read_provider_lineage",
                 "read_review_summary",
                 "read_run_artifact",
