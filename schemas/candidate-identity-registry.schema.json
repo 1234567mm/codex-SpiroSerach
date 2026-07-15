@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/candidate-identity-registry.schema.json",
+  "title": "CandidateIdentityRegistry",
+  "$comment": "V21 read-plane registry for stable candidate/material/use-instance/source identity. Reviewer state is explicit authority; deterministic confidence is diagnostic only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_id", "identity_policy_version", "records"],
+  "properties": {
+    "schema_version": { "const": "v21.candidate_identity_registry.v1" },
+    "registry_id": { "type": "string", "minLength": 1 },
+    "identity_policy_version": { "type": "string", "minLength": 1 },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/identity_record" }
+    }
+  },
+  "$defs": {
+    "identity_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "stable_identity_id",
+        "aliases",
+        "material_ids",
+        "use_instance_ids",
+        "source_identities",
+        "reviewer_state",
+        "blocking_review_ids",
+        "identity_history",
+        "lineage"
+      ],
+      "properties": {
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "stable_identity_id": { "type": "string", "minLength": 1 },
+        "aliases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/alias" }
+        },
+        "material_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "use_instance_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "source_identities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/source_identity" }
+        },
+        "reviewer_state": { "$ref": "#/$defs/reviewer_state" },
+        "blocking_review_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "identity_history": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/history_event" }
+        },
+        "lineage": { "$ref": "#/$defs/lineage" }
+      }
+    },
+    "alias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "alias_type"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1 },
+        "alias_type": { "enum": ["display_name", "formula", "synonym", "legacy_candidate_id"] }
+      }
+    },
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_identity_id", "basis", "value", "normalized_value"],
+      "properties": {
+        "source_identity_id": { "type": "string", "minLength": 1 },
+        "basis": { "enum": ["doi", "inchikey", "material_id", "use_instance_id", "provider_source_id", "literature_claim_id"] },
+        "value": { "type": "string", "minLength": 1 },
+        "normalized_value": { "type": "string", "minLength": 1 }
+      }
+    },
+    "history_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_type", "from_ids", "to_ids", "reason_code", "review_event_id"],
+      "properties": {
+        "event_id": { "type": "string", "minLength": 1 },
+        "event_type": { "enum": ["merge", "split", "alias_added", "source_identity_added", "review_state_changed"] },
+        "from_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "to_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reason_code": { "type": "string", "minLength": 1 },
+        "review_event_id": { "type": ["string", "null"] }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_run_id", "source_artifact_kinds", "generated_by"],
+      "properties": {
+        "source_run_id": { "type": "string", "minLength": 1 },
+        "source_artifact_kinds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "generated_by": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reviewer_state": {
+      "enum": ["accepted", "proposed", "blocked", "conflicting", "superseded"]
+    }
+  }
+}
