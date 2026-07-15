@@ -1707,6 +1707,137 @@ main().catch((error) => {
         self.assertIn("duplicate_artifact_kind", observed["duplicateKind"])
         self.assertIn("readonly_envelope_metadata_conflict", observed["metadataConflict"])
 
+    def test_project_store_loads_nested_project_bundle_and_selects_runs_atomically(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for project store test")
+        runner = r"""
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error, Promise};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+const {
+  ProjectBundleAdapter,
+  ProjectSelectorProjection,
+  ProjectStore,
+} = context.SpiroRunData;
+
+function file(relativePath, payload) {
+  return {
+    name: relativePath.split("/").pop(),
+    relativePath,
+    webkitRelativePath: relativePath,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
+function fixtureFiles(root, prefix = "") {
+  const out = [];
+  function walk(dir) {
+    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+      const absolute = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute);
+      } else {
+        const rel = path.relative(root, absolute).replaceAll("\\", "/");
+        out.push(file(prefix ? `${prefix}/${rel}` : rel, fs.readFileSync(absolute, "utf8")));
+      }
+    }
+  }
+  walk(root);
+  return out;
+}
+
+(async () => {
+  const fixtureRoot = process.argv[3];
+  const store = new ProjectStore(new ProjectBundleAdapter());
+  const committed = await store.replace(fixtureFiles(fixtureRoot, "nested/project"));
+  const snapshot = store.snapshot();
+  const beforeSelection = JSON.stringify(snapshot.runs[0].snapshot.artifacts);
+  const selection = store.selectRuns("run-001", "run-002");
+  const afterSelection = JSON.stringify(snapshot.runs[0].snapshot.artifacts);
+  const selector = ProjectSelectorProjection.project(snapshot, selection);
+  const html = ProjectSelectorProjection.render(selector);
+  const keyboardNext = ProjectSelectorProjection.nextRunId(snapshot.runIds, "run-001", "ArrowRight");
+  const keyboardHome = ProjectSelectorProjection.nextRunId(snapshot.runIds, "run-002", "Home");
+  const escaping = ProjectSelectorProjection.render(ProjectSelectorProjection.project({
+    ...snapshot,
+    runs: [{...snapshot.runs[0], runId: "<bad&run>"}],
+    runIds: ["<bad&run>"],
+  }, {sourceRunId: "<bad&run>", targetRunId: null}));
+
+  const staleFailure = await store.replace([
+    file("nested/project/project-run-index.json", {...snapshot.index, project_id: "bad-project", runs: [
+      {...snapshot.index.runs[0], project_id: "bad-project"},
+      {...snapshot.index.runs[1], project_id: "other-project"},
+    ]}),
+  ]);
+  const afterFailure = store.snapshot();
+  const duplicate = await new ProjectStore(new ProjectBundleAdapter()).replace([
+    file("project/project-run-index.json", snapshot.index),
+    file("project/project-run-index.json", snapshot.index),
+  ]);
+
+  process.stdout.write(JSON.stringify({
+    committedOk: committed.ok,
+    projectId: snapshot.projectId,
+    runIds: snapshot.runIds,
+    runCount: snapshot.runs.length,
+    comparisonStatuses: snapshot.comparisons.map((item) => item.compatibilityStatus),
+    sourceManifestPath: snapshot.runs[0].snapshot.manifestMetadata.path,
+    sourceCanonicalResolvedPath: snapshot.runs[0].snapshot.artifacts.canonical_evidence.resolvedPath,
+    selection,
+    selectorState: selector.state,
+    selectorHtml: html,
+    keyboardNext,
+    keyboardHome,
+    escaping,
+    selectionMutatedRun: beforeSelection !== afterSelection,
+    staleFailureOk: staleFailure.ok,
+    afterFailureRunCount: afterFailure.runs.length,
+    duplicateCodes: duplicate.diagnostics.map((item) => item.code),
+  }));
+})();
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/run-data-store.js",
+                    "tests/fixtures/v20_project_evolution",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        self.assertTrue(observed["committedOk"])
+        self.assertEqual(observed["projectId"], "project-v20-fixture")
+        self.assertEqual(observed["runIds"], ["run-001", "run-002"])
+        self.assertEqual(observed["runCount"], 2)
+        self.assertEqual(observed["comparisonStatuses"], ["partially_comparable"])
+        self.assertEqual(observed["sourceManifestPath"], "nested/project/run-001/run-manifest.json")
+        self.assertEqual(observed["sourceCanonicalResolvedPath"], "nested/project/run-001/canonical-evidence.json")
+        self.assertEqual(observed["selection"]["compatibilityStatus"], "partially_comparable")
+        self.assertEqual(observed["selection"]["sourceValidationStatus"], "valid")
+        self.assertEqual(observed["selectorState"], "ready")
+        self.assertIn('role="listbox"', observed["selectorHtml"])
+        self.assertIn('data-run-id="run-001"', observed["selectorHtml"])
+        self.assertEqual(observed["keyboardNext"], "run-002")
+        self.assertEqual(observed["keyboardHome"], "run-001")
+        self.assertIn("&lt;bad&amp;run&gt;", observed["escaping"])
+        self.assertFalse(observed["selectionMutatedRun"])
+        self.assertFalse(observed["staleFailureOk"])
+        self.assertEqual(observed["afterFailureRunCount"], 0)
+        self.assertIn("duplicate_project_path", observed["duplicateCodes"])
+
     def test_diagnostic_projection_lifecycle_and_stale_load_guard(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for run store lifecycle test")
         runner = r"""

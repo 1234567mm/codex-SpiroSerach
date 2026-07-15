@@ -721,6 +721,196 @@
     },
   });
 
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  class ProjectBundleAdapter {
+    async index(files) {
+      const diagnostics = [];
+      const entries = Object.create(null);
+      const selected = Array.from(files || []);
+      const seenPaths = new Set();
+
+      await Promise.all(selected.map(async (file, index) => {
+        const suppliedPath = inputRelativePath(file) || file?.name || `project-file-${index + 1}`;
+        let path;
+        try {
+          path = normalizeRelativePath(suppliedPath);
+        } catch (error) {
+          diagnostics.push(diagnostic(
+            "unsafe_project_path",
+            error.message,
+            {path: suppliedPath || null}
+          ));
+          return;
+        }
+        if (seenPaths.has(path)) {
+          diagnostics.push(diagnostic(
+            "duplicate_project_path",
+            `duplicate project-relative path: ${path}`,
+            {path}
+          ));
+          return;
+        }
+        seenPaths.add(path);
+        try {
+          entries[path] = {path, text: await file.text()};
+        } catch (error) {
+          diagnostics.push(diagnostic(
+            "file_read_error",
+            `could not read ${path}: ${error.message}`,
+            {path}
+          ));
+        }
+      }));
+
+      const paths = Object.keys(entries).sort();
+      const indexPaths = paths.filter((path) => path === "project-run-index.json" || path.endsWith("/project-run-index.json"));
+      if (indexPaths.length !== 1) {
+        diagnostics.push(diagnostic(
+          indexPaths.length ? "multiple_project_indexes" : "project_index_missing",
+          indexPaths.length ? "exactly one project-run-index.json is allowed" : "project-run-index.json is required",
+          {paths: indexPaths}
+        ));
+      }
+
+      const indexPath = indexPaths[0] || null;
+      const basePath = indexPath ? manifestDirectory(indexPath) : "";
+      let index = null;
+      if (indexPath) {
+        try {
+          index = JSON.parse(entries[indexPath].text);
+        } catch (error) {
+          diagnostics.push(diagnostic(
+            "project_index_parse_error",
+            `${indexPath} JSON parse failed: ${error.message}`,
+            {path: indexPath}
+          ));
+        }
+      }
+      if (!index || typeof index !== "object" || Array.isArray(index)) {
+        diagnostics.push(diagnostic(
+          "project_index_invalid",
+          "project-run-index.json must be a JSON object",
+          {path: indexPath}
+        ));
+      }
+
+      const projectId = typeof index?.project_id === "string" ? index.project_id : "";
+      if (!projectId.trim()) {
+        diagnostics.push(diagnostic("project_id_missing", "project index requires a non-empty project_id"));
+      }
+      if (!Array.isArray(index?.runs)) {
+        diagnostics.push(diagnostic("project_runs_invalid", "project index runs must be an array"));
+      }
+
+      const runs = [];
+      const runIds = new Set();
+      for (const run of Array.isArray(index?.runs) ? index.runs : []) {
+        if (!run || typeof run !== "object" || Array.isArray(run)) {
+          diagnostics.push(diagnostic("project_run_invalid", "project run entry must be an object"));
+          continue;
+        }
+        const runId = typeof run.run_id === "string" ? run.run_id : "";
+        if (!runId.trim()) {
+          diagnostics.push(diagnostic("project_run_id_missing", "project run entry requires run_id"));
+          continue;
+        }
+        if (runIds.has(runId)) {
+          diagnostics.push(diagnostic("duplicate_project_run_id", `duplicate project run_id: ${runId}`, {runId}));
+        }
+        runIds.add(runId);
+        if (run.project_id !== projectId) {
+          diagnostics.push(diagnostic(
+            "mixed_project_id",
+            "project run entry project_id must match project index project_id",
+            {runId, projectId: run.project_id || null}
+          ));
+        }
+        let manifestPath;
+        try {
+          manifestPath = joinRelativePath(basePath, normalizeRelativePath(run.manifest_path));
+        } catch (error) {
+          diagnostics.push(diagnostic("unsafe_project_manifest_path", error.message, {runId, path: run.manifest_path || null}));
+          continue;
+        }
+        const runBasePath = manifestDirectory(manifestPath);
+        const runFiles = paths
+          .filter((path) => path === manifestPath || path.startsWith(`${runBasePath}/`))
+          .map((path) => ({
+            name: path.split("/").pop(),
+            relativePath: path,
+            webkitRelativePath: path,
+            text: async () => entries[path].text,
+          }));
+        runs.push({run, runId, manifestPath, runBasePath, files: runFiles});
+      }
+
+      const comparisons = [];
+      for (const comparison of Array.isArray(index?.comparisons) ? index.comparisons : []) {
+        if (!comparison || typeof comparison !== "object" || Array.isArray(comparison)) {
+          diagnostics.push(diagnostic("project_comparison_invalid", "project comparison entry must be an object"));
+          continue;
+        }
+        const sourceRunId = comparison.source_run_id;
+        const targetRunId = comparison.target_run_id;
+        if (!runIds.has(sourceRunId) || !runIds.has(targetRunId)) {
+          diagnostics.push(diagnostic(
+            "stale_project_comparison",
+            "project comparison must reference declared project runs",
+            {sourceRunId, targetRunId}
+          ));
+          continue;
+        }
+        let compatibility = null;
+        let delta = null;
+        let compatibilityPath = null;
+        let deltaPath = null;
+        try {
+          compatibilityPath = joinRelativePath(basePath, normalizeRelativePath(comparison.compatibility_path));
+          if (!entries[compatibilityPath]) throw new Error(`missing compatibility artifact: ${compatibilityPath}`);
+          compatibility = JSON.parse(entries[compatibilityPath].text);
+        } catch (error) {
+          diagnostics.push(diagnostic("project_compatibility_unavailable", error.message, {sourceRunId, targetRunId}));
+        }
+        try {
+          deltaPath = joinRelativePath(basePath, normalizeRelativePath(comparison.delta_path));
+          if (!entries[deltaPath]) throw new Error(`missing delta artifact: ${deltaPath}`);
+          delta = JSON.parse(entries[deltaPath].text);
+        } catch (error) {
+          diagnostics.push(diagnostic("project_delta_unavailable", error.message, {sourceRunId, targetRunId}, "warning"));
+        }
+        comparisons.push({
+          sourceRunId,
+          targetRunId,
+          compatibilityPath,
+          deltaPath,
+          compatibility,
+          delta,
+          comparison: cloneJson(comparison),
+        });
+      }
+
+      return deepFreeze({
+        ok: !diagnostics.some(isFailureDiagnostic),
+        paths,
+        indexPath,
+        basePath,
+        projectId,
+        index,
+        runs,
+        comparisons,
+        diagnostics,
+      });
+    }
+  }
+
   class RunDataStore {
     constructor(adapter = new AutoRunDataAdapter()) {
       this.adapter = adapter;
@@ -1098,9 +1288,226 @@
     }
   }
 
+  const EMPTY_PROJECT_SNAPSHOT = deepFreeze({
+    schemaVersion: "v20.project_store.v1",
+    projectId: null,
+    indexPath: null,
+    basePath: "",
+    index: null,
+    runs: [],
+    runIds: [],
+    comparisons: [],
+    diagnostics: [],
+  });
+
+  const EMPTY_PROJECT_SELECTION = deepFreeze({
+    sourceRunId: null,
+    targetRunId: null,
+    sourceValidationStatus: "unavailable",
+    targetValidationStatus: "unavailable",
+    compatibilityStatus: "unavailable",
+    comparison: null,
+  });
+
+  class ProjectStore {
+    constructor(adapter = new ProjectBundleAdapter()) {
+      this.adapter = adapter;
+      this.committedSnapshot = EMPTY_PROJECT_SNAPSHOT;
+      this.committedSelection = EMPTY_PROJECT_SELECTION;
+      this.loadGeneration = 0;
+    }
+
+    snapshot() {
+      return this.committedSnapshot;
+    }
+
+    selection() {
+      return this.committedSelection;
+    }
+
+    async replace(files) {
+      const generation = ++this.loadGeneration;
+      const bundle = await this.adapter.index(files);
+      if (generation !== this.loadGeneration) {
+        return this.failure([diagnostic(
+          "stale_project_load_generation",
+          "Older asynchronous project load was ignored because a newer project load started",
+          {},
+          "warning"
+        )]);
+      }
+      if (!bundle.ok) {
+        return this.failure(bundle.diagnostics);
+      }
+
+      const diagnostics = [...bundle.diagnostics];
+      const runs = [];
+      for (const run of bundle.runs) {
+        const runResult = await new RunDataStore(new RelativePathBundleAdapter()).replace(run.files);
+        if (!runResult.ok) {
+          diagnostics.push(diagnostic(
+            "project_run_load_failed",
+            `project run ${run.runId} could not be loaded atomically`,
+            {runId: run.runId, manifestPath: run.manifestPath, diagnostics: runResult.diagnostics}
+          ));
+          continue;
+        }
+        runs.push({
+          projectId: bundle.projectId,
+          runId: run.runId,
+          manifestPath: run.manifestPath,
+          predecessorRunId: run.run.predecessor_run_id ?? null,
+          validation: cloneJson(run.run.validation || null),
+          comparisonDimensions: cloneJson(run.run.comparison_dimensions || {}),
+          snapshot: runResult.snapshot,
+        });
+      }
+
+      if (diagnostics.some(isFailureDiagnostic)) {
+        return this.failure(diagnostics);
+      }
+
+      const runIds = runs.map((run) => run.runId);
+      const comparisons = bundle.comparisons.map((comparison) => deepFreeze({
+        sourceRunId: comparison.sourceRunId,
+        targetRunId: comparison.targetRunId,
+        compatibilityPath: comparison.compatibilityPath,
+        deltaPath: comparison.deltaPath,
+        compatibilityStatus: comparison.compatibility?.status || "unavailable",
+        compatibility: cloneJson(comparison.compatibility),
+        delta: cloneJson(comparison.delta),
+        comparison: cloneJson(comparison.comparison),
+      }));
+      const snapshot = deepFreeze({
+        schemaVersion: "v20.project_store.v1",
+        projectId: bundle.projectId,
+        indexPath: bundle.indexPath,
+        basePath: bundle.basePath,
+        index: cloneJson(bundle.index),
+        runs,
+        runIds,
+        comparisons,
+        diagnostics,
+      });
+      if (generation !== this.loadGeneration) {
+        return this.failure([diagnostic(
+          "stale_project_load_generation",
+          "Older asynchronous project load was ignored because a newer project load committed first",
+          {},
+          "warning"
+        )]);
+      }
+      this.committedSnapshot = snapshot;
+      this.committedSelection = EMPTY_PROJECT_SELECTION;
+      return deepFreeze({ok: true, snapshot, selection: this.committedSelection, diagnostics});
+    }
+
+    selectRuns(sourceRunId, targetRunId) {
+      const source = this.committedSnapshot.runs.find((run) => run.runId === sourceRunId) || null;
+      const target = this.committedSnapshot.runs.find((run) => run.runId === targetRunId) || null;
+      const comparison = this.committedSnapshot.comparisons.find((item) =>
+        item.sourceRunId === sourceRunId && item.targetRunId === targetRunId
+      ) || null;
+      this.committedSelection = deepFreeze({
+        sourceRunId: source?.runId || null,
+        targetRunId: target?.runId || null,
+        sourceValidationStatus: source?.validation?.status || "unavailable",
+        targetValidationStatus: target?.validation?.status || "unavailable",
+        compatibilityStatus: comparison?.compatibilityStatus || "unavailable",
+        comparison,
+      });
+      return this.committedSelection;
+    }
+
+    failure(diagnostics) {
+      this.committedSnapshot = EMPTY_PROJECT_SNAPSHOT;
+      this.committedSelection = EMPTY_PROJECT_SELECTION;
+      return deepFreeze({
+        ok: false,
+        snapshot: this.committedSnapshot,
+        selection: this.committedSelection,
+        diagnostics: cloneJson(diagnostics),
+      });
+    }
+  }
+
+  const ProjectSelectorProjection = Object.freeze({
+    project(projectSnapshot = EMPTY_PROJECT_SNAPSHOT, selection = EMPTY_PROJECT_SELECTION) {
+      const diagnostics = cloneJson(projectSnapshot?.diagnostics || []);
+      const runs = (projectSnapshot?.runs || []).map((run) => ({
+        runId: run.runId,
+        manifestPath: run.manifestPath,
+        validationStatus: run.validation?.status || "unavailable",
+        predecessorRunId: run.predecessorRunId || null,
+        selectedAsSource: run.runId === selection?.sourceRunId,
+        selectedAsTarget: run.runId === selection?.targetRunId,
+      }));
+      const comparisons = (projectSnapshot?.comparisons || []).map((comparison) => ({
+        sourceRunId: comparison.sourceRunId,
+        targetRunId: comparison.targetRunId,
+        compatibilityStatus: comparison.compatibilityStatus,
+      }));
+      const hasFailure = diagnostics.some(isFailureDiagnostic);
+      return deepFreeze({
+        state: runs.length ? "ready" : (hasFailure ? "error" : "empty"),
+        projectId: projectSnapshot?.projectId || null,
+        runs,
+        comparisons,
+        selection: cloneJson(selection || EMPTY_PROJECT_SELECTION),
+        diagnostics,
+      });
+    },
+
+    nextRunId(runIds, currentRunId, key) {
+      const ids = Array.from(runIds || []);
+      if (!ids.length) return null;
+      const currentIndex = Math.max(0, ids.indexOf(currentRunId));
+      if (key === "Home") return ids[0];
+      if (key === "End") return ids[ids.length - 1];
+      if (key === "ArrowRight" || key === "ArrowDown") return ids[(currentIndex + 1) % ids.length];
+      if (key === "ArrowLeft" || key === "ArrowUp") return ids[(currentIndex - 1 + ids.length) % ids.length];
+      if (key === "Enter" || key === " ") return ids[currentIndex];
+      return currentRunId || ids[0];
+    },
+
+    render(selector) {
+      if (selector?.state === "error") {
+        return `<div class="project-selector error" role="alert">Project load failed</div>`;
+      }
+      if (!selector?.runs?.length) {
+        return `<div class="project-selector empty">No project loaded</div>`;
+      }
+      const runButtons = selector.runs.map((run, index) => `<button
+        type="button"
+        role="option"
+        data-run-id="${escapeHtml(run.runId)}"
+        aria-selected="${run.selectedAsSource || run.selectedAsTarget}"
+        tabindex="${index === 0 ? "0" : "-1"}">
+        ${escapeHtml(run.runId)}
+        <span>${escapeHtml(run.validationStatus)}</span>
+      </button>`).join("");
+      const comparison = selector.selection?.comparison;
+      const compatibility = selector.selection?.compatibilityStatus || "unavailable";
+      return `<section class="project-selector" aria-label="Project run selector">
+        <div role="listbox" aria-label="Runs" data-keyboard="ArrowLeft ArrowRight ArrowUp ArrowDown Home End Enter Space">
+          ${runButtons}
+        </div>
+        <div class="project-comparison-status">
+          source ${escapeHtml(selector.selection?.sourceRunId || "-")}
+          target ${escapeHtml(selector.selection?.targetRunId || "-")}
+          compatibility ${escapeHtml(compatibility)}
+          ${comparison ? `<span>${escapeHtml(comparison.sourceRunId)}→${escapeHtml(comparison.targetRunId)}</span>` : ""}
+        </div>
+      </section>`;
+    },
+  });
+
   global.SpiroRunData = Object.freeze({
     AutoRunDataAdapter,
     DiagnosticProjection,
+    ProjectBundleAdapter,
+    ProjectSelectorProjection,
+    ProjectStore,
     RelativePathBundleAdapter,
     ReadonlyEnvelopeAdapter,
     RunDataStore,
