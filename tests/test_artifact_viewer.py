@@ -7,12 +7,17 @@ from pathlib import Path
 
 
 class ArtifactViewerTests(unittest.TestCase):
-    def test_static_viewer_exposes_manifest_and_artifact_file_inputs(self):
+    def test_static_viewer_exposes_manifest_first_bundle_input(self):
         html = Path("frontend/artifact-viewer/index.html").read_text(encoding="utf-8")
 
-        self.assertIn('id="manifestFile"', html)
-        self.assertIn('id="artifactFiles"', html)
+        self.assertIn('id="bundleFiles"', html)
+        self.assertIn("webkitdirectory", html)
+        self.assertIn('<script src="run-data-store.js"></script>', html)
+        self.assertNotIn('id="manifestFile"', html)
+        self.assertNotIn('id="artifactFiles"', html)
         self.assertIn('id="artifactTable"', html)
+        self.assertIn('id="candidateTable"', html)
+        self.assertIn('id="candidateDetail"', html)
         self.assertIn('id="recommendationList"', html)
         self.assertIn('id="timeline"', html)
         self.assertIn('id="candidateFlow"', html)
@@ -27,10 +32,447 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="errorState"', html)
         self.assertNotIn("landing", html.casefold())
 
-    def test_viewer_script_parses_jsonl_and_renders_manifest_artifacts(self):
+    def test_run_data_store_commits_exact_manifest_bundle_atomically(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        store_script = Path("frontend/artifact-viewer/run-data-store.js")
+        self.assertTrue(
+            store_script.exists(),
+            "RelativePathBundleAdapter and RunDataStore script is required",
+        )
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error, Promise};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+const {RelativePathBundleAdapter, RunDataStore} = context.SpiroRunData;
+
+function file(relativePath, payload) {
+  return {
+    name: relativePath.split("/").pop(),
+    webkitRelativePath: relativePath,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
+function nameOnlyFile(name, payload) {
+  return {
+    name,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
+function explicitPathFile(relativePath, payload) {
+  return {
+    name: relativePath.split("/").pop(),
+    relativePath,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
+function manifest(runId, artifacts) {
+  return {
+    schema_version: "v6.run_manifest.v1",
+    run_id: runId,
+    artifacts: artifacts.map((artifact) => ({
+      format: "json",
+      run_id: runId,
+      ...artifact,
+    })),
+  };
+}
+
+function codes(result) {
+  return result.diagnostics.map((diagnostic) => diagnostic.code);
+}
+
+async function main() {
+  const runId = "run-good";
+  const goodManifest = manifest(runId, [
+    {kind: "canonical_evidence", path: "data/canonical.json"},
+    {kind: "screening_input_view", path: "derived/screening.json"},
+    {kind: "model_evaluation", path: "diagnostics/model.json"},
+  ]);
+  const canonical = {
+    schema_version: "v9.canonical_evidence.v1",
+    records: [{candidate_id: "candidate-1"}],
+  };
+  const screening = {
+    schema_version: "v19.screening_input_view.v1",
+    candidates: [{candidate_id: "candidate-1", status: "pass"}],
+  };
+  const goodFiles = [
+    file("chosen-run/run-manifest.json", goodManifest),
+    file("chosen-run/data/canonical.json", canonical),
+    file("chosen-run/derived/screening.json", screening),
+    file("chosen-run/diagnostics/model.json", "{bad json"),
+  ];
+
+  const adapter = new RelativePathBundleAdapter();
+  const indexed = await adapter.index(goodFiles);
+  const store = new RunDataStore(adapter);
+  const committed = await store.replace(goodFiles);
+  const snapshot = store.snapshot();
+  const beforeCandidateId = snapshot.artifacts.canonical_evidence.payload.records[0].candidate_id;
+  try {
+    snapshot.artifacts.canonical_evidence.payload.records[0].candidate_id = "mutated";
+  } catch (error) {
+    // Frozen snapshots may throw in strict runtimes; either behavior is acceptable.
+  }
+
+  const basenameOnly = await new RunDataStore().replace([
+    file("chosen-run/run-manifest.json", goodManifest),
+    file("chosen-run/canonical.json", canonical),
+    file("chosen-run/derived/screening.json", screening),
+  ]);
+  const duplicateKind = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-duplicate-kind", [
+      {kind: "canonical_evidence", path: "canonical-a.json"},
+      {kind: "canonical_evidence", path: "canonical-b.json"},
+    ])),
+  ]);
+  const duplicateManifestPath = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-duplicate-path", [
+      {kind: "canonical_evidence", path: "same.json"},
+      {kind: "screening_input_view", path: "same.json"},
+    ])),
+  ]);
+  const duplicateInputPath = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-input-path", [])),
+    file("run-manifest.json", manifest("run-input-path", [])),
+  ]);
+  const unsafePath = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-unsafe", [
+      {kind: "canonical_evidence", path: "../canonical.json"},
+    ])),
+  ]);
+  const mixedManifest = manifest("run-mixed", [
+    {kind: "canonical_evidence", path: "canonical.json", run_id: "other-run"},
+  ]);
+  const mixedRun = await store.replace([
+    file("run-manifest.json", mixedManifest),
+    file("canonical.json", canonical),
+  ]);
+  const afterFailedReplacement = store.snapshot();
+  const duplicateCandidates = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-candidates", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    file("canonical.json", {records: [{candidate_id: "same"}, {candidate_id: "same"}]}),
+  ]);
+  const nullCanonical = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-null-canonical", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    file("canonical.json", "null"),
+  ]);
+  const missingCandidateId = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-missing-candidate", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    file("canonical.json", {records: [{candidate_id: " "}]}),
+  ]);
+  const exactIdentityStore = new RunDataStore();
+  const exactRawRunId = " run-exact ";
+  const exactIdentityCommit = await exactIdentityStore.replace([
+    file("run-manifest.json", manifest(exactRawRunId, [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    file("canonical.json", canonical),
+  ]);
+  const whitespaceMismatch = await exactIdentityStore.replace([
+    file("run-manifest.json", manifest(" run-mismatch ", [
+      {kind: "canonical_evidence", path: "canonical.json", run_id: "run-mismatch"},
+    ])),
+    file("canonical.json", canonical),
+  ]);
+  const reservedFiles = [
+    file("run-manifest.json", manifest("run-reserved", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+      {kind: "__proto__", path: "__proto__"},
+    ])),
+    file("canonical.json", canonical),
+    file("__proto__", {nested: {marker: "reserved"}}),
+  ];
+  const reservedIndexed = await new RelativePathBundleAdapter().index(reservedFiles);
+  const reservedCommit = await new RunDataStore().replace(reservedFiles);
+  const reservedSnapshot = reservedCommit.snapshot;
+  const formatAuthority = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-format-authority", [
+      {kind: "canonical_evidence", path: "canonical.jsonl", format: "json"},
+    ])),
+    file("canonical.jsonl", canonical),
+  ]);
+  const unsupportedCanonicalFormat = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-format-unsupported", [
+      {kind: "canonical_evidence", path: "canonical.json", format: "yaml"},
+    ])),
+    file("canonical.json", canonical),
+  ]);
+  const missingOptionalFormat = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-format-optional", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+      {kind: "model_evaluation", path: "model.json", format: null},
+    ])),
+    file("canonical.json", canonical),
+    file("model.json", {activation_status: "disabled"}),
+  ]);
+  const jsonlPayloadConflict = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-jsonl-conflict", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+      {kind: "review_events", path: "review-events.jsonl", format: "jsonl"},
+    ])),
+    file("canonical.json", canonical),
+    file("review-events.jsonl", '{"event_id":"event-1","run_id":"other-run"}\n{"event_id":"event-2"}\n'),
+  ]);
+  const jsonlPayloadWithoutRunId = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-jsonl-without-id", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+      {kind: "review_events", path: "review-events.jsonl", format: "jsonl"},
+    ])),
+    file("canonical.json", canonical),
+    file("review-events.jsonl", '{"event_id":"event-without-run-id"}\n'),
+  ]);
+  const jsonlConflictDiagnostic = jsonlPayloadConflict.diagnostics.find(
+    (item) => item.code === "artifact_run_id_conflict" && item.kind === "review_events"
+  );
+  const nameOnlyBundle = await new RunDataStore().replace([
+    nameOnlyFile("run-manifest.json", manifest("run-name-only", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    nameOnlyFile("canonical.json", canonical),
+  ]);
+  const explicitPathBundle = await new RunDataStore().replace([
+    explicitPathFile("explicit/run-manifest.json", manifest("run-explicit-path", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    explicitPathFile("explicit/canonical.json", canonical),
+  ]);
+  const whitespaceKindBundle = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-kind-whitespace", [
+      {kind: " canonical_evidence ", path: "canonical.json"},
+    ])),
+    file("canonical.json", canonical),
+  ]);
+  const whitespaceKindSnapshot = whitespaceKindBundle.snapshot;
+  const viewerArtifact = (whitespaceKindSnapshot.manifest?.artifacts || [])
+    .find((artifact) => artifact.kind === "canonical_evidence");
+
+  function reachableValuesAreFrozen(value, seen = new Set()) {
+    if (!value || typeof value !== "object" || seen.has(value)) return true;
+    seen.add(value);
+    return Object.isFrozen(value) && Object.values(value)
+      .every((item) => reachableValuesAreFrozen(item, seen));
+  }
+
+  process.stdout.write(JSON.stringify({
+    indexedPaths: indexed.paths,
+    committed: committed.ok,
+    runId: snapshot.manifest.run_id,
+    manifestPath: snapshot.manifestMetadata.path,
+    manifestBasePath: snapshot.manifestMetadata.basePath,
+    canonicalPath: snapshot.artifacts.canonical_evidence.path,
+    canonicalResolvedPath: snapshot.artifacts.canonical_evidence.resolvedPath,
+    canonicalStatus: snapshot.availability.canonical_evidence.status,
+    screeningStatus: snapshot.availability.screening_input_view.status,
+    optionalParseStatus: snapshot.availability.model_evaluation.status,
+    committedCodes: codes(committed),
+    frozen: [
+      snapshot,
+      snapshot.manifest,
+      snapshot.manifestMetadata,
+      snapshot.artifacts,
+      snapshot.artifacts.canonical_evidence,
+      snapshot.artifacts.canonical_evidence.payload,
+      snapshot.availability,
+      snapshot.diagnostics,
+    ].every(Object.isFrozen),
+    mutationBlocked: snapshot.artifacts.canonical_evidence.payload.records[0].candidate_id === beforeCandidateId,
+    basenameOnly: {ok: basenameOnly.ok, codes: codes(basenameOnly)},
+    duplicateKind: codes(duplicateKind),
+    duplicateManifestPath: codes(duplicateManifestPath),
+    duplicateInputPath: codes(duplicateInputPath),
+    unsafePath: codes(unsafePath),
+    mixedRun: {
+      ok: mixedRun.ok,
+      codes: codes(mixedRun),
+      retainedRunId: mixedRun.retainedRunId,
+      sameSnapshot: afterFailedReplacement === snapshot,
+      committedRunId: afterFailedReplacement.manifest.run_id,
+    },
+    duplicateCandidates: codes(duplicateCandidates),
+    nullCanonical: codes(nullCanonical),
+    missingCandidateId: codes(missingCandidateId),
+    exactIdentity: {
+      committed: exactIdentityCommit.ok,
+      manifestRunId: exactIdentityCommit.snapshot.manifest.run_id,
+      metadataRunId: exactIdentityCommit.snapshot.manifestMetadata.runId,
+      mismatchOk: whitespaceMismatch.ok,
+      mismatchCodes: codes(whitespaceMismatch),
+      retainedRunId: whitespaceMismatch.retainedRunId,
+      retainedManifestRunId: exactIdentityStore.snapshot().manifest.run_id,
+      retainedMetadataRunId: exactIdentityStore.snapshot().manifestMetadata.runId,
+    },
+    reservedKeys: {
+      committed: reservedCommit.ok,
+      indexedOwnEntry: Object.prototype.hasOwnProperty.call(reservedIndexed.entries, "__proto__"),
+      artifactOwnEntry: Object.prototype.hasOwnProperty.call(reservedSnapshot.artifacts, "__proto__"),
+      availabilityOwnEntry: Object.prototype.hasOwnProperty.call(reservedSnapshot.availability, "__proto__"),
+      artifactMarker: reservedSnapshot.artifacts.__proto__?.payload?.nested?.marker,
+      availabilityStatus: reservedSnapshot.availability.__proto__?.status,
+      entriesPrototypeIsNull: Object.getPrototypeOf(reservedIndexed.entries) === null,
+      artifactsPrototypeIsNull: Object.getPrototypeOf(reservedSnapshot.artifacts) === null,
+      availabilityPrototypeIsNull: Object.getPrototypeOf(reservedSnapshot.availability) === null,
+      entriesFrozen: reachableValuesAreFrozen(reservedIndexed.entries),
+      artifactsFrozen: reachableValuesAreFrozen(reservedSnapshot.artifacts),
+      availabilityFrozen: reachableValuesAreFrozen(reservedSnapshot.availability),
+    },
+    manifestFormats: {
+      authoritativeCommit: formatAuthority.ok,
+      authoritativeCandidateId: formatAuthority.snapshot.artifacts.canonical_evidence?.payload?.records?.[0]?.candidate_id,
+      unsupportedCanonicalOk: unsupportedCanonicalFormat.ok,
+      unsupportedCanonicalCodes: codes(unsupportedCanonicalFormat),
+      missingOptionalOk: missingOptionalFormat.ok,
+      missingOptionalStatus: missingOptionalFormat.snapshot.availability.model_evaluation?.status,
+      missingOptionalCodes: codes(missingOptionalFormat),
+    },
+    jsonlPayloadIdentity: {
+      conflictOk: jsonlPayloadConflict.ok,
+      conflictCodes: codes(jsonlPayloadConflict),
+      conflictRecordIndex: jsonlConflictDiagnostic?.recordIndex,
+      conflictActualRunId: jsonlConflictDiagnostic?.actualRunId,
+      missingRunIdOk: jsonlPayloadWithoutRunId.ok,
+    },
+    explicitInputPaths: {
+      nameOnlyOk: nameOnlyBundle.ok,
+      nameOnlyCodes: codes(nameOnlyBundle),
+      explicitRelativePathOk: explicitPathBundle.ok,
+      webkitRelativePathOk: committed.ok,
+    },
+    whitespaceKind: {
+      ok: whitespaceKindBundle.ok,
+      codes: codes(whitespaceKindBundle),
+      committedManifestKind: whitespaceKindSnapshot.manifest?.artifacts?.[0]?.kind ?? null,
+      normalizedArtifactOwn: Object.prototype.hasOwnProperty.call(
+        whitespaceKindSnapshot.artifacts,
+        "canonical_evidence"
+      ),
+      viewerResolvable: Boolean(
+        viewerArtifact?.path && whitespaceKindSnapshot.artifacts.canonical_evidence
+      ),
+    },
+  }));
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), str(store_script)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        self.assertEqual(
+            observed["indexedPaths"],
+            [
+                "chosen-run/data/canonical.json",
+                "chosen-run/derived/screening.json",
+                "chosen-run/diagnostics/model.json",
+                "chosen-run/run-manifest.json",
+            ],
+        )
+        self.assertTrue(observed["committed"])
+        self.assertEqual(observed["runId"], "run-good")
+        self.assertEqual(observed["manifestPath"], "chosen-run/run-manifest.json")
+        self.assertEqual(observed["manifestBasePath"], "chosen-run")
+        self.assertEqual(observed["canonicalPath"], "data/canonical.json")
+        self.assertEqual(observed["canonicalResolvedPath"], "chosen-run/data/canonical.json")
+        self.assertEqual(observed["canonicalStatus"], "available")
+        self.assertEqual(observed["screeningStatus"], "available")
+        self.assertEqual(observed["optionalParseStatus"], "parse_error")
+        self.assertIn("artifact_parse_error", observed["committedCodes"])
+        self.assertTrue(observed["frozen"])
+        self.assertTrue(observed["mutationBlocked"])
+        self.assertFalse(observed["basenameOnly"]["ok"])
+        self.assertIn("artifact_missing", observed["basenameOnly"]["codes"])
+        self.assertIn("duplicate_artifact_kind", observed["duplicateKind"])
+        self.assertIn("duplicate_artifact_path", observed["duplicateManifestPath"])
+        self.assertIn("duplicate_relative_path", observed["duplicateInputPath"])
+        self.assertIn("unsafe_artifact_path", observed["unsafePath"])
+        self.assertFalse(observed["mixedRun"]["ok"])
+        self.assertIn("artifact_run_id_conflict", observed["mixedRun"]["codes"])
+        self.assertEqual(observed["mixedRun"]["retainedRunId"], "run-good")
+        self.assertTrue(observed["mixedRun"]["sameSnapshot"])
+        self.assertEqual(observed["mixedRun"]["committedRunId"], "run-good")
+        self.assertIn("duplicate_candidate_id", observed["duplicateCandidates"])
+        self.assertIn("canonical_evidence_invalid", observed["nullCanonical"])
+        self.assertIn("candidate_id_missing", observed["missingCandidateId"])
+        exact_identity = observed["exactIdentity"]
+        self.assertTrue(exact_identity["committed"])
+        self.assertEqual(exact_identity["manifestRunId"], " run-exact ")
+        self.assertEqual(exact_identity["metadataRunId"], " run-exact ")
+        self.assertFalse(exact_identity["mismatchOk"])
+        self.assertIn("artifact_run_id_conflict", exact_identity["mismatchCodes"])
+        self.assertEqual(exact_identity["retainedRunId"], " run-exact ")
+        self.assertEqual(exact_identity["retainedManifestRunId"], " run-exact ")
+        self.assertEqual(exact_identity["retainedMetadataRunId"], " run-exact ")
+        reserved_keys = observed["reservedKeys"]
+        self.assertTrue(reserved_keys["committed"])
+        self.assertTrue(reserved_keys["indexedOwnEntry"])
+        self.assertTrue(reserved_keys["artifactOwnEntry"])
+        self.assertTrue(reserved_keys["availabilityOwnEntry"])
+        self.assertEqual(reserved_keys["artifactMarker"], "reserved")
+        self.assertEqual(reserved_keys["availabilityStatus"], "available")
+        self.assertTrue(reserved_keys["entriesPrototypeIsNull"])
+        self.assertTrue(reserved_keys["artifactsPrototypeIsNull"])
+        self.assertTrue(reserved_keys["availabilityPrototypeIsNull"])
+        self.assertTrue(reserved_keys["entriesFrozen"])
+        self.assertTrue(reserved_keys["artifactsFrozen"])
+        self.assertTrue(reserved_keys["availabilityFrozen"])
+        manifest_formats = observed["manifestFormats"]
+        self.assertTrue(manifest_formats["authoritativeCommit"])
+        self.assertEqual(manifest_formats["authoritativeCandidateId"], "candidate-1")
+        self.assertFalse(manifest_formats["unsupportedCanonicalOk"])
+        self.assertIn("artifact_format_unsupported", manifest_formats["unsupportedCanonicalCodes"])
+        self.assertTrue(manifest_formats["missingOptionalOk"])
+        self.assertEqual(manifest_formats["missingOptionalStatus"], "unsupported_format")
+        self.assertIn("artifact_format_unsupported", manifest_formats["missingOptionalCodes"])
+        jsonl_identity = observed["jsonlPayloadIdentity"]
+        self.assertFalse(jsonl_identity["conflictOk"])
+        self.assertIn("artifact_run_id_conflict", jsonl_identity["conflictCodes"])
+        self.assertEqual(jsonl_identity["conflictRecordIndex"], 0)
+        self.assertEqual(jsonl_identity["conflictActualRunId"], "other-run")
+        self.assertTrue(jsonl_identity["missingRunIdOk"])
+        explicit_paths = observed["explicitInputPaths"]
+        self.assertFalse(explicit_paths["nameOnlyOk"])
+        self.assertIn("relative_path_missing", explicit_paths["nameOnlyCodes"])
+        self.assertTrue(explicit_paths["explicitRelativePathOk"])
+        self.assertTrue(explicit_paths["webkitRelativePathOk"])
+        whitespace_kind = observed["whitespaceKind"]
+        self.assertFalse(whitespace_kind["ok"], whitespace_kind)
+        self.assertIn("artifact_kind_invalid", whitespace_kind["codes"])
+        self.assertIsNone(whitespace_kind["committedManifestKind"])
+        self.assertFalse(whitespace_kind["normalizedArtifactOwn"])
+        self.assertFalse(whitespace_kind["viewerResolvable"])
+
+    def test_viewer_script_renders_manifest_artifacts(self):
         script = Path("frontend/artifact-viewer/viewer.js").read_text(encoding="utf-8")
 
-        self.assertIn("function parseJsonl", script)
+        self.assertNotIn("function parseArtifact", script)
+        self.assertNotIn("function parseJsonl", script)
         self.assertIn("function renderManifest", script)
         self.assertIn("function renderRecommendations", script)
         self.assertIn("function renderTimeline", script)
@@ -39,13 +481,9 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("function renderScoringView", script)
         self.assertIn("function renderReviewClosure", script)
         self.assertIn("function getArtifact", script)
-        self.assertIn("enrichment-results.json", script)
-        self.assertIn("canonical-evidence.json", script)
-        self.assertIn("provider-cache-index.json", script)
-        self.assertIn("review-queue.jsonl", script)
-        self.assertIn("review-events.jsonl", script)
-        self.assertIn("review-summary.json", script)
-        self.assertIn("recompute-markers.jsonl", script)
+        self.assertIn("runDataStore.replace", script)
+        self.assertIn("function renderCandidateTracer", script)
+        self.assertNotIn("legacyFileName", script)
         self.assertIn("candidate_id", script)
         self.assertIn("cache_status", script)
         self.assertIn("review_item_id", script)
@@ -60,6 +498,281 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn("function safeCount", script)
         self.assertIn("function showError", script)
         self.assertIn("escapeHtml", script)
+
+    def test_screening_status_display_never_invents_a_defer_decision(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+
+const context = {
+  console,
+  Map,
+  Number,
+  String,
+  JSON,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+const screening = {
+  candidates: [
+    {candidate_id: "missing-status"},
+    {candidate_id: "empty-status", status: ""},
+    {candidate_id: "unknown-status", status: "queued"},
+    {candidate_id: "pass-status", status: "pass"},
+    {candidate_id: "defer-status", status: "defer"},
+    {candidate_id: "reject-status", status: "reject"},
+  ],
+};
+context.renderCandidateTracer(screening, {records: []});
+context.renderScreeningEligibility(screening);
+
+function badge(html, candidateId) {
+  const candidateStart = html.indexOf(`>${candidateId}</span>`);
+  if (candidateStart === -1) throw new Error(`candidate ${candidateId} was not rendered`);
+  const segment = html.slice(candidateStart, candidateStart + 500);
+  const match = segment.match(/class="gate-status gate-([^" ]+)"(?: title="([^"]*)")?[^>]*>([^<]+)<\/span>/);
+  if (!match) throw new Error(`candidate ${candidateId} badge was not rendered`);
+  return {classStatus: match[1], reason: match[2] || "", text: match[3]};
+}
+
+const tracerHtml = element("candidateTable").innerHTML;
+const eligibilityHtml = element("screeningEligibilityList").innerHTML;
+vm.runInContext('state.selectedCandidateId = "unknown-status"', context);
+context.renderCandidateTracer(screening, {records: []});
+const unknownDetail = element("candidateDetail").innerHTML;
+vm.runInContext('state.selectedCandidateId = "pass-status"', context);
+context.renderCandidateTracer(screening, {records: []});
+const passDetail = element("candidateDetail").innerHTML;
+const ids = screening.candidates.map((candidate) => candidate.candidate_id);
+process.stdout.write(JSON.stringify({
+  tracer: Object.fromEntries(ids.map((id) => [id, badge(tracerHtml, id)])),
+  eligibility: Object.fromEntries(ids.map((id) => [id, badge(eligibilityHtml, id)])),
+  needsReviewCount: element("needsReviewCount").textContent,
+  unknownDetail,
+  passDetail,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        for surface_name in ("tracer", "eligibility"):
+            surface = observed[surface_name]
+            for candidate_id in ("missing-status", "empty-status"):
+                self.assertEqual(surface[candidate_id]["classStatus"], "unavailable")
+                self.assertEqual(surface[candidate_id]["text"], "unavailable")
+                self.assertIn("not provided", surface[candidate_id]["reason"])
+            self.assertEqual(surface["unknown-status"]["classStatus"], "unavailable")
+            self.assertEqual(surface["unknown-status"]["text"], "unavailable")
+            self.assertIn("Unsupported screening status: queued", surface["unknown-status"]["reason"])
+            for status in ("pass", "defer", "reject"):
+                candidate_id = f"{status}-status"
+                self.assertEqual(surface[candidate_id]["classStatus"], status)
+                self.assertEqual(surface[candidate_id]["text"], status)
+        self.assertEqual(observed["needsReviewCount"], "1")
+        self.assertIn("status unavailable", observed["unknownDetail"])
+        self.assertIn("Unsupported screening status: queued", observed["unknownDetail"])
+        self.assertNotIn("status queued", observed["unknownDetail"])
+        self.assertIn("status pass", observed["passDetail"])
+        self.assertNotIn("Unsupported screening status", observed["passDetail"])
+
+    def test_bundle_bootstrap_renders_v13_candidate_and_retains_prior_run_on_failure(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+
+const elements = new Map();
+const listeners = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: (type, handler) => listeners.set(`${id}:${type}`, handler),
+    });
+  }
+  return elements.get(id);
+}
+const context = {
+  console,
+  Map,
+  Set,
+  Number,
+  String,
+  JSON,
+  Object,
+  Array,
+  Error,
+  Promise,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
+
+function selectedFile(relativePath, text) {
+  return {
+    name: path.basename(relativePath),
+    webkitRelativePath: relativePath.replaceAll("\\", "/"),
+    text: async () => text,
+  };
+}
+
+function fixtureFiles(directory) {
+  const rootName = path.basename(directory);
+  return fs.readdirSync(directory).map((name) => selectedFile(
+    `${rootName}/${name}`,
+    fs.readFileSync(path.join(directory, name), "utf8")
+  ));
+}
+
+async function main() {
+  const load = listeners.get("bundleFiles:change");
+  if (!load) throw new Error("bundleFiles change handler was not registered");
+
+  const noPriorManifest = {
+    schema_version: "v6.run_manifest.v1",
+    run_id: "failed-without-prior",
+    artifacts: [],
+  };
+  await load({target: {files: [selectedFile(
+    "failed/run-manifest.json",
+    JSON.stringify(noPriorManifest)
+  )]}});
+  const noPrior = {
+    runSummary: element("runSummary").textContent,
+    candidateTable: element("candidateTable").innerHTML,
+    error: element("errorState").textContent,
+  };
+
+  const files = fixtureFiles(process.argv[4]);
+  await load({target: {files}});
+  const committed = {
+    runSummary: element("runSummary").textContent,
+    candidateTable: element("candidateTable").innerHTML,
+    candidateDetail: element("candidateDetail").innerHTML,
+    artifactTable: element("artifactTable").innerHTML,
+    loadState: element("loadState").textContent,
+    errorDisplay: element("errorState").style.display,
+  };
+  const selectCandidate = listeners.get("candidateTable:click");
+  if (!selectCandidate) throw new Error("candidateTable click handler was not registered");
+  selectCandidate({target: {closest: () => ({dataset: {candidateId: "defer-1"}})}});
+  const selected = {
+    candidateTable: element("candidateTable").innerHTML,
+    candidateDetail: element("candidateDetail").innerHTML,
+  };
+
+  const originalManifestFile = files.find((item) => item.name === "run-manifest.json");
+  const originalManifest = JSON.parse(await originalManifestFile.text());
+  const failedManifest = {
+    ...originalManifest,
+    run_id: "failed-replacement",
+  };
+  await load({target: {files: [selectedFile(
+    "failed/run-manifest.json",
+    JSON.stringify(failedManifest)
+  )]}});
+  const failedReplacement = {
+    runSummary: element("runSummary").textContent,
+    candidateTable: element("candidateTable").innerHTML,
+    candidateDetail: element("candidateDetail").innerHTML,
+    artifactTable: element("artifactTable").innerHTML,
+    loadState: element("loadState").textContent,
+    error: element("errorState").textContent,
+  };
+
+  process.stdout.write(JSON.stringify({noPrior, committed, selected, failedReplacement}));
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/run-data-store.js",
+                    "frontend/artifact-viewer/viewer.js",
+                    "tests/fixtures/artifact_viewer/v13_algorithm_run",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["noPrior"]["runSummary"], "No run loaded")
+        self.assertIn("No candidates loaded", observed["noPrior"]["candidateTable"])
+        self.assertIn("Load failed", observed["noPrior"]["error"])
+        self.assertNotIn("retained prior run", observed["noPrior"]["error"])
+
+        committed = observed["committed"]
+        self.assertIn("v13-algorithm-diagnostic-001", committed["runSummary"])
+        self.assertIn('data-candidate-id="pass-1"', committed["candidateTable"])
+        self.assertIn('data-candidate-id="defer-1"', committed["candidateTable"])
+        self.assertIn("pass-1", committed["candidateDetail"])
+        self.assertIn("small_molecule", committed["candidateDetail"])
+        self.assertIn("status pass", committed["candidateDetail"])
+        self.assertIn("screening-input-view.json", committed["artifactTable"])
+        self.assertIn("available", committed["artifactTable"])
+        self.assertIn("15 available", committed["loadState"])
+        self.assertEqual(committed["errorDisplay"], "none")
+
+        selected = observed["selected"]
+        self.assertIn('data-candidate-id="defer-1"', selected["candidateTable"])
+        self.assertIn('aria-pressed="true"', selected["candidateTable"])
+        self.assertIn("defer-1", selected["candidateDetail"])
+        self.assertIn("status defer", selected["candidateDetail"])
+
+        failed = observed["failedReplacement"]
+        self.assertEqual(failed["runSummary"], committed["runSummary"])
+        self.assertEqual(failed["candidateTable"], selected["candidateTable"])
+        self.assertEqual(failed["candidateDetail"], selected["candidateDetail"])
+        self.assertEqual(failed["artifactTable"], committed["artifactTable"])
+        self.assertIn("Load failed", failed["error"])
+        self.assertIn("retained prior run v13-algorithm-diagnostic-001", failed["error"])
+        self.assertIn("retained prior run v13-algorithm-diagnostic-001", failed["loadState"])
+        self.assertNotIn("failed-replacement", failed["runSummary"])
 
     def test_viewer_renders_enrichment_flow_with_precise_review_correlation_and_escaping(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
@@ -93,8 +806,9 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
 
-const parsedJsonl = context.parseJsonl('{"a":1}\n\n{"b":2}\n');
+const parsedJsonl = context.SpiroRunData.parseArtifactPayload('{"a":1}\n\n{"b":2}\n', "jsonl");
 const enrichment = {
   records: [{
     candidate_id: "c1",
@@ -160,7 +874,12 @@ process.stdout.write(JSON.stringify({
             runner_path = Path(file.name)
         try:
             result = subprocess.run(
-                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/run-data-store.js",
+                    "frontend/artifact-viewer/viewer.js",
+                ],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -218,10 +937,11 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
 
 let parseError = "";
 try {
-  context.parseArtifact("review-queue.jsonl", '{"ok":true}\n\n{bad}\n');
+  context.SpiroRunData.parseArtifactPayload('{"ok":true}\n\n{bad}\n', "jsonl");
 } catch (error) {
   parseError = error.message;
 }
@@ -241,9 +961,9 @@ state.artifacts.clear();
 state.artifacts.set("provider-cache-index.json", {marker: "wrong-default"});
 state.artifacts.set("nested/provider-cache-index.json", {marker: "manifest-path"});
 `, context);
-const matched = context.getArtifact("provider-cache-index.json", "provider_cache_index");
+const matched = context.getArtifact("provider_cache_index");
 vm.runInContext('state.artifacts.delete("nested/provider-cache-index.json");', context);
-const unmatched = context.getArtifact("provider-cache-index.json", "provider_cache_index");
+const unmatched = context.getArtifact("provider_cache_index");
 context.showError("visible failure");
 const errorText = element("errorState").textContent;
 const errorDisplay = element("errorState").style.display;
@@ -267,7 +987,12 @@ process.stdout.write(JSON.stringify({
             runner_path = Path(file.name)
         try:
             result = subprocess.run(
-                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/run-data-store.js",
+                    "frontend/artifact-viewer/viewer.js",
+                ],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -276,7 +1001,7 @@ process.stdout.write(JSON.stringify({
             runner_path.unlink(missing_ok=True)
 
         rendered = json.loads(result.stdout)
-        self.assertIn("review-queue.jsonl line 3", rendered["parseError"])
+        self.assertIn("line 3", rendered["parseError"])
         self.assertEqual(rendered["candidateCount"], "7")
         self.assertEqual(rendered["needsReviewCount"], "2")
         self.assertIn("No enrichment results loaded", rendered["candidateFlow"])

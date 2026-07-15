@@ -162,6 +162,42 @@ input[type="file"] {
   max-height: 648px;
 }
 
+.candidate-workbench {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  min-height: 240px;
+}
+
+.candidate-table {
+  border-right: 1px solid var(--line);
+}
+
+.candidate-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.candidate-row:hover,
+.candidate-row[aria-pressed="true"] {
+  background: var(--soft);
+}
+
+.candidate-detail {
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -326,5 +362,14 @@ th {
 
   .panel.wide {
     grid-row: auto;
+  }
+
+  .candidate-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-table {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
 }
