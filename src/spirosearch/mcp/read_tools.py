@@ -99,6 +99,7 @@ def create_readonly_run_tools(output_dir: str | Path) -> tuple[MCPTool, ...]:
                 optional_artifacts=_optional_artifacts(payload),
             ),
         ),
+        _tool("read_v22_scientific_reports", EMPTY_INPUT_SCHEMA, lambda payload, context: api.v22_scientific_reports()),
     )
 
 

@@ -18,6 +18,14 @@ ALGORITHM_DIAGNOSTIC_KINDS = (
     "model_evaluation",
     "acquisition_breakdown",
 )
+V22_SCIENTIFIC_REPORT_KINDS = (
+    "v22_quality_report",
+    "v22_zero_leakage_report",
+    "v22_independent_snapshot_report",
+    "v22_model_activation_report",
+    "v22_scientific_closure_report",
+    "v22_literature_benchmark_report",
+)
 
 
 REST_SURFACES: tuple[dict[str, Any], ...] = (
@@ -101,6 +109,14 @@ REST_SURFACES: tuple[dict[str, Any], ...] = (
         "read_only": True,
         "response_schema": READONLY_API_ENVELOPE_SCHEMA_REF,
     },
+    {
+        "surface_id": "v22_scientific_reports",
+        "method": "GET",
+        "path": "/runs/{run_id}/v22-scientific-reports",
+        "mcp_tool": "read_v22_scientific_reports",
+        "read_only": True,
+        "response_schema": READONLY_API_ENVELOPE_SCHEMA_REF,
+    },
 )
 
 
@@ -115,6 +131,7 @@ MCP_TOOL_DESCRIPTIONS: dict[str, str] = {
     "read_candidate_identity_registry": "Read the V21 candidate identity registry artifact.",
     "read_candidate_evidence_links": "Read V21 candidate-to-evidence link records.",
     "read_artifact_validation_report": "Read a frontend-ready artifact validation report.",
+    "read_v22_scientific_reports": "Read V22 scientific validation reports from manifest-discovered artifacts.",
 }
 
 
@@ -135,6 +152,10 @@ def readonly_surface_inventory() -> dict[str, Any]:
         "non_goals": [
             "live_provider_mutation",
             "scoring_policy_mutation",
+            "review_writes",
+            "recompute_dispatch",
+            "model_training",
+            "experiment_dispatch",
             "database_requirement",
             "hard_coded_artifact_filenames",
         ],
@@ -290,6 +311,22 @@ class ReadOnlyRunAPI:
             payload={
                 "panels": panels,
                 "available_count": len(panels) - unavailable_count,
+                "unavailable_count": unavailable_count,
+            },
+            status="degraded" if unavailable_count else "available",
+            severity="warning" if unavailable_count else "info",
+        )
+
+    def v22_scientific_reports(self) -> dict[str, Any]:
+        reports = {kind: self.artifact(kind) for kind in V22_SCIENTIFIC_REPORT_KINDS}
+        unavailable_count = sum(report["status"] != "available" for report in reports.values())
+        return _available_envelope(
+            surface="v22_scientific_reports",
+            run_id=self._run_id(),
+            artifact_kind=None,
+            payload={
+                "reports": reports,
+                "available_count": len(reports) - unavailable_count,
                 "unavailable_count": unavailable_count,
             },
             status="degraded" if unavailable_count else "available",

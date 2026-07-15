@@ -177,6 +177,7 @@ class ReadOnlyApiTests(unittest.TestCase):
                 "provider_lineage",
                 "review_summary",
                 "scoring_view",
+                "v22_scientific_reports",
             ],
         )
         self.assertTrue(all(surface["method"] == "GET" for surface in rest.values()))
@@ -197,6 +198,7 @@ class ReadOnlyApiTests(unittest.TestCase):
                 "read_run_artifacts",
                 "read_run_manifest",
                 "read_scoring_view",
+                "read_v22_scientific_reports",
             ],
         )
         self.assertTrue(all(tool["write"] is False for tool in mcp_tools.values()))
@@ -318,6 +320,67 @@ class ReadOnlyApiTests(unittest.TestCase):
             self.assertEqual(len(registry.audit_events), 3)
             self.assertIsNone(registry.audit_path)
             self.assert_envelope_schema_valid(by_kind)
+
+    def test_v22_scientific_reports_surface_reads_manifest_artifacts_without_writes(self):
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            artifact = write_json_artifact(
+                output_dir,
+                "reports/v22-model-activation.json",
+                {
+                    "schema_version": "v22.model_activation_report.v1",
+                    "snapshot_id": "snapshot-a",
+                    "model_version": "model-v1",
+                    "objective_name": "pce",
+                    "closure_gate_status": "blocked",
+                    "activation_status": "disabled",
+                    "activation_reasons": ["insufficient_independent_data"],
+                    "disabled_model_state": {
+                        "status": "disabled",
+                        "may_rank_candidates": False,
+                        "downstream_consumer": "v24_admission",
+                    },
+                    "grouped_evaluation": {
+                        "split_policy": "fold_id_grouped_cross_validation",
+                        "surrogate_type": "TEST",
+                        "feature_count": 1,
+                        "metrics": {},
+                        "baselines": {},
+                        "calibration": {},
+                        "replay_status": "unavailable",
+                        "folds": [{"fold_id": 0}, {"fold_id": 1}],
+                    },
+                    "independent_validation": {
+                        "report_status": "blocked",
+                        "retained_record_count": 0,
+                        "minimum_retained_records": 2,
+                    },
+                },
+                kind="v22_model_activation_report",
+                run_id="readonly-run",
+                input_hash="input-hash",
+                generated_at="2026-07-10T00:00:00+00:00",
+                producer_version="readonly-test",
+            )
+            write_manifest(output_dir, [artifact])
+            before = {path.relative_to(output_dir) for path in output_dir.rglob("*")}
+
+            api = ReadOnlyRunAPI(output_dir)
+            envelope = api.v22_scientific_reports()
+            registry = create_readonly_run_registry(output_dir)
+            mcp_envelope = registry.call_tool("read_v22_scientific_reports", {}, actor="MCPClient")
+
+            after = {path.relative_to(output_dir) for path in output_dir.rglob("*")}
+            self.assertEqual(before, after)
+            self.assertEqual(envelope["surface"], "v22_scientific_reports")
+            self.assertEqual(envelope["status"], "degraded")
+            self.assertEqual(envelope["payload"]["reports"]["v22_model_activation_report"]["status"], "available")
+            self.assertEqual(
+                envelope["payload"]["reports"]["v22_model_activation_report"]["payload"]["data"]["activation_status"],
+                "disabled",
+            )
+            self.assertEqual(mcp_envelope["surface"], "v22_scientific_reports")
+            self.assert_envelope_schema_valid(envelope)
 
     def test_readonly_registry_is_separate_from_default_write_capable_registry(self):
         with TemporaryDirectory() as temp_dir:

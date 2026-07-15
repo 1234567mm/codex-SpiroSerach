@@ -36,6 +36,9 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="canonicalEvidenceCount"', html)
         self.assertIn('id="scoringViewList"', html)
         self.assertIn('id="scoringFactCount"', html)
+        self.assertIn('id="v22ScientificClosurePanel"', html)
+        self.assertIn('id="v22ScientificClosureStatus"', html)
+        self.assertIn('id="v22ScientificClosureList"', html)
         self.assertIn('id="reviewClosureList"', html)
         self.assertIn('id="reviewClosureCount"', html)
         self.assertIn('id="reviewQueueList"', html)
@@ -2237,6 +2240,7 @@ Promise.all([slow, fast]).then(([slowResult, fastResult]) => {
         self.assertIn("function renderEnrichmentFlow", script)
         self.assertIn("function renderCanonicalEvidence", script)
         self.assertIn("function renderScoringView", script)
+        self.assertIn("function renderV22ScientificClosure", script)
         self.assertIn("function renderReviewClosure", script)
         self.assertIn("function getArtifact", script)
         self.assertIn("runDataStore.replace", script)
@@ -3037,6 +3041,100 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(rendered["unmatchedCount"], "0 facts")
         self.assertIn("No scoring view loaded", rendered["unmatchedHtml"])
         self.assertNotIn("wrong", rendered["unmatchedHtml"])
+
+    def test_viewer_renders_v22_scientific_closure_from_manifest_paths(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+
+const context = {
+  console,
+  Map,
+  Number,
+  String,
+  JSON,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+vm.runInContext(`
+state.manifest = {
+  artifacts: [
+    {kind: "v22_scientific_closure_report", path: "reports/v22-closure.json"},
+    {kind: "v22_model_activation_report", path: "reports/v22-activation.json"}
+  ]
+};
+state.artifacts.clear();
+state.artifacts.set("v22-scientific-closure-report.json", {closure_gate_status: "pass", gates: [{gate_id: "wrong"}]});
+state.artifacts.set("reports/v22-closure.json", {
+  closure_id: "v22-test",
+  closure_gate_status: "blocked",
+  validation_scope: {
+    software_validation: {status: "pass"},
+    scientific_validation: {status: "blocked"}
+  },
+  downstream_impact: "models_disabled_for_v24_admission",
+  gates: [{
+    gate_id: "activation",
+    decision_type: "scientific",
+    status: "blocked",
+    source_artifacts: [{kind: "v22_model_activation_report"}],
+    reason_codes: ["insufficient_independent_data"],
+    downstream_impact: "blocks_downstream_activation"
+  }]
+});
+state.artifacts.set("reports/v22-activation.json", {
+  activation_status: "disabled",
+  model_version: "model-v1",
+  objective_name: "pce",
+  activation_reasons: ["insufficient_independent_data"],
+  disabled_model_state: {may_rank_candidates: false}
+});
+renderKnownArtifacts();
+`, context);
+
+process.stdout.write(JSON.stringify({
+  status: element("v22ScientificClosureStatus").textContent,
+  html: element("v22ScientificClosureList").innerHTML,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        rendered = json.loads(result.stdout)
+        self.assertEqual(rendered["status"], "blocked")
+        self.assertIn("v22-test", rendered["html"])
+        self.assertIn("activation", rendered["html"])
+        self.assertIn("insufficient_independent_data", rendered["html"])
+        self.assertIn("v22_model_activation_report", rendered["html"])
+        self.assertIn("disabled", rendered["html"])
+        self.assertNotIn("wrong", rendered["html"])
 
     def test_viewer_renders_review_closure_artifacts_from_manifest_paths(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
