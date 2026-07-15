@@ -1838,6 +1838,124 @@ function fixtureFiles(root, prefix = "") {
         self.assertEqual(observed["afterFailureRunCount"], 0)
         self.assertIn("duplicate_project_path", observed["duplicateCodes"])
 
+    def test_candidate_history_and_project_diagnostics_render_backend_delta_fail_closed(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for candidate history test")
+        runner = r"""
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error, Promise};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+const {
+  CandidateHistoryProjection,
+  ProjectBundleAdapter,
+  ProjectDiagnosticsProjection,
+  ProjectStore,
+} = context.SpiroRunData;
+
+function file(relativePath, payload) {
+  return {
+    name: relativePath.split("/").pop(),
+    relativePath,
+    webkitRelativePath: relativePath,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
+function fixtureFiles(root) {
+  const out = [];
+  function walk(dir) {
+    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+      const absolute = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(absolute);
+      else out.push(file(path.relative(root, absolute).replaceAll("\\", "/"), fs.readFileSync(absolute, "utf8")));
+    }
+  }
+  walk(root);
+  return out;
+}
+
+(async () => {
+  const store = new ProjectStore(new ProjectBundleAdapter());
+  await store.replace(fixtureFiles(process.argv[3]));
+  const snapshot = store.snapshot();
+  const selection = store.selectRuns("run-001", "run-002");
+  const history = CandidateHistoryProjection.project(snapshot, selection);
+  const historyHtml = CandidateHistoryProjection.render(history);
+  const diagnostics = ProjectDiagnosticsProjection.project(snapshot);
+  const diagnosticsHtml = ProjectDiagnosticsProjection.render(diagnostics);
+  const ambiguousSnapshot = {
+    ...snapshot,
+    comparisons: [{
+      ...snapshot.comparisons[0],
+      delta: {
+        ...snapshot.comparisons[0].delta,
+        candidate_deltas: [{candidate_id: "", status_transition: {from: "pass", to: "reject", reason_codes: ["AMBIGUOUS"]}}],
+      },
+    }],
+  };
+  const ambiguousHistory = CandidateHistoryProjection.project(ambiguousSnapshot, selection);
+  const staleFailure = await store.replace([
+    file("project-run-index.json", {...snapshot.index, project_id: "bad-project", runs: [
+      {...snapshot.index.runs[0], project_id: "bad-project"},
+      {...snapshot.index.runs[1], project_id: "other-project"},
+    ]}),
+  ]);
+  const failureDiagnostics = ProjectDiagnosticsProjection.project(staleFailure.snapshot);
+
+  process.stdout.write(JSON.stringify({
+    state: history.state,
+    candidateIds: history.candidates.map((item) => item.candidateId),
+    transition: history.candidates[0].statusTransition,
+    evidenceAdded: history.candidates[0].evidenceChange.added,
+    blockerResolved: history.candidates[0].blockerChange.resolved,
+    scoreStatus: history.candidates[0].scoreRank.status,
+    html: historyHtml,
+    diagnosticsCodes: diagnostics.items.map((item) => item.code),
+    diagnosticsHtml,
+    ambiguousRows: ambiguousHistory.candidates.length,
+    ambiguousCodes: ambiguousHistory.diagnostics.map((item) => item.code),
+    failureOk: staleFailure.ok,
+    failureCodes: failureDiagnostics.items.map((item) => item.code),
+  }));
+})();
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/run-data-store.js",
+                    "tests/fixtures/v20_project_evolution",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["state"], "ready")
+        self.assertEqual(observed["candidateIds"], ["candidate-transition", "candidate-unchanged"])
+        self.assertEqual(observed["transition"]["from"], "defer")
+        self.assertEqual(observed["transition"]["to"], "pass")
+        self.assertEqual(observed["evidenceAdded"], ["ev-transition-lumo"])
+        self.assertEqual(observed["blockerResolved"], ["review-transition"])
+        self.assertEqual(observed["scoreStatus"], "non_comparable")
+        self.assertIn("DATASET_SNAPSHOT_CHANGED", observed["html"])
+        self.assertNotIn("score_delta", observed["html"])
+        self.assertIn("project_comparison_degraded", observed["diagnosticsCodes"])
+        self.assertIn("partially_comparable", observed["diagnosticsHtml"])
+        self.assertEqual(observed["ambiguousRows"], 0)
+        self.assertIn("candidate_identity_unavailable", observed["ambiguousCodes"])
+        self.assertFalse(observed["failureOk"])
+        self.assertIn("mixed_project_id", observed["failureCodes"])
+
     def test_diagnostic_projection_lifecycle_and_stale_load_guard(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for run store lifecycle test")
         runner = r"""

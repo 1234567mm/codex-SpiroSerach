@@ -51,6 +51,7 @@ document.getElementById("projectBundleFiles").addEventListener("change", async (
   if (!result.ok) {
     showError(`Project load failed: ${result.diagnostics.map((item) => item.code).join(", ") || "unknown error"}`);
     renderProjectSelector();
+    renderCandidateHistory();
     return;
   }
   const runIds = result.snapshot.runIds || [];
@@ -64,6 +65,7 @@ document.getElementById("projectBundleFiles").addEventListener("change", async (
   }
   clearError();
   renderProjectSelector();
+  renderCandidateHistory();
 });
 
 document.getElementById("projectEvolutionFiles").addEventListener("change", async (event) => {
@@ -84,6 +86,7 @@ document.getElementById("projectRunSelector").addEventListener("click", (event) 
     renderKnownArtifacts();
   }
   renderProjectSelector();
+  renderCandidateHistory();
 });
 
 document.getElementById("projectRunSelector").addEventListener("keydown", (event) => {
@@ -426,6 +429,30 @@ function renderProjectSelector() {
   count.textContent = selector.projectId
     ? `${selector.projectId}: ${selector.runs.length} runs / ${selector.comparisons.length} comparisons`
     : "No project loaded";
+}
+
+function renderCandidateHistory() {
+  const historyProjection = globalThis.SpiroRunData?.CandidateHistoryProjection?.project(
+    state.projectSnapshot,
+    state.projectSelection
+  );
+  const diagnosticsProjection = globalThis.SpiroRunData?.ProjectDiagnosticsProjection?.project(
+    state.projectSnapshot
+  );
+  const historyList = document.getElementById("candidateHistoryList");
+  const diagnosticsList = document.getElementById("projectDiagnosticsList");
+  const count = document.getElementById("candidateHistoryCount");
+  if (!historyProjection || !globalThis.SpiroRunData?.CandidateHistoryProjection) {
+    historyList.innerHTML = `<div class="empty">Candidate history is unavailable</div>`;
+    diagnosticsList.innerHTML = "";
+    count.textContent = "No comparison selected";
+    return;
+  }
+  historyList.innerHTML = globalThis.SpiroRunData.CandidateHistoryProjection.render(historyProjection);
+  diagnosticsList.innerHTML = globalThis.SpiroRunData.ProjectDiagnosticsProjection?.render(diagnosticsProjection) || "";
+  count.textContent = historyProjection.candidates.length
+    ? `${historyProjection.candidates.length} candidate deltas`
+    : "No candidate deltas";
 }
 
 function projectionSnapshotFromViewerState() {
@@ -1573,5 +1600,6 @@ renderReviewClosure([], null, []);
 renderPaperDiagnostics([], [], null, null, null);
 renderProjectEvolution();
 renderProjectSelector();
+renderCandidateHistory();
 renderReviewQueue([]);
 renderCandidateTracer(null, null);
