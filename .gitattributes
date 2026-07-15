@@ -1,6 +1,6 @@
 tests/fixtures/artifact_viewer/v11_diagnostic_run/* text eol=lf
 tests/fixtures/artifact_viewer/v13_algorithm_run/*.json text eol=crlf
 tests/fixtures/artifact_viewer/v13_algorithm_run/*.jsonl text eol=lf
-tests/fixtures/v20_project_evolution/* text eol=lf
-tests/fixtures/v20_project_evolution/run-001/* text eol=lf
-tests/fixtures/v20_project_evolution/run-002/* text eol=lf
+tests/fixtures/v20_project_evolution/* -text
+tests/fixtures/v20_project_evolution/run-001/* -text
+tests/fixtures/v20_project_evolution/run-002/* -text
