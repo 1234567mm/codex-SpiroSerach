@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/candidate-evidence-link.schema.json",
+  "title": "CandidateEvidenceLink",
+  "$comment": "One V21 candidate-to-paper/evidence link record. Link confidence is diagnostic only and cannot grant accepted state or scoring eligibility.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "link_id",
+    "candidate_id",
+    "stable_identity_id",
+    "evidence_id",
+    "evidence_kind",
+    "paper",
+    "link_basis",
+    "confidence_category",
+    "reviewer_state",
+    "blocking_review_ids",
+    "lineage"
+  ],
+  "properties": {
+    "schema_version": { "const": "v21.candidate_evidence_link.v1" },
+    "link_id": { "type": "string", "minLength": 1 },
+    "candidate_id": { "type": "string", "minLength": 1 },
+    "stable_identity_id": { "type": "string", "minLength": 1 },
+    "evidence_id": { "type": "string", "minLength": 1 },
+    "evidence_kind": { "enum": ["canonical_evidence", "literature_claim", "device_evidence", "review_item"] },
+    "paper": { "$ref": "#/$defs/paper_ref" },
+    "link_basis": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/link_basis" },
+      "minItems": 1
+    },
+    "confidence_category": {
+      "enum": ["reviewed_explicit", "deterministic_proposal", "ambiguous", "conflicting", "blocked"]
+    },
+    "reviewer_state": {
+      "enum": ["accepted", "proposed", "blocked", "conflicting", "superseded"]
+    },
+    "blocking_review_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "lineage": { "$ref": "#/$defs/lineage" }
+  },
+  "$defs": {
+    "paper_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["doi", "source_id", "asset_id", "chunk_id"],
+      "properties": {
+        "doi": { "type": ["string", "null"] },
+        "source_id": { "type": "string", "minLength": 1 },
+        "asset_id": { "type": ["string", "null"] },
+        "chunk_id": { "type": ["string", "null"] }
+      }
+    },
+    "link_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["basis_type", "value", "normalized_value"],
+      "properties": {
+        "basis_type": { "enum": ["review_event", "doi", "inchikey", "material_id", "use_instance_id", "literature_claim_id", "canonical_evidence_id"] },
+        "value": { "type": "string", "minLength": 1 },
+        "normalized_value": { "type": "string", "minLength": 1 }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_run_id", "source_artifact_kinds", "generated_by"],
+      "properties": {
+        "source_run_id": { "type": "string", "minLength": 1 },
+        "source_artifact_kinds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "generated_by": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

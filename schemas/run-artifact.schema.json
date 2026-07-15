@@ -33,6 +33,8 @@
         "acquisition_breakdown",
         "agent_trace",
         "canonical_evidence",
+        "candidate_evidence_links",
+        "candidate_identity_registry",
         "conflict_report",
         "data_quality_report",
         "device_evidence",

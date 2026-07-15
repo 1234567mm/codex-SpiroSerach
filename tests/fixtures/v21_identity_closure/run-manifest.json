@@ -1,0 +1,58 @@
+{
+  "artifacts": [
+    {
+      "bytes": 4778,
+      "depends_on": [
+        "canonical_evidence"
+      ],
+      "format": "json",
+      "generated_at": "2026-07-15T09:07:00+00:00",
+      "input_hash": "sha256:v21-identity-fixture",
+      "join_keys": [
+        "candidate_id",
+        "material_id",
+        "use_instance_id",
+        "source_identity_id"
+      ],
+      "kind": "candidate_identity_registry",
+      "path": "candidate-identity-registry.json",
+      "producer_version": "spirosearch-v21",
+      "record_count": null,
+      "run_id": "v21-identity-fixture",
+      "schema_ref": "schemas/candidate-identity-registry.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "7c710f83d5b26129061c75490162b3c4fec8aa8df764705382ceb4dd1e5018c8"
+    },
+    {
+      "bytes": 2550,
+      "depends_on": [
+        "candidate_identity_registry",
+        "canonical_evidence",
+        "literature_claims"
+      ],
+      "format": "jsonl",
+      "generated_at": "2026-07-15T09:07:00+00:00",
+      "input_hash": "sha256:v21-identity-fixture",
+      "join_keys": [
+        "link_id",
+        "candidate_id",
+        "evidence_id",
+        "doi",
+        "review_item_id"
+      ],
+      "kind": "candidate_evidence_links",
+      "path": "candidate-evidence-links.jsonl",
+      "producer_version": "spirosearch-v21",
+      "record_count": 3,
+      "run_id": "v21-identity-fixture",
+      "schema_ref": "schemas/candidate-evidence-link.schema.json",
+      "schema_version": "v6.run_artifact.v1",
+      "sha256": "1d6e1d0e955f0f6ec84ec098748e7f8be8e10b3bc1b30d9c0b562fc1d5279438"
+    }
+  ],
+  "generated_at": "2026-07-15T09:07:00+00:00",
+  "input_hash": "sha256:v21-identity-fixture",
+  "producer_version": "spirosearch-v21",
+  "run_id": "v21-identity-fixture",
+  "schema_version": "v6.run_manifest.v1"
+}

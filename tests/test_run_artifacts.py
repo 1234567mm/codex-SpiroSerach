@@ -151,6 +151,8 @@ class RunArtifactContractTests(unittest.TestCase):
                 "provider_cache",
                 "enrichment_results",
                 "canonical_evidence",
+                "candidate_identity_registry",
+                "candidate_evidence_links",
                 "scoring_view",
                 "review_events",
                 "review_summary",

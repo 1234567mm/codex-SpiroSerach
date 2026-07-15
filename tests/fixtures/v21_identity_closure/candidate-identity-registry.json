@@ -1,0 +1,176 @@
+{
+  "identity_policy_version": "v21.identity_policy.v1",
+  "records": [
+    {
+      "aliases": [
+        {
+          "alias_type": "display_name",
+          "value": "Accepted HTL"
+        },
+        {
+          "alias_type": "legacy_candidate_id",
+          "value": "legacy-accepted-a"
+        }
+      ],
+      "blocking_review_ids": [],
+      "candidate_id": "candidate-accepted",
+      "identity_history": [
+        {
+          "event_id": "identity-event-merge-accepted",
+          "event_type": "merge",
+          "from_ids": [
+            "legacy-accepted-a",
+            "legacy-accepted-b"
+          ],
+          "reason_code": "review_confirmed_same_material",
+          "review_event_id": "review-event-identity-accepted",
+          "to_ids": [
+            "candidate-accepted"
+          ]
+        },
+        {
+          "event_id": "identity-event-split-accepted",
+          "event_type": "split",
+          "from_ids": [
+            "candidate-accepted"
+          ],
+          "reason_code": "use_instance_separated_from_material_identity",
+          "review_event_id": "review-event-identity-split",
+          "to_ids": [
+            "candidate-accepted",
+            "candidate-accepted-use-variant"
+          ]
+        }
+      ],
+      "lineage": {
+        "generated_by": "v21-fixture",
+        "source_artifact_kinds": [
+          "canonical_evidence",
+          "literature_claims"
+        ],
+        "source_run_id": "v21-identity-fixture"
+      },
+      "material_ids": [
+        "material-accepted"
+      ],
+      "reviewer_state": "accepted",
+      "source_identities": [
+        {
+          "basis": "doi",
+          "normalized_value": "10.1000/accepted",
+          "source_identity_id": "source-accepted-doi",
+          "value": "https://doi.org/10.1000/Accepted"
+        },
+        {
+          "basis": "inchikey",
+          "normalized_value": "ACCEPTEDINCHIKEY",
+          "source_identity_id": "source-accepted-inchikey",
+          "value": "acceptedinchikey"
+        }
+      ],
+      "stable_identity_id": "identity-accepted",
+      "use_instance_ids": [
+        "use-accepted-htl"
+      ]
+    },
+    {
+      "aliases": [
+        {
+          "alias_type": "display_name",
+          "value": "Proposed HTL"
+        }
+      ],
+      "blocking_review_ids": [],
+      "candidate_id": "candidate-proposed",
+      "identity_history": [
+        {
+          "event_id": "identity-event-proposed-source",
+          "event_type": "source_identity_added",
+          "from_ids": [],
+          "reason_code": "deterministic_identifier_match",
+          "review_event_id": null,
+          "to_ids": [
+            "candidate-proposed"
+          ]
+        }
+      ],
+      "lineage": {
+        "generated_by": "v21-fixture",
+        "source_artifact_kinds": [
+          "canonical_evidence",
+          "literature_claims"
+        ],
+        "source_run_id": "v21-identity-fixture"
+      },
+      "material_ids": [
+        "material-proposed"
+      ],
+      "reviewer_state": "proposed",
+      "source_identities": [
+        {
+          "basis": "doi",
+          "normalized_value": "10.1000/proposed",
+          "source_identity_id": "source-proposed-doi",
+          "value": "10.1000/Proposed"
+        }
+      ],
+      "stable_identity_id": "identity-proposed",
+      "use_instance_ids": [
+        "use-proposed-htl"
+      ]
+    },
+    {
+      "aliases": [
+        {
+          "alias_type": "display_name",
+          "value": "Ambiguous HTL"
+        }
+      ],
+      "blocking_review_ids": [
+        "review-identity-ambiguous"
+      ],
+      "candidate_id": "candidate-blocked",
+      "identity_history": [
+        {
+          "event_id": "identity-event-blocked",
+          "event_type": "review_state_changed",
+          "from_ids": [
+            "candidate-blocked"
+          ],
+          "reason_code": "ambiguous_candidate_to_paper_identity",
+          "review_event_id": null,
+          "to_ids": [
+            "candidate-blocked"
+          ]
+        }
+      ],
+      "lineage": {
+        "generated_by": "v21-fixture",
+        "source_artifact_kinds": [
+          "canonical_evidence",
+          "literature_claims",
+          "review_queue"
+        ],
+        "source_run_id": "v21-identity-fixture"
+      },
+      "material_ids": [
+        "material-blocked"
+      ],
+      "reviewer_state": "blocked",
+      "source_identities": [
+        {
+          "basis": "doi",
+          "normalized_value": "10.1000/ambiguous",
+          "source_identity_id": "source-blocked-doi",
+          "value": "10.1000/Ambiguous"
+        }
+      ],
+      "stable_identity_id": "identity-blocked",
+      "use_instance_ids": [
+        "use-blocked-htl"
+      ]
+    }
+  ],
+  "registry_id": "registry-v21-fixture",
+  "schema_version": "v21.candidate_identity_registry.v1"
+}
