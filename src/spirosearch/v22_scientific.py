@@ -106,6 +106,85 @@ def adapt_provider_response_energy(
     }
 
 
+def build_v22_quality_reports(snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    """Build deterministic V22 quality and zero-leakage reports."""
+
+    snapshot_id = _text(snapshot.get("snapshot_id")) or "unknown-snapshot"
+    records = [record for record in snapshot.get("records", []) if isinstance(record, Mapping)]
+    records = sorted(records, key=lambda item: (_text(item.get("record_id")), _text(item.get("candidate_id"))))
+    duplicate_ids = _duplicate_values(records, "record_id")
+    duplicate_records = [
+        _report_item(record, "duplicate_record_id")
+        for record in records
+        if _text(record.get("record_id")) in duplicate_ids
+    ]
+    duplicate_record_ids = {_text(item.get("record_id")) for item in duplicate_records}
+
+    rejected_records = sorted(
+        [
+            {
+                "record_id": _text(item.get("record_id")),
+                "reason_code": _text(item.get("reason_code")) or "record_rejected",
+            }
+            for item in snapshot.get("rejected_records", [])
+            if isinstance(item, Mapping) and _text(item.get("record_id"))
+        ],
+        key=lambda item: item["record_id"],
+    )
+    blocked_records = [
+        _report_item(record, "identity_blocked")
+        for record in records
+        if _identity_state(record) == "blocked"
+    ]
+    ambiguous_records = [
+        _report_item(record, f"identity_{_identity_state(record) or 'ambiguous'}")
+        for record in records
+        if _identity_state(record) not in {"accepted", "blocked"}
+    ]
+    conflicting_records = _conflicting_material_records(records)
+    accepted_record_ids = sorted({
+        _text(record.get("record_id"))
+        for record in records
+        if _identity_state(record) == "accepted"
+        and _text(record.get("record_id"))
+        and _text(record.get("record_id")) not in duplicate_record_ids
+    })
+    if duplicate_record_ids:
+        accepted_record_ids.extend(sorted(duplicate_record_ids))
+        accepted_record_ids = sorted(set(accepted_record_ids))
+
+    quality_blockers = rejected_records or blocked_records or duplicate_records or conflicting_records or ambiguous_records
+    quality_report = {
+        "schema_version": "v22.quality_report.v1",
+        "snapshot_id": snapshot_id,
+        "closure_gate_status": "blocked" if quality_blockers else "pass",
+        "accepted_record_ids": accepted_record_ids,
+        "rejected_records": rejected_records,
+        "blocked_records": sorted(blocked_records, key=lambda item: item["record_id"]),
+        "duplicate_records": sorted(duplicate_records, key=lambda item: (item["record_id"], item.get("candidate_id", ""))),
+        "conflicting_records": sorted(conflicting_records, key=lambda item: (item.get("material_id", ""), item["record_id"])),
+        "ambiguous_records": sorted(ambiguous_records, key=lambda item: item["record_id"]),
+    }
+
+    checks = [_leakage_check(records, dimension) for dimension in (
+        "doi",
+        "source_id",
+        "material_id",
+        "candidate_id",
+        "group_id",
+    )]
+    zero_leakage_report = {
+        "schema_version": "v22.zero_leakage_report.v1",
+        "snapshot_id": snapshot_id,
+        "closure_gate_status": "blocked" if any(check["status"] == "blocked" for check in checks) else "pass",
+        "checks": checks,
+    }
+    return {
+        "quality_report": quality_report,
+        "zero_leakage_report": zero_leakage_report,
+    }
+
+
 def _target_key(target: Mapping[str, Any]) -> dict[str, Any]:
     key = (
         _text(target.get("material_id")),
@@ -113,6 +192,87 @@ def _target_key(target: Mapping[str, Any]) -> dict[str, Any]:
         _text(target.get("property_name")),
     )
     return {"key": key if all(key) else None, "record": target}
+
+
+def _identity_state(record: Mapping[str, Any]) -> str:
+    identity = record.get("identity", {})
+    return _text(identity.get("identity_review_state")) if isinstance(identity, Mapping) else ""
+
+
+def _report_item(record: Mapping[str, Any], reason_code: str) -> dict[str, Any]:
+    item = {
+        "record_id": _text(record.get("record_id")),
+        "reason_code": reason_code,
+    }
+    for key in ("candidate_id", "material_id", "source_id"):
+        value = _text(record.get(key))
+        if value:
+            item[key] = value
+    return item
+
+
+def _duplicate_values(records: Iterable[Mapping[str, Any]], field: str) -> set[str]:
+    counts: dict[str, int] = {}
+    for record in records:
+        value = _text(record.get(field))
+        if value:
+            counts[value] = counts.get(value, 0) + 1
+    return {value for value, count in counts.items() if count > 1}
+
+
+def _conflicting_material_records(records: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    values: dict[tuple[str, str], set[float]] = {}
+    members: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    for record in records:
+        material_id = _text(record.get("material_id"))
+        for evidence in record.get("energy_evidence", []):
+            if not isinstance(evidence, Mapping):
+                continue
+            property_name = _text(evidence.get("property_name"))
+            value = evidence.get("value_ev")
+            if not material_id or not property_name or not isinstance(value, (int, float)):
+                continue
+            key = (material_id, property_name)
+            values.setdefault(key, set()).add(float(value))
+            members.setdefault(key, []).append(record)
+    conflicts = []
+    for key, observed_values in values.items():
+        if len(observed_values) <= 1:
+            continue
+        for record in members.get(key, []):
+            item = _report_item(record, "conflicting_energy_value")
+            item["material_id"] = key[0]
+            item["property_name"] = key[1]
+            conflicts.append(item)
+    return conflicts
+
+
+def _leakage_check(records: Iterable[Mapping[str, Any]], dimension: str) -> dict[str, Any]:
+    by_value: dict[str, dict[str, set[str]]] = {}
+    for record in records:
+        value = _text(record.get(dimension))
+        split = _text(record.get("group_id"))
+        record_id = _text(record.get("record_id"))
+        if not value or not split or not record_id:
+            continue
+        entry = by_value.setdefault(value, {"splits": set(), "record_ids": set()})
+        entry["splits"].add(split)
+        entry["record_ids"].add(record_id)
+    overlaps = [
+        {
+            "value": value,
+            "splits": sorted(entry["splits"]),
+            "record_ids": sorted(entry["record_ids"]),
+        }
+        for value, entry in by_value.items()
+        if len(entry["splits"]) > 1
+    ]
+    overlaps.sort(key=lambda item: item["value"])
+    return {
+        "dimension": dimension,
+        "status": "blocked" if overlaps else "pass",
+        "overlaps": overlaps,
+    }
 
 
 def _missing_policy_fields(fact: Mapping[str, Any]) -> list[str]:
