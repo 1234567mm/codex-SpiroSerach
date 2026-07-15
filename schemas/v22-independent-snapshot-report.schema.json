@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v22-independent-snapshot-report.schema.json",
+  "title": "V22IndependentSnapshotReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "production_snapshot_id",
+    "independent_snapshot_id",
+    "closure_gate_status",
+    "external_validation_claimed",
+    "retained_record_ids",
+    "removed_overlaps",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": { "const": "v22.independent_snapshot_report.v1" },
+    "production_snapshot_id": { "type": "string", "minLength": 1 },
+    "independent_snapshot_id": { "type": "string", "minLength": 1 },
+    "closure_gate_status": { "enum": ["pass", "blocked"] },
+    "external_validation_claimed": { "const": false },
+    "retained_record_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "removed_overlaps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/overlap" }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    }
+  },
+  "$defs": {
+    "overlap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "dimension", "value", "production_record_ids"],
+      "properties": {
+        "record_id": { "type": "string", "minLength": 1 },
+        "dimension": { "enum": ["doi", "source_id", "material_id", "candidate_id"] },
+        "value": { "type": "string", "minLength": 1 },
+        "production_record_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason_code", "message"],
+      "properties": {
+        "reason_code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -185,6 +185,75 @@ def build_v22_quality_reports(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_v22_independent_snapshot_report(
+    production_snapshot: Mapping[str, Any],
+    independent_snapshot: Mapping[str, Any],
+    *,
+    source_ledger: Mapping[str, Any],
+    minimum_retained_records: int,
+) -> dict[str, Any]:
+    """Remove production overlaps from an independent snapshot report."""
+
+    production_records = [
+        record for record in production_snapshot.get("records", ())
+        if isinstance(record, Mapping)
+    ]
+    independent_records = sorted(
+        [
+            record for record in independent_snapshot.get("records", ())
+            if isinstance(record, Mapping)
+        ],
+        key=lambda item: _text(item.get("record_id")),
+    )
+    diagnostics = []
+    if not _source_is_approved(_text(independent_snapshot.get("source_id")), source_ledger):
+        diagnostics.append({
+            "reason_code": "source_approval_missing",
+            "message": "Independent snapshot source is absent from the approved source ledger.",
+        })
+
+    production_index = {
+        dimension: _records_by_dimension(production_records, dimension)
+        for dimension in ("doi", "source_id", "material_id", "candidate_id")
+    }
+    removed = []
+    retained = []
+    for record in independent_records:
+        overlaps = []
+        for dimension in ("doi", "source_id", "material_id", "candidate_id"):
+            value = _text(record.get(dimension))
+            production_ids = production_index[dimension].get(value, set()) if value else set()
+            if production_ids:
+                overlaps.append({
+                    "record_id": _text(record.get("record_id")),
+                    "dimension": dimension,
+                    "value": value,
+                    "production_record_ids": sorted(production_ids),
+                })
+        if overlaps:
+            removed.extend(overlaps)
+        else:
+            retained.append(_text(record.get("record_id")))
+
+    retained = sorted(record_id for record_id in retained if record_id)
+    removed.sort(key=lambda item: (item["record_id"], item["dimension"], item["value"]))
+    if len(retained) < minimum_retained_records:
+        diagnostics.append({
+            "reason_code": "independent_set_below_minimum",
+            "message": "Retained independent records are below the declared minimum.",
+        })
+    return {
+        "schema_version": "v22.independent_snapshot_report.v1",
+        "production_snapshot_id": _text(production_snapshot.get("snapshot_id")) or "unknown-production",
+        "independent_snapshot_id": _text(independent_snapshot.get("snapshot_id")) or "unknown-independent",
+        "closure_gate_status": "blocked" if diagnostics else "pass",
+        "external_validation_claimed": False,
+        "retained_record_ids": retained,
+        "removed_overlaps": removed,
+        "diagnostics": sorted(diagnostics, key=lambda item: item["reason_code"]),
+    }
+
+
 def _target_key(target: Mapping[str, Any]) -> dict[str, Any]:
     key = (
         _text(target.get("material_id")),
@@ -197,6 +266,26 @@ def _target_key(target: Mapping[str, Any]) -> dict[str, Any]:
 def _identity_state(record: Mapping[str, Any]) -> str:
     identity = record.get("identity", {})
     return _text(identity.get("identity_review_state")) if isinstance(identity, Mapping) else ""
+
+
+def _source_is_approved(source_id: str, source_ledger: Mapping[str, Any]) -> bool:
+    approved = {"licensed", "approved_public"}
+    for source in source_ledger.get("sources", ()):
+        if not isinstance(source, Mapping) or _text(source.get("source_id")) != source_id:
+            continue
+        license_info = source.get("license", {})
+        return isinstance(license_info, Mapping) and _text(license_info.get("status")) in approved
+    return False
+
+
+def _records_by_dimension(records: Iterable[Mapping[str, Any]], dimension: str) -> dict[str, set[str]]:
+    index: dict[str, set[str]] = {}
+    for record in records:
+        value = _text(record.get(dimension))
+        record_id = _text(record.get("record_id"))
+        if value and record_id:
+            index.setdefault(value, set()).add(record_id)
+    return index
 
 
 def _report_item(record: Mapping[str, Any], reason_code: str) -> dict[str, Any]:
