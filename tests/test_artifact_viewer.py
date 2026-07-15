@@ -1570,6 +1570,74 @@ Promise.all([slow, fast]).then(([slowResult, fastResult]) => {
         self.assertIn("function showError", script)
         self.assertIn("escapeHtml", script)
 
+    def test_viewer_renders_paper_diagnostics_without_candidate_join_or_validation_claims(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for paper diagnostics test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+const context = {
+  console, JSON, Map, Set, Object, Array, String, Number, Error,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+context.renderPaperDiagnostics(
+  [
+    {asset_id: "asset-1", doi: "10.123/test", rights: "open <unsafe>", sha256: "sha-source", license: "CC-BY"},
+  ],
+  [
+    {claim_id: "claim-1", asset_id: "asset-1", chunk_id: "chunk-1", doi: "10.123/test", property_name: "pce_percent", value: 20.1, unit: "%", confidence: 0.8, text_span: "<span>unsafe</span>", review_required: true, lineage: {extractor: "fixture"}},
+    {claim_id: "claim-name-only", candidate_name: "Spiro-ish", formula: "C1", text_span: "must stay run scoped"},
+  ],
+  {papers: [{doi: "10.123/test", status: "stored"}]},
+  {matches: [{doi: "10.123/test", note: "internal only"}]},
+  {note_count: 2}
+);
+process.stdout.write(JSON.stringify({
+  html: element("paperDiagnosticsList").innerHTML,
+  count: element("paperDiagnosticsCount").textContent,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        observed = json.loads(result.stdout)
+        self.assertIn("1 source assets / 2 claims", observed["count"])
+        self.assertIn("asset-1", observed["html"])
+        self.assertIn("sha-source", observed["html"])
+        self.assertIn("CC-BY", observed["html"])
+        self.assertIn("claim-1", observed["html"])
+        self.assertIn("chunk-1", observed["html"])
+        self.assertIn("review required", observed["html"])
+        self.assertIn("internal diagnostic context", observed["html"])
+        self.assertIn("candidate paper tab remains unavailable", observed["html"])
+        self.assertIn("&lt;span&gt;unsafe&lt;/span&gt;", observed["html"])
+        self.assertNotIn("<span>unsafe</span>", observed["html"])
+        self.assertNotIn("external validation", observed["html"].lower())
+        self.assertNotIn("candidate association", observed["html"].lower())
+
     def test_screening_status_display_never_invents_a_defer_decision(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
         runner = r"""
