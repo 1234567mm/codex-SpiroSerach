@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
 
+from spirosearch.model_evaluation import ModelEvaluation
 from spirosearch.providers.base import ProviderResponse
 
 
@@ -251,6 +252,74 @@ def build_v22_independent_snapshot_report(
         "retained_record_ids": retained,
         "removed_overlaps": removed,
         "diagnostics": sorted(diagnostics, key=lambda item: item["reason_code"]),
+    }
+
+
+def build_v22_model_activation_report(
+    model_evaluation: ModelEvaluation | Mapping[str, Any],
+    independent_snapshot_report: Mapping[str, Any],
+    *,
+    minimum_retained_records: int,
+    replay_verification_status: str = "trusted",
+) -> dict[str, Any]:
+    """Build the V22 model activation decision consumed by later admission."""
+
+    evaluation = (
+        model_evaluation.to_dict()
+        if isinstance(model_evaluation, ModelEvaluation)
+        else dict(model_evaluation)
+    )
+    retained_count = len([
+        record_id for record_id in independent_snapshot_report.get("retained_record_ids", ())
+        if _text(record_id)
+    ])
+    reasons = set(
+        _text(reason)
+        for reason in evaluation.get("activation_reasons", ())
+        if _text(reason)
+    )
+    if _text(evaluation.get("activation_status")) != "eligible":
+        reasons.add("model_evaluation_disabled")
+    if _text(independent_snapshot_report.get("closure_gate_status")) != "pass":
+        reasons.add("independent_validation_blocked")
+    if retained_count < minimum_retained_records:
+        reasons.add("insufficient_independent_data")
+    if replay_verification_status == "tampered":
+        reasons.add("offline_replay_tampered")
+    elif replay_verification_status != "trusted":
+        reasons.add("offline_replay_untrusted")
+
+    activation_status = "disabled" if reasons else "eligible"
+    return {
+        "schema_version": "v22.model_activation_report.v1",
+        "snapshot_id": _text(evaluation.get("snapshot_id")) or "unknown-snapshot",
+        "model_version": _text(evaluation.get("model_version")) or "unknown-model",
+        "objective_name": _text(evaluation.get("objective_name")) or "unknown-objective",
+        "closure_gate_status": "blocked" if reasons else "pass",
+        "activation_status": activation_status,
+        "activation_reasons": sorted(reasons),
+        "disabled_model_state": {
+            "status": activation_status,
+            "may_rank_candidates": activation_status == "eligible",
+            "downstream_consumer": "v24_admission",
+        },
+        "grouped_evaluation": {
+            "split_policy": "fold_id_grouped_cross_validation",
+            "surrogate_type": _text(evaluation.get("surrogate_type")),
+            "feature_count": int(evaluation.get("feature_count", 0)),
+            "metrics": dict(evaluation.get("metrics", {})),
+            "baselines": dict(evaluation.get("baselines", {})),
+            "calibration": dict(evaluation.get("calibration", {})),
+            "replay_status": _text(evaluation.get("replay_status")) or "unavailable",
+            "folds": list(evaluation.get("folds", ())),
+        },
+        "independent_validation": {
+            "report_status": (
+                "pass" if _text(independent_snapshot_report.get("closure_gate_status")) == "pass" else "blocked"
+            ),
+            "retained_record_count": retained_count,
+            "minimum_retained_records": minimum_retained_records,
+        },
     }
 
 
