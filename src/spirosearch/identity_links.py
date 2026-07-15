@@ -6,6 +6,8 @@ from typing import Any, Iterable, Mapping
 
 IDENTITY_LINK_PROPOSAL_SCHEMA_VERSION = "v21.identity_link_proposals.v1"
 IDENTITY_REVIEW_DIAGNOSTICS_SCHEMA_VERSION = "v21.identity_review_diagnostics.v1"
+CANDIDATE_IDENTITY_PROJECTION_SCHEMA_VERSION = "v21.candidate_identity_projection.v1"
+IDENTITY_HISTORY_DELTA_SCHEMA_VERSION = "v21.identity_history_delta.v1"
 
 
 def normalize_doi(value: str | None) -> str | None:
@@ -108,6 +110,80 @@ def build_identity_review_diagnostics(
     }
 
 
+def build_candidate_identity_projection(
+    registry: Mapping[str, Any],
+    link_records: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    diagnostics = build_identity_review_diagnostics(registry, link_records)
+    diagnostics_by_candidate = {
+        item["candidate_id"]: item
+        for item in diagnostics["candidate_diagnostics"]
+    }
+    accepted_links_by_candidate: dict[str, list[dict[str, Any]]] = {}
+    for link in diagnostics["displayable_links"]:
+        accepted_links_by_candidate.setdefault(str(link.get("candidate_id", "")), []).append(dict(link))
+
+    candidates: list[dict[str, Any]] = []
+    for record in sorted(
+        (record for record in registry.get("records", []) if isinstance(record, Mapping)),
+        key=lambda item: str(item.get("candidate_id", "")),
+    ):
+        candidate_id = str(record.get("candidate_id", ""))
+        accepted_links = accepted_links_by_candidate.get(candidate_id, [])
+        accepted_links.sort(key=_link_sort_key)
+        candidate_diagnostics = diagnostics_by_candidate.get(candidate_id, {})
+        candidates.append(
+            {
+                "candidate_id": candidate_id,
+                "stable_identity_id": str(record.get("stable_identity_id", "")),
+                "accepted_links": accepted_links,
+                "identity_diagnostics": {
+                    "reviewer_state": candidate_diagnostics.get("reviewer_state", "unknown"),
+                    "reason_codes": list(candidate_diagnostics.get("reason_codes", [])),
+                    "blocking_review_ids": list(candidate_diagnostics.get("blocking_review_ids", [])),
+                },
+                "identity_history": [dict(event) for event in record.get("identity_history", []) if isinstance(event, Mapping)],
+            }
+        )
+    return {
+        "schema_version": CANDIDATE_IDENTITY_PROJECTION_SCHEMA_VERSION,
+        "candidates": candidates,
+        "link_diagnostics": diagnostics["link_diagnostics"],
+        "scoring_impact": {
+            "status": "unchanged",
+            "eligible_for_scoring_changed": False,
+            "reason": "identity links are read-plane diagnostics only",
+        },
+    }
+
+
+def build_identity_history_delta(
+    source_registry: Mapping[str, Any],
+    target_registry: Mapping[str, Any],
+    source_links: Iterable[Mapping[str, Any]],
+    target_links: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    source_event_ids = _identity_event_ids(source_registry)
+    identity_events_added = [
+        dict(event)
+        for event in _identity_events(target_registry)
+        if str(event.get("event_id", "")) not in source_event_ids
+    ]
+    identity_events_added.sort(key=lambda event: str(event.get("event_id", "")))
+
+    source_link_ids = {str(link.get("link_id", "")) for link in source_links}
+    target_link_ids = {str(link.get("link_id", "")) for link in target_links}
+    return {
+        "schema_version": IDENTITY_HISTORY_DELTA_SCHEMA_VERSION,
+        "identity_events_added": identity_events_added,
+        "link_changes": {
+            "added": sorted(target_link_ids - source_link_ids),
+            "removed": sorted(source_link_ids - target_link_ids),
+        },
+        "mutation_policy": "old_runs_immutable",
+    }
+
+
 def _identity_index(registry: Mapping[str, Any]) -> dict[tuple[str, str], list[Mapping[str, Any]]]:
     index: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for record in registry.get("records", []):
@@ -140,6 +216,21 @@ def _candidate_diagnostic(record: Mapping[str, Any]) -> dict[str, Any]:
         "blocking_review_ids": _string_list(record.get("blocking_review_ids", [])),
         "identity_history": [dict(event) for event in record.get("identity_history", []) if isinstance(event, Mapping)],
     }
+
+
+def _identity_events(registry: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    events: list[Mapping[str, Any]] = []
+    for record in registry.get("records", []):
+        if not isinstance(record, Mapping):
+            continue
+        for event in record.get("identity_history", []):
+            if isinstance(event, Mapping):
+                events.append(event)
+    return events
+
+
+def _identity_event_ids(registry: Mapping[str, Any]) -> set[str]:
+    return {str(event.get("event_id", "")) for event in _identity_events(registry)}
 
 
 def _accepted_conflict_keys(links: list[Mapping[str, Any]]) -> set[tuple[str, str]]:
