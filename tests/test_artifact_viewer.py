@@ -335,6 +335,11 @@ const queueWrongCandidateSameReview = result(
   row({status: "defer", blocking_review_ids: ["review-cross-candidate"]}),
   {reviewQueue: [{review_item_id: "review-cross-candidate", candidate_id: "other-candidate", target_type: "use_instance", target_id: "use-c"}]}
 );
+const unreferencedCanonicalWrongCandidate = result(
+  record({review_items: [{review_item_id: "review-owned-unreferenced", target_type: "use_instance", target_id: "use-c"}]}),
+  row(),
+  {reviewQueue: [{review_item_id: "review-owned-unreferenced", candidate_id: "other-candidate", target_type: "use_instance", target_id: "use-c"}]}
+);
 
 const evidenceA = {energy_evidence_id: "e-duplicate", material_id: "material-c", use_instance_id: "use-c", property_name: "homo_ev"};
 const evidenceB = {...evidenceA, property_name: "lumo_ev"};
@@ -372,7 +377,7 @@ const unrelatedQueueDuplicate = result(
 process.stdout.write(JSON.stringify({
   invalidCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
   payloadExtraProperty, rowExtraProperty, componentExtraProperty,
-  typedMismatch, wrongMappedEnergyTarget, queueCandidateWhitespace, queueTargetWhitespace, queueWrongCandidateSameReview,
+  typedMismatch, wrongMappedEnergyTarget, queueCandidateWhitespace, queueTargetWhitespace, queueWrongCandidateSameReview, unreferencedCanonicalWrongCandidate,
   duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
   duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate, unrelatedQueueDuplicate,
 }));
@@ -412,6 +417,8 @@ process.stdout.write(JSON.stringify({
             self.assertIn("unjoinable_review_reference", observed[name]["codes"], name)
         self.assertEqual(observed["queueWrongCandidateSameReview"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("unjoinable_review_reference", observed["queueWrongCandidateSameReview"]["codes"])
+        self.assertEqual(observed["unreferencedCanonicalWrongCandidate"]["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertIn("unjoinable_review_reference", observed["unreferencedCanonicalWrongCandidate"]["codes"])
         for name in ["duplicateEvidenceForward", "duplicateEvidenceReverse"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("ambiguous_evidence_reference", observed[name]["codes"], name)

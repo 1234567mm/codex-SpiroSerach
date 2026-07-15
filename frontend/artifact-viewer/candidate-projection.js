@@ -203,7 +203,7 @@
     );
   }
 
-  function reviewIndex(snapshot, record, candidateId, declaredReviewIds) {
+  function reviewIndex(snapshot, record, candidateId, relatedReviewIds) {
     const index = new Map();
     for (const item of Array.isArray(record?.review_items) ? record.review_items : []) {
       const id = identifier(item?.review_item_id);
@@ -217,7 +217,7 @@
       const id = identifier(item?.review_item_id);
       if (!id) continue;
       const queueCandidateId = identifier(item?.candidate_id);
-      const relatedId = index.has(id) || declaredReviewIds.includes(id);
+      const relatedId = index.has(id) || relatedReviewIds.includes(id);
       const relatedCandidate = queueCandidateId === candidateId ||
         text(queueCandidateId) === text(candidateId);
       if (!relatedId && !relatedCandidate) continue;
@@ -459,7 +459,12 @@
       }
 
       const reviewIds = row ? uniqueIdentifiers(Array.isArray(row.blocking_review_ids) ? row.blocking_review_ids : []) : [];
-      const reviewsById = reviewIndex(snapshot, record, candidateId, reviewIds);
+      const canonicalReviewIds = uniqueIdentifiers(
+        (Array.isArray(record?.review_items) ? record.review_items : [])
+          .map((item) => item?.review_item_id)
+      );
+      const reviewValidationIds = uniqueIdentifiers([...reviewIds, ...canonicalReviewIds]);
+      const reviewsById = reviewIndex(snapshot, record, candidateId, reviewValidationIds);
       const ownedDuplicateReviewIds = [...reviewsById.entries()]
         .filter(([, matches]) => matches.canonical.length > 1 ||
           matches.queue.filter((item) => identifier(item?.candidate_id) === candidateId).length > 1)
@@ -474,13 +479,13 @@
           "canonical_evidence, review_queue"
         );
       }
-      const reviewResolutions = new Map(reviewIds.map((id) => [
+      const reviewResolutions = new Map(reviewValidationIds.map((id) => [
         id,
         reviewResolution(reviewsById.get(id), candidateId, identity, evidenceById),
       ]));
-      const missingReviewIds = reviewIds.filter((id) => reviewResolutions.get(id).status === "missing");
-      const ambiguousReviewIds = reviewIds.filter((id) => reviewResolutions.get(id).status === "ambiguous");
-      const conflictingReviewIds = reviewIds.filter((id) => reviewResolutions.get(id).status === "conflict");
+      const missingReviewIds = reviewValidationIds.filter((id) => reviewResolutions.get(id).status === "missing");
+      const ambiguousReviewIds = reviewValidationIds.filter((id) => reviewResolutions.get(id).status === "ambiguous");
+      const conflictingReviewIds = reviewValidationIds.filter((id) => reviewResolutions.get(id).status === "conflict");
       if (ambiguousReviewIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
@@ -515,7 +520,7 @@
           codes: uniqueIds(Array.isArray(row?.codes) ? row.codes : []),
           reviewIds,
           joinedReviews: reviewIds.filter((id) => reviewResolutions.get(id).status === "valid").map((id) => cloneJson(reviewResolutions.get(id).review)),
-          missingReviewIds: unjoinableReviewIds,
+          missingReviewIds: reviewIds.filter((id) => unjoinableReviewIds.includes(id)),
         },
         evidenceCoverage: {
           declared: evidenceIds.length,
