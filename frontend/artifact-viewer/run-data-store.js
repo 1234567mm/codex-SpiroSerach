@@ -173,10 +173,113 @@
     diagnostics: [],
   });
 
+  const DIAGNOSTIC_KINDS = Object.freeze([
+    "canonical_evidence",
+    "screening_input_view",
+    "scoring_view",
+    "review_queue",
+    "review_events",
+    "review_summary",
+    "recompute_markers",
+    "recommendations",
+    "acquisition_breakdown",
+    "agent_trace",
+    "literature_claims",
+    "source_assets",
+    "model_evaluation",
+  ]);
+
+  function lifecycleState(snapshot, kind) {
+    if (!snapshot?.manifest) {
+      return {
+        kind,
+        state: "idle",
+        severity: "info",
+        source: "run_store",
+        reason: "No run is committed",
+      };
+    }
+    const availability = snapshot.availability?.[kind];
+    const declared = Boolean((snapshot.manifest.artifacts || []).some((item) => item?.kind === kind));
+    const artifact = snapshot.artifacts?.[kind];
+    if (!declared && !availability && !artifact) {
+      return {
+        kind,
+        state: "unavailable",
+        severity: "info",
+        source: "manifest",
+        reason: "Artifact kind is not declared by the committed manifest",
+      };
+    }
+    const matchingDiagnostics = (snapshot.diagnostics || []).filter((item) =>
+      item.kind === kind || item.path === availability?.path || item.path === availability?.resolvedPath
+    );
+    const warningOrError = matchingDiagnostics.find((item) => item.severity === "error") ||
+      matchingDiagnostics.find((item) => item.severity === "warning");
+    if (availability?.status === "missing") {
+      return {
+        kind,
+        state: "degraded",
+        severity: "warning",
+        source: "manifest",
+        reason: warningOrError?.message || "Declared optional artifact is unavailable",
+        path: availability.path || null,
+      };
+    }
+    if (availability?.status === "parse_error" || availability?.status === "unsupported_format") {
+      return {
+        kind,
+        state: "invalid",
+        severity: availability.status === "parse_error" ? "error" : "warning",
+        source: "browser-local",
+        reason: warningOrError?.message || `Artifact status is ${availability.status}`,
+        path: availability.path || null,
+      };
+    }
+    if (availability?.status && availability.status !== "available") {
+      return {
+        kind,
+        state: "unavailable",
+        severity: "warning",
+        source: "manifest",
+        reason: warningOrError?.message || `Artifact status is ${availability.status}`,
+        path: availability.path || null,
+      };
+    }
+    const payload = artifact?.payload;
+    const empty = Array.isArray(payload)
+      ? payload.length === 0
+      : (payload && typeof payload === "object" && Array.isArray(payload.records) && payload.records.length === 0);
+    return {
+      kind,
+      state: empty ? "empty" : "available",
+      severity: warningOrError?.severity || "info",
+      source: "repository-manifest",
+      reason: empty ? "Artifact is available with zero records" : "Artifact is available from the committed run",
+      path: availability?.path || artifact?.path || null,
+    };
+  }
+
+  const DiagnosticProjection = Object.freeze({
+    project(snapshot) {
+      const manifestKinds = (snapshot?.manifest?.artifacts || [])
+        .map((item) => item?.kind)
+        .filter((kind) => typeof kind === "string" && kind);
+      const kinds = [...new Set([...DIAGNOSTIC_KINDS, ...manifestKinds])].sort();
+      const panels = Object.fromEntries(kinds.map((kind) => [kind, lifecycleState(snapshot, kind)]));
+      return deepFreeze({
+        runId: snapshot?.manifest?.run_id || snapshot?.manifestMetadata?.runId || null,
+        panels,
+        diagnostics: cloneJson(snapshot?.diagnostics || []),
+      });
+    },
+  });
+
   class RunDataStore {
     constructor(adapter = new RelativePathBundleAdapter()) {
       this.adapter = adapter;
       this.committedSnapshot = EMPTY_SNAPSHOT;
+      this.loadGeneration = 0;
     }
 
     snapshot() {
@@ -184,7 +287,16 @@
     }
 
     async replace(files) {
+      const generation = ++this.loadGeneration;
       const bundle = await this.adapter.index(files);
+      if (generation !== this.loadGeneration) {
+        return this.failure([diagnostic(
+          "stale_load_generation",
+          "Older asynchronous load was ignored because a newer run load started",
+          {},
+          "warning"
+        )]);
+      }
       if (!bundle.ok) {
         return this.failure(bundle.diagnostics);
       }
@@ -465,6 +577,14 @@
         availability,
         diagnostics,
       });
+      if (generation !== this.loadGeneration) {
+        return this.failure([diagnostic(
+          "stale_load_generation",
+          "Older asynchronous load was ignored because a newer run load committed first",
+          {},
+          "warning"
+        )]);
+      }
       this.committedSnapshot = snapshot;
       return deepFreeze({
         ok: true,
@@ -485,6 +605,7 @@
   }
 
   global.SpiroRunData = Object.freeze({
+    DiagnosticProjection,
     RelativePathBundleAdapter,
     RunDataStore,
     normalizeRelativePath,
