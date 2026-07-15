@@ -804,6 +804,7 @@ function renderCandidatePaperEvidenceTab(candidate) {
     message: "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.",
     records: [],
     runArtifacts: [],
+    diagnostics: [],
   };
   return `
     <div class="context-block">
@@ -811,15 +812,20 @@ function renderCandidatePaperEvidenceTab(candidate) {
       <div class="item-meta">status ${escapeHtml(paper.status || "unavailable")}</div>
       <p>${escapeHtml(paper.message || "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.")}</p>
       ${(paper.records || []).map((record) => `<div class="detail-row">
-        <strong>${escapeHtml(record.claim_id || record.asset_id || record.doi || "paper-record")}</strong>
+        <strong>${escapeHtml(record.evidenceId || record.claim_id || record.asset_id || record.doi || "paper-record")}</strong>
         <span>${compactMeta([
           ["source", record.artifactKind || "candidate_paper_evidence"],
           ["doi", record.doi],
+          ["source_id", record.sourceId],
+          ["title", record.title],
           ["asset", record.asset_id],
           ["chunk", record.chunk_id],
+          ["reviewer_state", record.reviewerState],
+          ["confidence", record.confidenceCategory],
         ])}</span>
       </div>`).join("")}
     </div>
+    ${renderProjectionDiagnostics(paper.diagnostics || [])}
     <div class="context-block">
       <strong>Run/DOI-scope literature artifacts</strong>
       <div class="chip-row">

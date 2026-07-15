@@ -798,6 +798,153 @@ process.stdout.write(JSON.stringify({
         self.assertIn("run/DOI scope", observed["paperEvidence"]["message"])
         self.assertTrue(observed["frozen"])
 
+    def test_candidate_paper_tab_uses_only_v21_accepted_identity_links(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for V21 paper tab test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+      dataset: {},
+      focus: () => {},
+    });
+  }
+  return elements.get(id);
+}
+const context = {
+  console, JSON, Map, Set, Object, Array, String, Number, Error, Promise,
+  document: {
+    getElementById: element,
+    querySelectorAll: () => [],
+  },
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
+
+const componentNames = ["homo_alignment", "lumo_alignment", "band_gap", "solubility", "stability", "cost", "synthesis_complexity"];
+const weights = {homo_alignment: 0.3, lumo_alignment: 0.2, band_gap: 0.1, solubility: 0.1, stability: 0.15, cost: 0.1, synthesis_complexity: 0.05};
+function record(candidateId, stableId) {
+  return {
+    candidate_id: candidateId,
+    material: {material_id: `material-${candidateId}`, material_kind: "small_molecule", supplier_status: "available"},
+    use_instance: {material_id: `material-${candidateId}`, use_instance_id: `use-${candidateId}`, role: "HTL"},
+    energy_evidence: [],
+    review_items: [],
+    stable_identity_id: stableId,
+  };
+}
+function screening(candidateId) {
+  return {
+    candidate_id: candidateId,
+    status: "pass",
+    codes: [],
+    components: componentNames.map((name) => ({name, utility: 0.5, quality: 1, observed: true, evidence_ids: []})),
+    blocking_review_ids: [],
+    profile_version: "v12.htl_screening.v1",
+    weights,
+    weighted_utility: 0.5,
+    coverage: 1,
+  };
+}
+const identityProjection = {
+  schema_version: "v21.candidate_identity_projection.v1",
+  candidates: [
+    {
+      candidate_id: "candidate-a",
+      stable_identity_id: "sid-a",
+      accepted_links: [{
+        schema_version: "v21.candidate_evidence_link.v1",
+        link_id: "link-accepted",
+        candidate_id: "candidate-a",
+        stable_identity_id: "sid-a",
+        evidence_id: "claim-accepted",
+        evidence_kind: "literature_claim",
+        paper: {doi: "10.1000/accepted", source_id: "paper-a", title: "Accepted <Paper>"},
+        link_basis: [{field: "doi", value: "10.1000/accepted"}],
+        confidence_category: "reviewed_explicit",
+        reviewer_state: "accepted",
+        blocking_review_ids: [],
+        lineage: {source_run_id: "run-v21", source_artifact_kinds: ["candidate_identity_registry", "literature_claims"]},
+      }],
+      identity_diagnostics: {reviewer_state: "accepted", reason_codes: [], blocking_review_ids: []},
+    },
+    {
+      candidate_id: "candidate-b",
+      stable_identity_id: "sid-b",
+      accepted_links: [],
+      identity_diagnostics: {reviewer_state: "blocked", reason_codes: ["identity_state_blocked"], blocking_review_ids: ["review-b"]},
+    },
+  ],
+  link_diagnostics: [
+    {link_id: "link-proposed", candidate_id: "candidate-b", evidence_id: "claim-proposed", reviewer_state: "proposed", reason_code: "identity_link_proposed", message: "proposed link is diagnostic only"},
+    {link_id: "link-conflict", candidate_id: "candidate-a", evidence_id: "claim-conflict", reviewer_state: "accepted", reason_code: "conflicting_accepted_identity_link", message: "conflicting accepted link is diagnostic only"},
+  ],
+  scoring_impact: {status: "unchanged", eligible_for_scoring_changed: false},
+};
+const artifacts = {
+  canonical_evidence: {kind: "canonical_evidence", path: "canonical.json", payload: {records: [record("candidate-a", "sid-a"), record("candidate-b", "sid-b")]}},
+  screening_input_view: {kind: "screening_input_view", path: "screening.json", payload: {schema_version: "v19.screening_input_view.v1", profile_version: "v12.htl_screening.v1", candidates: [screening("candidate-a"), screening("candidate-b")]}},
+  candidate_identity_projection: {kind: "candidate_identity_projection", path: "identity-projection.json", payload: identityProjection},
+};
+const manifest = {run_id: "run-v21", artifacts: Object.values(artifacts).map((artifact) => ({kind: artifact.kind, path: artifact.path}))};
+const availability = Object.fromEntries(Object.values(artifacts).map((artifact) => [artifact.kind, {status: "available", path: artifact.path}]));
+const projection = context.SpiroCandidateProjection.project({manifest, manifestMetadata: {runId: "run-v21"}, artifacts, availability, diagnostics: []});
+const candidateA = projection.groups.continue.find((candidate) => candidate.candidateId === "candidate-a");
+const candidateB = projection.groups.continue.find((candidate) => candidate.candidateId === "candidate-b");
+const htmlA = context.renderCandidatePaperEvidenceTab(candidateA);
+const htmlB = context.renderCandidatePaperEvidenceTab(candidateB);
+process.stdout.write(JSON.stringify({
+  statusA: candidateA.detail.paperEvidence.status,
+  recordsA: candidateA.detail.paperEvidence.records.map((record) => record.evidenceId),
+  diagnosticsA: candidateA.detail.paperEvidence.diagnostics.map((item) => item.code),
+  statusB: candidateB.detail.paperEvidence.status,
+  recordsB: candidateB.detail.paperEvidence.records.map((record) => record.evidenceId),
+  diagnosticsB: candidateB.detail.paperEvidence.diagnostics.map((item) => item.code),
+  htmlA,
+  htmlB,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = file.name
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    runner_path,
+                    "frontend/artifact-viewer/candidate-projection.js",
+                    "frontend/artifact-viewer/viewer.js",
+                ],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+        finally:
+            Path(runner_path).unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["statusA"], "available")
+        self.assertEqual(observed["recordsA"], ["claim-accepted"])
+        self.assertIn("conflicting_accepted_identity_link", observed["diagnosticsA"])
+        self.assertNotIn("claim-conflict", observed["recordsA"])
+        self.assertEqual(observed["statusB"], "unavailable")
+        self.assertEqual(observed["recordsB"], [])
+        self.assertIn("identity_state_blocked", observed["diagnosticsB"])
+        self.assertIn("identity_link_proposed", observed["diagnosticsB"])
+        self.assertIn("10.1000/accepted", observed["htmlA"])
+        self.assertIn("Accepted &lt;Paper&gt;", observed["htmlA"])
+        self.assertNotIn("Accepted <Paper>", observed["htmlA"])
+        self.assertIn("conflicting_accepted_identity_link", observed["htmlA"])
+        self.assertIn("identity_link_proposed", observed["htmlB"])
+
     def test_candidate_workspace_renders_groups_controls_selection_and_empty_state(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for workspace test")
         runner = r"""
