@@ -184,6 +184,7 @@
   function screeningRowIsStructurallyValid(row) {
     if (!hasExactFields(row, SCREENING_ROW_FIELDS)) return false;
     if (!identifier(row.candidate_id) || !Array.isArray(row.codes) || !uniqueNonEmptyStrings(row.codes)) return false;
+    if (!Object.prototype.hasOwnProperty.call(STATUS_TO_GROUP, row.status)) return false;
     if (!row.codes.every((code) => SCREENING_CODES.includes(code))) return false;
     if (!uniqueNonEmptyStrings(row.blocking_review_ids)) return false;
     if (row.profile_version !== SCREENING_PROFILE_VERSION || !finiteUnitInterval(row.weighted_utility) || !finiteUnitInterval(row.coverage)) return false;
@@ -192,7 +193,7 @@
     if (weightNames.length !== COMPONENT_NAMES.length || !COMPONENT_NAMES.every((name) => weightNames.includes(name))) return false;
     if (!COMPONENT_NAMES.every((name) => row.weights[name] === SCREENING_WEIGHTS[name])) return false;
     if (!Array.isArray(row.components) || row.components.length !== COMPONENT_NAMES.length) return false;
-    const names = row.components.map((component) => text(component?.name));
+    const names = row.components.map((component) => identifier(component?.name));
     if (new Set(names).size !== COMPONENT_NAMES.length || !COMPONENT_NAMES.every((name) => names.includes(name))) return false;
     return row.components.every((component) =>
       hasExactFields(component, SCREENING_COMPONENT_FIELDS) &&
@@ -404,7 +405,7 @@
         pushCandidateDiagnostic(candidateDiagnostics, candidateId, "canonical_mapping_conflict", mappingProblem, "canonical_evidence");
       }
 
-      const backendStatus = row ? text(row.status) : "";
+      const backendStatus = row ? identifier(row.status) : "";
       if (row && !screeningContractSupported) {
         pushCandidateDiagnostic(candidateDiagnostics, candidateId, "screening_contract_unsupported", "Browser-local structural check does not support the screening schema/profile markers", "screening_input_view");
       }
@@ -496,13 +497,26 @@
         );
       }
       const unjoinableReviewIds = uniqueIdentifiers([...missingReviewIds, ...ambiguousReviewIds, ...conflictingReviewIds]);
-      if (unjoinableReviewIds.length) {
+      const declaredUnjoinableReviewIds = reviewIds.filter((id) => unjoinableReviewIds.includes(id));
+      const ownedUnjoinableReviewIds = canonicalReviewIds.filter((id) =>
+        unjoinableReviewIds.includes(id) && !reviewIds.includes(id)
+      );
+      if (declaredUnjoinableReviewIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
           candidateId,
           "unjoinable_review_reference",
           "declared blocking review does not join by review_item_id and candidate_id",
-          "screening_input_view"
+          "screening_input_view, canonical_evidence, review_queue"
+        );
+      }
+      if (ownedUnjoinableReviewIds.length) {
+        pushCandidateDiagnostic(
+          candidateDiagnostics,
+          candidateId,
+          "unjoinable_review_reference",
+          "canonical review representation conflicts with review_queue candidate or typed target",
+          "canonical_evidence, review_queue"
         );
       }
 
@@ -520,7 +534,7 @@
           codes: uniqueIds(Array.isArray(row?.codes) ? row.codes : []),
           reviewIds,
           joinedReviews: reviewIds.filter((id) => reviewResolutions.get(id).status === "valid").map((id) => cloneJson(reviewResolutions.get(id).review)),
-          missingReviewIds: reviewIds.filter((id) => unjoinableReviewIds.includes(id)),
+          missingReviewIds: declaredUnjoinableReviewIds,
         },
         evidenceCoverage: {
           declared: evidenceIds.length,

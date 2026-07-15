@@ -294,7 +294,7 @@ function snapshot(canonicalRecord, screeningRow, options = {}) {
 function result(canonicalRecord, screeningRow, options = {}) {
   const projection = context.SpiroCandidateProjection.project(snapshot(canonicalRecord, screeningRow, options));
   const groups = Object.fromEntries(Object.entries(projection.groups).map(([group, values]) => [group, values.map((candidate) => candidate.candidateId)]));
-  return {groups, codes: projection.diagnostics.map((item) => item.code), messages: projection.diagnostics.map((item) => item.message)};
+  return {groups, codes: projection.diagnostics.map((item) => item.code), messages: projection.diagnostics.map((item) => item.message), diagnostics: projection.diagnostics};
 }
 
 const invalidCode = result(record(), row({codes: ["NOT_A_FROZEN_CODE"]}));
@@ -308,6 +308,10 @@ const rowExtraProperty = result(record(), row({invented: true}));
 const componentExtra = row();
 componentExtra.components[0] = {...componentExtra.components[0], invented: true};
 const componentExtraProperty = result(record(), componentExtra);
+const statusWhitespace = result(record(), row({status: " pass "}));
+const componentNameWhitespaceRow = row();
+componentNameWhitespaceRow.components[0] = {...componentNameWhitespaceRow.components[0], name: " homo_alignment "};
+const componentNameWhitespace = result(record(), componentNameWhitespaceRow);
 
 const typedMismatch = result(
   record({review_items: [{review_item_id: "review-c", target_type: "candidate", target_id: "use-c"}]}),
@@ -376,7 +380,7 @@ const unrelatedQueueDuplicate = result(
 
 process.stdout.write(JSON.stringify({
   invalidCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
-  payloadExtraProperty, rowExtraProperty, componentExtraProperty,
+  payloadExtraProperty, rowExtraProperty, componentExtraProperty, statusWhitespace, componentNameWhitespace,
   typedMismatch, wrongMappedEnergyTarget, queueCandidateWhitespace, queueTargetWhitespace, queueWrongCandidateSameReview, unreferencedCanonicalWrongCandidate,
   duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
   duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate, unrelatedQueueDuplicate,
@@ -408,6 +412,9 @@ process.stdout.write(JSON.stringify({
         for name in ["rowExtraProperty", "componentExtraProperty"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("screening_row_invalid", observed[name]["codes"], name)
+        for name in ["statusWhitespace", "componentNameWhitespace"]:
+            self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
+            self.assertIn("screening_row_invalid", observed[name]["codes"], name)
         self.assertEqual(observed["typedMismatch"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("unjoinable_review_reference", observed["typedMismatch"]["codes"])
         self.assertEqual(observed["wrongMappedEnergyTarget"]["groups"]["insufficient-data"], ["candidate-c"])
@@ -419,6 +426,12 @@ process.stdout.write(JSON.stringify({
         self.assertIn("unjoinable_review_reference", observed["queueWrongCandidateSameReview"]["codes"])
         self.assertEqual(observed["unreferencedCanonicalWrongCandidate"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("unjoinable_review_reference", observed["unreferencedCanonicalWrongCandidate"]["codes"])
+        owned_conflict = next(
+            item for item in observed["unreferencedCanonicalWrongCandidate"]["diagnostics"]
+            if item["code"] == "unjoinable_review_reference"
+        )
+        self.assertEqual(owned_conflict["source"], "canonical_evidence, review_queue")
+        self.assertNotIn("declared blocking", owned_conflict["message"])
         for name in ["duplicateEvidenceForward", "duplicateEvidenceReverse"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("ambiguous_evidence_reference", observed[name]["codes"], name)
