@@ -219,14 +219,15 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
 
-const fixtureDir = process.argv[3];
+const fixtureDir = process.argv[4];
 const manifest = JSON.parse(fs.readFileSync(path.join(fixtureDir, "run-manifest.json"), "utf8"));
 context.loadedManifest = manifest;
 vm.runInContext("state.manifest = loadedManifest", context);
 for (const artifact of manifest.artifacts) {
   const artifactText = fs.readFileSync(path.join(fixtureDir, artifact.path), "utf8");
-  const parsed = context.parseArtifact(artifact.path, artifactText);
+  const parsed = context.SpiroRunData.parseArtifactPayload(artifactText, artifact.format);
   context.loadedArtifactPath = artifact.path;
   context.loadedArtifactPayload = parsed;
   vm.runInContext("state.artifacts.set(loadedArtifactPath, loadedArtifactPayload)", context);
@@ -255,7 +256,13 @@ process.stdout.write(JSON.stringify({
             runner_path = Path(file.name)
         try:
             result = subprocess.run(
-                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js", str(FIXTURE_DIR)],
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/run-data-store.js",
+                    "frontend/artifact-viewer/viewer.js",
+                    str(FIXTURE_DIR),
+                ],
                 check=True,
                 capture_output=True,
                 text=True,

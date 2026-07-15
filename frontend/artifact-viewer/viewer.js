@@ -56,32 +56,6 @@ function showLoadFailure(result) {
     : "Load failed; no run committed";
 }
 
-function parseArtifact(name, text) {
-  if (name.endsWith(".jsonl")) {
-    return parseJsonl(text, name);
-  }
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new Error(`${name} JSON parse failed: ${error.message}`);
-  }
-}
-
-function parseJsonl(text, name = "jsonl") {
-  const records = [];
-  const lines = text.split(/\r?\n/);
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-    try {
-      records.push(JSON.parse(trimmed));
-    } catch (error) {
-      throw new Error(`${name} line ${index + 1}: ${error.message}`);
-    }
-  });
-  return records;
-}
-
 function renderManifest(manifest) {
   document.getElementById("artifactCount").textContent = String((manifest.artifacts || []).length);
   document.getElementById("candidateCount").textContent = String(manifest.candidate_count ?? 0);
@@ -229,6 +203,7 @@ function renderCandidateDetail(candidate, canonicalRecord) {
   const material = canonicalRecord?.material || {};
   const useInstance = canonicalRecord?.use_instance || {};
   const energyEvidence = canonicalRecord?.energy_evidence || [];
+  const statusDisplay = screeningStatusDisplay(candidate.status);
   detail.innerHTML = `<section>
     <div class="item-title">
       <span>${escapeHtml(candidate.candidate_id || "-")}</span>
@@ -236,7 +211,8 @@ function renderCandidateDetail(candidate, canonicalRecord) {
     </div>
     <div class="item-meta">
       ${compactMeta([
-        ["status", candidate.status],
+        ["status", statusDisplay.status],
+        ["status_reason", statusDisplay.status === "unavailable" ? statusDisplay.reason : null],
         ["utility", formatNumber(candidate.weighted_utility)],
         ["coverage", formatNumber(candidate.coverage)],
         ["profile", candidate.profile_version],

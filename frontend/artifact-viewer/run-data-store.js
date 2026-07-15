@@ -56,10 +56,12 @@
     return path === MANIFEST_FILE_NAME || path.endsWith(`/${MANIFEST_FILE_NAME}`);
   }
 
-  function parsePayload(text, metadata, path) {
-    const isJsonl = metadata.format === "jsonl" || path.endsWith(".jsonl");
-    if (!isJsonl) {
+  function parseArtifactPayload(text, format) {
+    if (format === "json") {
       return JSON.parse(text);
+    }
+    if (format !== "jsonl") {
+      throw new Error(`unsupported artifact format: ${String(format)}`);
     }
     const records = [];
     text.split(/\r?\n/).forEach((line, index) => {
@@ -105,7 +107,7 @@
         pending.push({file, path});
       }
 
-      const entries = {};
+      const entries = Object.create(null);
       await Promise.all(pending.map(async ({file, path}) => {
         try {
           entries[path] = {path, text: await file.text()};
@@ -146,8 +148,8 @@
   const EMPTY_SNAPSHOT = deepFreeze({
     manifest: null,
     manifestMetadata: null,
-    artifacts: {},
-    availability: {},
+    artifacts: Object.create(null),
+    availability: Object.create(null),
     diagnostics: [],
   });
 
@@ -189,8 +191,8 @@
         return this.failure(diagnostics);
       }
 
-      const runId = typeof manifest.run_id === "string" ? manifest.run_id.trim() : "";
-      if (!runId) {
+      const runId = typeof manifest.run_id === "string" ? manifest.run_id : "";
+      if (!runId.trim()) {
         diagnostics.push(diagnostic(
           "manifest_run_id_missing",
           "run manifest requires a non-empty run_id",
@@ -207,8 +209,8 @@
 
       const manifestBasePath = manifestDirectory(bundle.manifestPath);
       const normalizedManifest = cloneJson(manifest);
-      const artifacts = {};
-      const availability = {};
+      const artifacts = Object.create(null);
+      const availability = Object.create(null);
       const seenKinds = new Set();
       const seenArtifactPaths = new Set();
       let canonicalDeclared = false;
@@ -262,8 +264,8 @@
         }
         seenArtifactPaths.add(declaredPath);
 
-        const artifactRunId = typeof metadata.run_id === "string" ? metadata.run_id.trim() : "";
-        if (!artifactRunId || artifactRunId !== runId) {
+        const artifactRunId = typeof metadata.run_id === "string" ? metadata.run_id : "";
+        if (!artifactRunId.trim() || artifactRunId !== runId) {
           diagnostics.push(diagnostic(
             "artifact_run_id_conflict",
             `artifact ${kind} run_id does not match manifest run_id`,
@@ -272,6 +274,25 @@
         }
 
         const resolvedPath = joinRelativePath(manifestBasePath, declaredPath);
+        const format = metadata.format;
+        if (format !== "json" && format !== "jsonl") {
+          const severity = kind === "canonical_evidence" ? "error" : "warning";
+          const unsupported = diagnostic(
+            "artifact_format_unsupported",
+            `artifact ${kind} requires manifest format json or jsonl`,
+            {kind, path: declaredPath, resolvedPath, format: format ?? null},
+            severity
+          );
+          diagnostics.push(unsupported);
+          availability[kind] = {
+            kind,
+            path: declaredPath,
+            resolvedPath,
+            status: "unsupported_format",
+            diagnosticCodes: [unsupported.code],
+          };
+          continue;
+        }
         const selectedFile = bundle.entries[resolvedPath];
         if (!selectedFile) {
           const severity = kind === "canonical_evidence" ? "error" : "warning";
@@ -294,7 +315,7 @@
 
         let payload;
         try {
-          payload = parsePayload(selectedFile.text, metadata, declaredPath);
+          payload = parseArtifactPayload(selectedFile.text, format);
         } catch (error) {
           const severity = kind === "canonical_evidence" ? "error" : "warning";
           const parseError = diagnostic(
@@ -436,5 +457,6 @@
     RelativePathBundleAdapter,
     RunDataStore,
     normalizeRelativePath,
+    parseArtifactPayload,
   });
 })(typeof globalThis === "undefined" ? this : globalThis);
