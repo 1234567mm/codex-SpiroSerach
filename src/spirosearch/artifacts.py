@@ -45,6 +45,7 @@ V4_ARTIFACT_KINDS = {
     "scientific_source_ledger",
     "v22_quality_report",
     "v22_zero_leakage_report",
+    "v22_independent_snapshot_report",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -223,6 +224,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v22-zero-leakage-report.schema.json",
         "join_keys": ("snapshot_id", "dimension", "value"),
         "depends_on": ("production_beard_cole_snapshot",),
+    },
+    "v22_independent_snapshot_report": {
+        "schema_ref": "schemas/v22-independent-snapshot-report.schema.json",
+        "join_keys": ("production_snapshot_id", "independent_snapshot_id", "record_id", "dimension"),
+        "depends_on": ("production_beard_cole_snapshot", "scientific_source_ledger"),
     },
 }
 

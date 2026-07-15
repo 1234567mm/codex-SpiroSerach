@@ -164,6 +164,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "scientific_source_ledger",
                 "v22_quality_report",
                 "v22_zero_leakage_report",
+                "v22_independent_snapshot_report",
             },
         )
 
