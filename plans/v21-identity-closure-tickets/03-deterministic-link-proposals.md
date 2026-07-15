@@ -1,6 +1,6 @@
 # T21-03 Deterministic link proposals
 
-Status: pending  
+Status: complete
 Source plan: `plans/v21-candidate-evidence-identity-closure-spec.md`
 
 ## What to build

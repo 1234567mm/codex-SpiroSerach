@@ -1,6 +1,6 @@
 # T21-05 V19/V20 identity projections
 
-Status: pending  
+Status: complete
 Source plan: `plans/v21-candidate-evidence-identity-closure-spec.md`
 
 ## What to build

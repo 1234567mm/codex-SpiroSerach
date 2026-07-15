@@ -1,6 +1,6 @@
 # T21-04 Review and conflict routing
 
-Status: pending  
+Status: complete
 Source plan: `plans/v21-candidate-evidence-identity-closure-spec.md`
 
 ## What to build

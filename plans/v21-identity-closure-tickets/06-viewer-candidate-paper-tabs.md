@@ -1,6 +1,6 @@
 # T21-06 Viewer candidate paper tabs
 
-Status: pending  
+Status: complete
 Source plan: `plans/v21-candidate-evidence-identity-closure-spec.md`
 
 ## What to build

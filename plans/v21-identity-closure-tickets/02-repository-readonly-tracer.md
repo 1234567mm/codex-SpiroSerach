@@ -1,6 +1,6 @@
 # T21-02 Repository and read-only API tracer
 
-Status: pending  
+Status: complete
 Source plan: `plans/v21-candidate-evidence-identity-closure-spec.md`
 
 ## What to build

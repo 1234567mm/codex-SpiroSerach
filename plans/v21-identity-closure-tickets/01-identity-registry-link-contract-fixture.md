@@ -1,6 +1,6 @@
 # T21-01 Identity registry, link contract, and fixture
 
-Status: pending  
+Status: complete
 Source plan: `plans/v21-candidate-evidence-identity-closure-spec.md`
 
 ## What to build

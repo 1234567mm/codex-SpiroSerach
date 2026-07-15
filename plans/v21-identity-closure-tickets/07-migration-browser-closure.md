@@ -1,6 +1,6 @@
 # T21-07 Migration, browser smoke, and closure
 
-Status: pending  
+Status: complete
 Source plan: `plans/v21-candidate-evidence-identity-closure-spec.md`
 
 ## What to build
