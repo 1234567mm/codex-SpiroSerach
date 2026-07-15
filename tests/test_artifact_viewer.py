@@ -57,6 +57,21 @@ function file(relativePath, payload) {
   };
 }
 
+function nameOnlyFile(name, payload) {
+  return {
+    name,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
+function explicitPathFile(relativePath, payload) {
+  return {
+    name: relativePath.split("/").pop(),
+    relativePath,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
 function manifest(runId, artifacts) {
   return {
     schema_version: "v6.run_manifest.v1",
@@ -223,6 +238,27 @@ async function main() {
   const jsonlConflictDiagnostic = jsonlPayloadConflict.diagnostics.find(
     (item) => item.code === "artifact_run_id_conflict" && item.kind === "review_events"
   );
+  const nameOnlyBundle = await new RunDataStore().replace([
+    nameOnlyFile("run-manifest.json", manifest("run-name-only", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    nameOnlyFile("canonical.json", canonical),
+  ]);
+  const explicitPathBundle = await new RunDataStore().replace([
+    explicitPathFile("explicit/run-manifest.json", manifest("run-explicit-path", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+    ])),
+    explicitPathFile("explicit/canonical.json", canonical),
+  ]);
+  const whitespaceKindBundle = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-kind-whitespace", [
+      {kind: " canonical_evidence ", path: "canonical.json"},
+    ])),
+    file("canonical.json", canonical),
+  ]);
+  const whitespaceKindSnapshot = whitespaceKindBundle.snapshot;
+  const viewerArtifact = (whitespaceKindSnapshot.manifest?.artifacts || [])
+    .find((artifact) => artifact.kind === "canonical_evidence");
 
   function reachableValuesAreFrozen(value, seen = new Set()) {
     if (!value || typeof value !== "object" || seen.has(value)) return true;
@@ -308,6 +344,24 @@ async function main() {
       conflictRecordIndex: jsonlConflictDiagnostic?.recordIndex,
       conflictActualRunId: jsonlConflictDiagnostic?.actualRunId,
       missingRunIdOk: jsonlPayloadWithoutRunId.ok,
+    },
+    explicitInputPaths: {
+      nameOnlyOk: nameOnlyBundle.ok,
+      nameOnlyCodes: codes(nameOnlyBundle),
+      explicitRelativePathOk: explicitPathBundle.ok,
+      webkitRelativePathOk: committed.ok,
+    },
+    whitespaceKind: {
+      ok: whitespaceKindBundle.ok,
+      codes: codes(whitespaceKindBundle),
+      committedManifestKind: whitespaceKindSnapshot.manifest?.artifacts?.[0]?.kind ?? null,
+      normalizedArtifactOwn: Object.prototype.hasOwnProperty.call(
+        whitespaceKindSnapshot.artifacts,
+        "canonical_evidence"
+      ),
+      viewerResolvable: Boolean(
+        viewerArtifact?.path && whitespaceKindSnapshot.artifacts.canonical_evidence
+      ),
     },
   }));
 }
@@ -402,6 +456,17 @@ main().catch((error) => {
         self.assertEqual(jsonl_identity["conflictRecordIndex"], 0)
         self.assertEqual(jsonl_identity["conflictActualRunId"], "other-run")
         self.assertTrue(jsonl_identity["missingRunIdOk"])
+        explicit_paths = observed["explicitInputPaths"]
+        self.assertFalse(explicit_paths["nameOnlyOk"])
+        self.assertIn("relative_path_missing", explicit_paths["nameOnlyCodes"])
+        self.assertTrue(explicit_paths["explicitRelativePathOk"])
+        self.assertTrue(explicit_paths["webkitRelativePathOk"])
+        whitespace_kind = observed["whitespaceKind"]
+        self.assertFalse(whitespace_kind["ok"], whitespace_kind)
+        self.assertIn("artifact_kind_invalid", whitespace_kind["codes"])
+        self.assertIsNone(whitespace_kind["committedManifestKind"])
+        self.assertFalse(whitespace_kind["normalizedArtifactOwn"])
+        self.assertFalse(whitespace_kind["viewerResolvable"])
 
     def test_viewer_script_renders_manifest_artifacts(self):
         script = Path("frontend/artifact-viewer/viewer.js").read_text(encoding="utf-8")

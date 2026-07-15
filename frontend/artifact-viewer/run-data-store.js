@@ -40,7 +40,7 @@
   }
 
   function inputRelativePath(file) {
-    return file?.relativePath || file?.webkitRelativePath || file?.name || "";
+    return file?.relativePath || file?.webkitRelativePath || "";
   }
 
   function joinRelativePath(basePath, artifactPath) {
@@ -96,6 +96,14 @@
 
       for (const file of Array.from(files || [])) {
         const suppliedPath = inputRelativePath(file);
+        if (!suppliedPath) {
+          diagnostics.push(diagnostic(
+            "relative_path_missing",
+            "selected file requires relativePath or webkitRelativePath",
+            {name: file?.name || null}
+          ));
+          continue;
+        }
         let path;
         try {
           path = normalizeRelativePath(suppliedPath);
@@ -236,11 +244,20 @@
           continue;
         }
 
-        const kind = typeof metadata.kind === "string" ? metadata.kind.trim() : "";
+        const rawKind = typeof metadata.kind === "string" ? metadata.kind : "";
+        const kind = rawKind.trim();
         if (!kind) {
           diagnostics.push(diagnostic(
             "artifact_kind_missing",
             "artifact declaration requires a non-empty kind"
+          ));
+          continue;
+        }
+        if (rawKind !== kind) {
+          diagnostics.push(diagnostic(
+            "artifact_kind_invalid",
+            "artifact kind must not contain surrounding whitespace",
+            {kind: rawKind}
           ));
           continue;
         }
