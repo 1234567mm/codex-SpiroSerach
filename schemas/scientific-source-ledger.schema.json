@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/scientific-source-ledger.schema.json",
+  "title": "ScientificSourceLedger",
+  "$comment": "V22 source/license ledger. A ledger documents approved source use; it does not by itself claim scientific closure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ledger_id", "sources"],
+  "properties": {
+    "schema_version": { "const": "v22.scientific_source_ledger.v1" },
+    "ledger_id": { "type": "string", "minLength": 1 },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/source" }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_name",
+        "source_kind",
+        "license",
+        "provider_response_ids",
+        "lineage"
+      ],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "source_name": { "type": "string", "minLength": 1 },
+        "source_kind": { "enum": ["beard_cole_production", "independent_external", "fixture", "benchmark"] },
+        "license": { "$ref": "#/$defs/license" },
+        "provider_response_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "lineage": { "$ref": "#/$defs/lineage" }
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["license_id", "status", "usage_scope"],
+      "properties": {
+        "license_id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["licensed", "approved_public", "blocked", "unknown"] },
+        "usage_scope": { "type": "string", "minLength": 1 }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generated_by", "retrieved_at", "source_artifact_kinds"],
+      "properties": {
+        "generated_by": { "type": "string", "minLength": 1 },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "source_artifact_kinds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

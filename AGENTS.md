@@ -42,6 +42,29 @@ short, concrete, and operational.
 - For behavior changes, run focused checks first, then the completion gate.
 - Do not claim success without fresh evidence from this turn.
 
+### 5. Fast Bounded Execution
+
+- When information and scope are sufficient, execute directly; do not expand
+  into goals the user did not request and current acceptance does not need.
+- Read only the authoritative context required for the current step. Do not
+  pre-read later phases, neighboring modules, or historical material unless a
+  condition makes them relevant.
+- Default to targeted verification that directly covers the changed scope. Do
+  not add diagnostics, reviewer loops, strict TDD ceremony, or full gates when
+  there is no failure, anomaly, or risk signal.
+- Do not repeatedly re-read, re-explain, re-verify, or re-report facts that have
+  not changed.
+- Once tests pass and acceptance is satisfied, stop that slice; do not keep
+  searching for unbounded potential problems as "insurance."
+- Escalate process or reasoning depth only with concrete evidence: failed tests,
+  unexpected behavior, context conflicts, public API/schema impact, data safety,
+  irreversible actions, high coupling, or real external writes.
+- High-risk review needs an explicit issue list, file scope, and exit condition;
+  never perform open-ended code wandering.
+- Do planned smoke, compatibility, and review checks before final full gates.
+  For final implementation, run the full gate once by default; if it fails, fix
+  with targeted verification first, then rerun one final full gate.
+
 ## Repository Identity
 
 SpiroSearch is a deterministic, auditable modular monolith for mining

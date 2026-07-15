@@ -41,6 +41,8 @@ V4_ARTIFACT_KINDS = {
     "paper_vault_summary",
     "paper_cross_ref_report",
     "obsidian_notes",
+    "production_beard_cole_snapshot",
+    "scientific_source_ledger",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -199,6 +201,16 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/obsidian-notes.schema.json",
         "join_keys": ("doi", "note_path"),
         "depends_on": ("paper_vault_summary", "literature_claims"),
+    },
+    "scientific_source_ledger": {
+        "schema_ref": "schemas/scientific-source-ledger.schema.json",
+        "join_keys": ("source_id", "license_id", "provider_response_id"),
+        "depends_on": (),
+    },
+    "production_beard_cole_snapshot": {
+        "schema_ref": "schemas/production-beard-cole-snapshot.schema.json",
+        "join_keys": ("snapshot_id", "record_id", "candidate_id", "material_id", "source_id"),
+        "depends_on": ("scientific_source_ledger",),
     },
 }
 
