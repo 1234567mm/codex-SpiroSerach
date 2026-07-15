@@ -150,6 +150,79 @@ def score_claim_extraction(
     }
 
 
+def build_v22_literature_benchmark_report(
+    score_report: Mapping[str, Any],
+    *,
+    model_version: str,
+    prompt_version: str,
+    total_cost_usd: float,
+    p50_latency_ms: float,
+    failure_modes: Mapping[str, int],
+    review_throughput_per_hour: float,
+    manual_tasks: Iterable[Mapping[str, Any]] = (),
+    htl_pilot_inputs: Mapping[str, Any] | None = None,
+    benchmark_id: str = "v22-literature-extraction-benchmark",
+) -> dict[str, Any]:
+    """Report V18/V22 literature extraction as engineering support only."""
+
+    htl_inputs = htl_pilot_inputs or {}
+    htl_blockers = [
+        reason
+        for key, reason in (
+            ("owner", "ownership_missing"),
+            ("budget", "budget_missing"),
+            ("calibration_anchors", "calibration_anchors_missing"),
+            ("runtime", "runtime_missing"),
+            ("identity_policy", "identity_missing"),
+        )
+        if not htl_inputs.get(key)
+    ]
+    return {
+        "schema_version": "v22.literature_benchmark_report.v1",
+        "benchmark_id": benchmark_id,
+        "lane": "engineering_literature_extraction_support",
+        "reported_separately_from": "v22_scientific_closure_report",
+        "scientific_closure_claimed": False,
+        "model_version": model_version,
+        "prompt_version": prompt_version,
+        "quality": {
+            "gold_count": int(score_report.get("gold_count", 0)),
+            "prediction_count": int(score_report.get("prediction_count", 0)),
+            "micro_precision": float(score_report.get("micro_precision", 0.0)),
+            "micro_recall": float(score_report.get("micro_recall", 0.0)),
+            "micro_f1": float(score_report.get("micro_f1", 0.0)),
+            "pce_mae": score_report.get("pce_mae"),
+            "gate_status": "eligible" if score_report.get("gate_status") == "eligible" else "blocked",
+        },
+        "cost": {"total_usd": float(total_cost_usd)},
+        "latency": {"p50_ms": float(p50_latency_ms)},
+        "failure_modes": [
+            {"reason_code": str(reason_code), "count": int(count)}
+            for reason_code, count in sorted(failure_modes.items())
+        ],
+        "review": {
+            "throughput_per_hour": float(review_throughput_per_hour),
+            "closed_fulltext_policy": "manual_review_task",
+            "manual_tasks": sorted(
+                [
+                    {
+                        "task_id": str(task.get("task_id", "")),
+                        "reason_code": str(task.get("reason_code", "")),
+                        **({"doi": str(task.get("doi"))} if task.get("doi") else {}),
+                    }
+                    for task in manual_tasks
+                ],
+                key=lambda item: item["task_id"],
+            ),
+        },
+        "htl_pilot": {
+            "status": "parked" if htl_blockers else "ready",
+            "blockers": htl_blockers,
+        },
+        "downstream_impact": "does_not_enable_scientific_closure",
+    }
+
+
 def _claim_key(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
     return (
         str(item.get("document_id", "")),

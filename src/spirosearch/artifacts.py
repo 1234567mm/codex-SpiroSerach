@@ -47,6 +47,7 @@ V4_ARTIFACT_KINDS = {
     "v22_zero_leakage_report",
     "v22_independent_snapshot_report",
     "v22_model_activation_report",
+    "v22_literature_benchmark_report",
     "v22_scientific_closure_report",
 }
 
@@ -236,6 +237,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v22-model-activation-report.schema.json",
         "join_keys": ("snapshot_id", "model_version", "reason_code"),
         "depends_on": ("model_evaluation", "v22_independent_snapshot_report"),
+    },
+    "v22_literature_benchmark_report": {
+        "schema_ref": "schemas/v22-literature-benchmark-report.schema.json",
+        "join_keys": ("benchmark_id", "model_version", "prompt_version", "reason_code"),
+        "depends_on": ("extraction_evaluation",),
     },
     "v22_scientific_closure_report": {
         "schema_ref": "schemas/v22-scientific-closure-report.schema.json",
