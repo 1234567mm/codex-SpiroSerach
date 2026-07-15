@@ -1420,7 +1420,10 @@
     }
 
     failure(diagnostics) {
-      this.committedSnapshot = EMPTY_PROJECT_SNAPSHOT;
+      this.committedSnapshot = deepFreeze({
+        ...EMPTY_PROJECT_SNAPSHOT,
+        diagnostics: cloneJson(diagnostics),
+      });
       this.committedSelection = EMPTY_PROJECT_SELECTION;
       return deepFreeze({
         ok: false,
@@ -1496,16 +1499,155 @@
           source ${escapeHtml(selector.selection?.sourceRunId || "-")}
           target ${escapeHtml(selector.selection?.targetRunId || "-")}
           compatibility ${escapeHtml(compatibility)}
-          ${comparison ? `<span>${escapeHtml(comparison.sourceRunId)}→${escapeHtml(comparison.targetRunId)}</span>` : ""}
+          ${comparison ? `<span>${escapeHtml(comparison.sourceRunId)} to ${escapeHtml(comparison.targetRunId)}</span>` : ""}
         </div>
+      </section>`;
+    },
+  });
+
+  const CandidateHistoryProjection = Object.freeze({
+    project(projectSnapshot = EMPTY_PROJECT_SNAPSHOT, selection = EMPTY_PROJECT_SELECTION) {
+      const comparison = (projectSnapshot?.comparisons || []).find((item) =>
+          item.sourceRunId === selection?.sourceRunId && item.targetRunId === selection?.targetRunId
+        ) ||
+        selection?.comparison ||
+        null;
+      const delta = comparison?.delta || null;
+      const diagnostics = [];
+      if (!delta) {
+        diagnostics.push(diagnostic(
+          "candidate_history_unavailable",
+          "No backend run delta is available for the selected comparison",
+          {sourceRunId: selection?.sourceRunId || null, targetRunId: selection?.targetRunId || null},
+          "warning"
+        ));
+      }
+      const candidates = [];
+      for (const row of Array.isArray(delta?.candidate_deltas) ? delta.candidate_deltas : []) {
+        const candidateId = typeof row?.candidate_id === "string" ? row.candidate_id : "";
+        if (!candidateId) {
+          diagnostics.push(diagnostic(
+            "candidate_identity_unavailable",
+            "Candidate history row is unavailable because the backend delta did not declare a candidate identity",
+            {sourceRunId: delta?.source_run_id || null, targetRunId: delta?.target_run_id || null},
+            "warning"
+          ));
+          continue;
+        }
+        const scoreRank = cloneJson(row.score_rank || {});
+        if (scoreRank.status !== "comparable") {
+          delete scoreRank.score_delta;
+          delete scoreRank.rank_delta;
+        }
+        candidates.push({
+          candidateId,
+          sourceRunId: delta.source_run_id || selection?.sourceRunId || null,
+          targetRunId: delta.target_run_id || selection?.targetRunId || null,
+          statusTransition: cloneJson(row.status_transition || {}),
+          evidenceChange: cloneJson(row.evidence_change || {}),
+          blockerChange: cloneJson(row.blocker_change || {}),
+          scoreRank,
+        });
+      }
+      return deepFreeze({
+        state: candidates.length ? "ready" : (diagnostics.length ? "unavailable" : "empty"),
+        projectId: projectSnapshot?.projectId || delta?.project_id || null,
+        sourceRunId: delta?.source_run_id || selection?.sourceRunId || null,
+        targetRunId: delta?.target_run_id || selection?.targetRunId || null,
+        candidates,
+        artifactDeltas: cloneJson(delta?.artifact_deltas || []),
+        diagnostics,
+      });
+    },
+
+    render(history) {
+      if (!history?.candidates?.length) {
+        return `<div class="candidate-history empty">No candidate history available</div>`;
+      }
+      return `<section class="candidate-history" aria-label="Candidate history">
+        ${history.candidates.map((candidate) => `<article class="candidate-history-row" data-candidate-id="${escapeHtml(candidate.candidateId)}">
+          <h3>${escapeHtml(candidate.candidateId)}</h3>
+          <p>source ${escapeHtml(candidate.sourceRunId || "-")} to target ${escapeHtml(candidate.targetRunId || "-")}</p>
+          <div>Status ${escapeHtml(candidate.statusTransition?.from ?? "missing")} to ${escapeHtml(candidate.statusTransition?.to ?? "missing")}</div>
+          <div>codes ${(candidate.statusTransition?.reason_codes || []).map(escapeHtml).join(", ") || "-"}</div>
+          <div>evidence added ${(candidate.evidenceChange?.added || []).map(escapeHtml).join(", ") || "-"}</div>
+          <div>evidence removed ${(candidate.evidenceChange?.removed || []).map(escapeHtml).join(", ") || "-"}</div>
+          <div>blockers opened ${(candidate.blockerChange?.opened || []).map(escapeHtml).join(", ") || "-"}</div>
+          <div>blockers resolved ${(candidate.blockerChange?.resolved || []).map(escapeHtml).join(", ") || "-"}</div>
+          <div>score/rank ${escapeHtml(candidate.scoreRank?.status || "unavailable")}
+            ${(candidate.scoreRank?.reason_codes || []).map(escapeHtml).join(", ") || ""}
+            ${candidate.scoreRank?.score_delta !== undefined ? `score ${escapeHtml(candidate.scoreRank.score_delta)}` : ""}
+            ${candidate.scoreRank?.rank_delta !== undefined ? `rank ${escapeHtml(candidate.scoreRank.rank_delta)}` : ""}
+          </div>
+        </article>`).join("")}
+      </section>`;
+    },
+  });
+
+  const ProjectDiagnosticsProjection = Object.freeze({
+    project(projectSnapshot = EMPTY_PROJECT_SNAPSHOT) {
+      const items = [];
+      for (const item of projectSnapshot?.diagnostics || []) {
+        items.push({
+          code: item.code || "project_diagnostic",
+          severity: item.severity || "warning",
+          message: item.message || "Project diagnostic",
+        });
+      }
+      for (const run of projectSnapshot?.runs || []) {
+        if (run.validation?.status && run.validation.status !== "valid") {
+          items.push({
+            code: "project_run_degraded",
+            severity: "warning",
+            message: `Run ${run.runId} validation is ${run.validation.status}`,
+          });
+        }
+      }
+      for (const comparison of projectSnapshot?.comparisons || []) {
+        if (comparison.compatibilityStatus && comparison.compatibilityStatus !== "comparable") {
+          items.push({
+            code: comparison.compatibilityStatus === "partially_comparable"
+              ? "project_comparison_degraded"
+              : "project_comparison_unavailable",
+            severity: "warning",
+            message: `Comparison ${comparison.sourceRunId} to ${comparison.targetRunId} is ${comparison.compatibilityStatus}`,
+          });
+        }
+        for (const artifact of comparison.delta?.artifact_deltas || []) {
+          if (artifact.status === "unavailable") {
+            items.push({
+              code: "project_delta_artifact_unavailable",
+              severity: "warning",
+              message: `Delta artifact ${artifact.kind} is unavailable`,
+            });
+          }
+        }
+      }
+      return deepFreeze({
+        state: items.length ? "diagnostic" : "clean",
+        projectId: projectSnapshot?.projectId || null,
+        items,
+      });
+    },
+
+    render(projection) {
+      if (!projection?.items?.length) {
+        return `<div class="project-diagnostics empty">No project diagnostics</div>`;
+      }
+      return `<section class="project-diagnostics" aria-label="Project diagnostics">
+        ${projection.items.map((item) => `<div class="projection-diagnostic">
+          ${escapeHtml(item.code)}: ${escapeHtml(item.message)}
+        </div>`).join("")}
       </section>`;
     },
   });
 
   global.SpiroRunData = Object.freeze({
     AutoRunDataAdapter,
+    CandidateHistoryProjection,
     DiagnosticProjection,
     ProjectBundleAdapter,
+    ProjectDiagnosticsProjection,
     ProjectSelectorProjection,
     ProjectStore,
     RelativePathBundleAdapter,
