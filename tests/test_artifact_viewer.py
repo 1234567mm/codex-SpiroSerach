@@ -11,6 +11,11 @@ class ArtifactViewerTests(unittest.TestCase):
         html = Path("frontend/artifact-viewer/index.html").read_text(encoding="utf-8")
 
         self.assertIn('id="bundleFiles"', html)
+        self.assertIn('id="projectEvolutionFiles"', html)
+        self.assertIn('id="projectEvolutionPanel"', html)
+        self.assertIn('id="projectEvolutionList"', html)
+        self.assertIn('aria-label="Viewer sections"', html)
+        self.assertIn("#candidateWorkspace", html)
         self.assertIn("webkitdirectory", html)
         self.assertIn('<script src="run-data-store.js"></script>', html)
         self.assertIn('<script src="candidate-projection.js"></script>', html)
@@ -37,6 +42,86 @@ class ArtifactViewerTests(unittest.TestCase):
         self.assertIn('id="cacheSummary"', html)
         self.assertIn('id="errorState"', html)
         self.assertNotIn("landing", html.casefold())
+
+    def test_project_evolution_markdown_import_is_escaped_and_kept_as_context(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for project evolution test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      style: {},
+      addEventListener: () => {},
+    });
+  }
+  return elements.get(id);
+}
+const context = {
+  console, JSON, Map, Set, Object, Array, String, Number, Error, Promise,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+function file(name, text) {
+  return {name, text: async () => text};
+}
+
+async function main() {
+  const markdown = `---
+version: V19
+status: proposed <unsafe>
+---
+# Evolution <script>alert(1)</script>
+## Exit Gate
+Acceptance gate: user-selected context only <b>not facts</b>
+`;
+  const result = await context.loadProjectEvolutionFiles([
+    file("v19.md", markdown),
+    file("notes.txt", "# unsupported"),
+  ]);
+  context.renderProjectEvolution(result);
+  process.stdout.write(JSON.stringify({
+    count: element("projectEvolutionCount").textContent,
+    html: element("projectEvolutionList").innerHTML,
+    documentCount: result.documents.length,
+    diagnosticCodes: result.diagnostics.map((item) => item.code),
+  }));
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/viewer.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["documentCount"], 1)
+        self.assertIn("1 documents / 1 diagnostics", observed["count"])
+        self.assertIn("human context only", observed["html"])
+        self.assertIn("does not prove implementation completion", observed["html"])
+        self.assertIn("declared status proposed &lt;unsafe&gt;", observed["html"])
+        self.assertIn("Evolution &lt;script&gt;alert(1)&lt;/script&gt;", observed["html"])
+        self.assertIn("Acceptance gate: user-selected context only &lt;b&gt;not facts&lt;/b&gt;", observed["html"])
+        self.assertNotIn("<script>alert(1)</script>", observed["html"])
+        self.assertNotIn("<b>not facts</b>", observed["html"])
+        self.assertIn("project_evolution_unsupported_file", observed["diagnosticCodes"])
 
     def test_candidate_projection_maps_authoritative_screening_and_fails_closed(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
