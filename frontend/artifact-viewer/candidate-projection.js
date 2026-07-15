@@ -110,12 +110,12 @@
     collection.push(diagnostic(code, message, {candidateId, source}));
   }
 
-  function uniqueIds(values) {
-    return [...new Set(values.map(text).filter(Boolean))].sort(compareText);
-  }
-
   function uniqueIdentifiers(values) {
     return [...new Set(values.map(identifier).filter(Boolean))].sort(compareText);
+  }
+
+  function uniqueRawStrings(values) {
+    return [...new Set(values.filter((value) => typeof value === "string"))].sort(compareText);
   }
 
   function hasExactFields(value, fields) {
@@ -466,18 +466,32 @@
       );
       const reviewValidationIds = uniqueIdentifiers([...reviewIds, ...canonicalReviewIds]);
       const reviewsById = reviewIndex(snapshot, record, candidateId, reviewValidationIds);
-      const ownedDuplicateReviewIds = [...reviewsById.entries()]
-        .filter(([, matches]) => matches.canonical.length > 1 ||
-          matches.queue.filter((item) => identifier(item?.candidate_id) === candidateId).length > 1)
+      const canonicalDuplicateReviewIds = [...reviewsById.entries()]
+        .filter(([, matches]) => matches.canonical.length > 1)
         .map(([id]) => id)
         .sort(compareText);
-      if (ownedDuplicateReviewIds.length) {
+      const queueDuplicateReviewIds = [...reviewsById.entries()]
+        .filter(([, matches]) =>
+          matches.queue.filter((item) => identifier(item?.candidate_id) === candidateId).length > 1
+        )
+        .map(([id]) => id)
+        .sort(compareText);
+      if (canonicalDuplicateReviewIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
           candidateId,
           "duplicate_owned_review_id",
-          "candidate contains same-source duplicate review_item_id records",
-          "canonical_evidence, review_queue"
+          "canonical candidate contains duplicate review_item_id records",
+          "canonical_evidence"
+        );
+      }
+      if (queueDuplicateReviewIds.length) {
+        pushCandidateDiagnostic(
+          candidateDiagnostics,
+          candidateId,
+          "duplicate_owned_review_id",
+          "review_queue contains duplicate review_item_id records for the exact candidate_id",
+          "review_queue"
         );
       }
       const reviewResolutions = new Map(reviewValidationIds.map((id) => [
@@ -531,7 +545,7 @@
         backendStatus: group === "insufficient-data" ? (backendStatus || null) : backendStatus,
         identity,
         blockers: {
-          codes: uniqueIds(Array.isArray(row?.codes) ? row.codes : []),
+          codes: uniqueRawStrings(Array.isArray(row?.codes) ? row.codes : []),
           reviewIds,
           joinedReviews: reviewIds.filter((id) => reviewResolutions.get(id).status === "valid").map((id) => cloneJson(reviewResolutions.get(id).review)),
           missingReviewIds: declaredUnjoinableReviewIds,

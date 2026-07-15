@@ -294,10 +294,12 @@ function snapshot(canonicalRecord, screeningRow, options = {}) {
 function result(canonicalRecord, screeningRow, options = {}) {
   const projection = context.SpiroCandidateProjection.project(snapshot(canonicalRecord, screeningRow, options));
   const groups = Object.fromEntries(Object.entries(projection.groups).map(([group, values]) => [group, values.map((candidate) => candidate.candidateId)]));
-  return {groups, codes: projection.diagnostics.map((item) => item.code), messages: projection.diagnostics.map((item) => item.message), diagnostics: projection.diagnostics};
+  const candidate = Object.values(projection.groups).flat().find((item) => item.candidateId === "candidate-c");
+  return {groups, blockerCodes: candidate?.blockers.codes || [], codes: projection.diagnostics.map((item) => item.code), messages: projection.diagnostics.map((item) => item.message), diagnostics: projection.diagnostics};
 }
 
 const invalidCode = result(record(), row({codes: ["NOT_A_FROZEN_CODE"]}));
+const whitespaceFrozenCode = result(record(), row({codes: [" HOMO_MISMATCH "]}));
 const invalidProfile = result(record(), row({profile_version: "future-profile"}));
 const extraWeight = result(record(), row({weights: {...exactWeights, invented: 0}}));
 const changedWeight = result(record(), row({weights: {...exactWeights, homo_alignment: 0.31}}));
@@ -377,13 +379,20 @@ const unrelatedQueueDuplicate = result(
     {...queueReviewB, candidate_id: "other-candidate"},
   ]}
 );
+const canonicalOnlyReviewDuplicate = result(
+  record({review_items: [
+    {review_item_id: "review-canonical-duplicate", target_type: "use_instance", target_id: "use-c", reason: "a"},
+    {review_item_id: "review-canonical-duplicate", target_type: "use_instance", target_id: "use-c", reason: "b"},
+  ]}),
+  row()
+);
 
 process.stdout.write(JSON.stringify({
-  invalidCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
+  invalidCode, whitespaceFrozenCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
   payloadExtraProperty, rowExtraProperty, componentExtraProperty, statusWhitespace, componentNameWhitespace,
   typedMismatch, wrongMappedEnergyTarget, queueCandidateWhitespace, queueTargetWhitespace, queueWrongCandidateSameReview, unreferencedCanonicalWrongCandidate,
   duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
-  duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate, unrelatedQueueDuplicate,
+  duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate, unrelatedQueueDuplicate, canonicalOnlyReviewDuplicate,
 }));
 """
         with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
@@ -403,6 +412,8 @@ process.stdout.write(JSON.stringify({
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("screening_row_invalid", observed[name]["codes"], name)
             self.assertTrue(any("browser-local structural" in message.casefold() for message in observed[name]["messages"]), name)
+        self.assertEqual(observed["whitespaceFrozenCode"]["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertEqual(observed["whitespaceFrozenCode"]["blockerCodes"], [" HOMO_MISMATCH "])
         for name in ["unsupportedSchema", "unsupportedTopProfile"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("screening_contract_unsupported", observed[name]["codes"], name)
@@ -443,6 +454,14 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(observed["unreferencedReviewDuplicate"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("duplicate_owned_review_id", observed["unreferencedReviewDuplicate"]["codes"])
         self.assertEqual(observed["unrelatedQueueDuplicate"]["groups"]["continue"], ["candidate-c"])
+        self.assertEqual(observed["canonicalOnlyReviewDuplicate"]["groups"]["insufficient-data"], ["candidate-c"])
+        canonical_duplicate = next(
+            item for item in observed["canonicalOnlyReviewDuplicate"]["diagnostics"]
+            if item["code"] == "duplicate_owned_review_id"
+        )
+        self.assertEqual(canonical_duplicate["source"], "canonical_evidence")
+        self.assertNotIn("declared blocking", canonical_duplicate["message"])
+        self.assertNotIn("review_queue", canonical_duplicate["message"])
 
     def test_candidate_projection_preserves_v13_review_representation_across_canonical_and_queue(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
@@ -547,7 +566,7 @@ context.workspaceProjection = {
     continue: [candidate("Alpha", "continue", "pass", "material-a", 1), candidate("unsafe-<script>alert(1)</script>", "continue", "pass", "material-safe", 1)],
     review: [candidate("beta", "review", "defer", "material-b", 0.5)],
     reject: [candidate("gamma", "reject", "reject", "material-g", 0)],
-    "insufficient-data": [candidate("delta", "insufficient-data", null, "material-d", 0)],
+    "insufficient-data": [{...candidate("delta", "insufficient-data", null, "material-d", 0), blockers: {codes: [" HOMO_MISMATCH ", "<unsafe-code>"], reviewIds: [], missingReviewIds: []}}],
   },
 };
 vm.runInContext("state.candidateProjection = workspaceProjection; renderCandidateWorkspace();", context);
@@ -565,6 +584,13 @@ const preservedSelection = vm.runInContext("state.selectedCandidateId", context)
 const reviewDetail = element("candidateDetail").innerHTML;
 
 vm.runInContext(`
+state.selectedCandidateId = "delta";
+state.candidateControls = {search: "", statuses: ["insufficient-data"], sort: "candidate-asc"};
+renderCandidateWorkspace();
+`, context);
+const insufficientDetail = element("candidateDetail").innerHTML;
+
+vm.runInContext(`
 state.candidateControls = {search: "no-match", statuses: [], sort: "candidate-asc"};
 renderCandidateWorkspace();
 `, context);
@@ -578,6 +604,7 @@ process.stdout.write(JSON.stringify({
   selected: context.selected,
   preservedSelection,
   reviewDetail,
+  insufficientDetail,
   emptyTable,
   emptyDetail,
   diagnostics: element("candidateDiagnostics").innerHTML,
@@ -615,6 +642,9 @@ process.stdout.write(JSON.stringify({
         self.assertIn("blocking reviews 2", rendered["reviewDetail"])
         self.assertIn("review-&lt;unsafe&gt;", rendered["reviewDetail"])
         self.assertNotIn("review-<unsafe>", rendered["reviewDetail"])
+        self.assertIn("> HOMO_MISMATCH </span>", rendered["insufficientDetail"])
+        self.assertNotIn(">HOMO_MISMATCH</span>", rendered["insufficientDetail"])
+        self.assertIn("&lt;unsafe-code&gt;", rendered["insufficientDetail"])
         self.assertIn("No candidates match", rendered["emptyTable"])
         self.assertIn("Adjust search or status filters", rendered["emptyDetail"])
         self.assertIn("screening_only_identity_contradiction", rendered["diagnostics"])
