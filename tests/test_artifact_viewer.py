@@ -539,6 +539,180 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(observed["groups"]["insufficient-data"], [])
         self.assertEqual(len(observed["deferJoinedReviews"]), 1)
 
+    def test_candidate_detail_projection_uses_contract_backed_sources(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+const componentNames = ["homo_alignment", "lumo_alignment", "band_gap", "solubility", "stability", "cost", "synthesis_complexity"];
+const weights = {homo_alignment: 0.3, lumo_alignment: 0.2, band_gap: 0.1, solubility: 0.1, stability: 0.15, cost: 0.1, synthesis_complexity: 0.05};
+const canonical = {
+  records: [{
+    candidate_id: "candidate-c",
+    material: {material_id: "material-c", material_kind: "small_molecule", supplier_status: "available"},
+    use_instance: {material_id: "material-c", use_instance_id: "use-c", role: "HTL"},
+    energy_evidence: [
+      {energy_evidence_id: "e-eligible", material_id: "material-c", use_instance_id: "use-c", property_name: "homo_ev"},
+      {energy_evidence_id: "e-not-admitted", material_id: "material-c", use_instance_id: "use-c", property_name: "lumo_ev"},
+      {energy_evidence_id: "e-contradictory", material_id: "material-c", use_instance_id: "use-c", property_name: "band_gap_ev"},
+    ],
+    review_items: [{review_item_id: "review-c", target_type: "use_instance", target_id: "use-c", reason_code: "needs_review"}],
+  }],
+};
+const screening = {
+  schema_version: "v19.screening_input_view.v1",
+  profile_version: "v12.htl_screening.v1",
+  candidates: [{
+    candidate_id: "candidate-c",
+    status: "defer",
+    codes: ["HOMO_NOT_YET_RESOLVED"],
+    components: componentNames.map((name) => ({
+      name,
+      utility: name === "homo_alignment" ? 0.25 : 0.5,
+      quality: 1,
+      observed: name === "homo_alignment",
+      evidence_ids: name === "homo_alignment" ? ["e-eligible", "e-not-admitted", "e-contradictory"] : [],
+    })),
+    blocking_review_ids: ["review-c"],
+    profile_version: "v12.htl_screening.v1",
+    weights,
+    weighted_utility: 0.5,
+    coverage: 0.5,
+  }],
+};
+const scoringView = {energy_facts: [
+  {
+    evidence_id: "e-eligible",
+    material_id: "material-c",
+    use_instance_id: "use-c",
+    property_name: "homo_ev",
+    value_ev: -5.2,
+    unit: "eV",
+    method: "reported",
+    reference_scale: "vacuum",
+    quality: {eligible_for_scoring: true, trust_level: "T4_literature_curated", curation_status: "curated", quality_score: 0.85},
+  },
+  {
+    evidence_id: "e-not-admitted",
+    material_id: "material-c",
+    use_instance_id: "use-c",
+    property_name: "lumo_ev",
+    value_ev: -2.1,
+    unit: "eV",
+    method: "reported",
+    reference_scale: "vacuum",
+    quality: {eligible_for_scoring: false, trust_level: "T1_raw", curation_status: "raw", quality_score: 0},
+  },
+  {
+    evidence_id: "e-contradictory",
+    material_id: "other-material",
+    use_instance_id: "use-c",
+    property_name: "band_gap_ev",
+    value_ev: 3.1,
+    unit: "eV",
+    method: "reported",
+    reference_scale: "vacuum",
+    quality: {eligible_for_scoring: true, trust_level: "T4_literature_curated", curation_status: "curated", quality_score: 0.85},
+  },
+]};
+const reviewQueue = [{review_item_id: "review-c", candidate_id: "candidate-c", target_type: "use_instance", target_id: "use-c", reason: "needs review"}];
+const reviewEvents = [
+  {event_id: "event-good", review_item_id: "review-c", target_type: "use_instance", target_id: "use-c", decision: "accept", resolution_status: "resolved", reason: "closed", recompute_marker_ids: ["marker-good"]},
+  {event_id: "event-wrong-target", review_item_id: "review-c", target_type: "candidate", target_id: "other-candidate", decision: "accept", resolution_status: "resolved", reason: "wrong target"},
+];
+const recomputeMarkers = [{
+  marker_id: "marker-good",
+  review_event_id: "event-good",
+  review_item_id: "review-c",
+  candidate_id: "candidate-c",
+  target_type: "use_instance",
+  target_id: "use-c",
+  affected_artifacts: ["canonical-evidence.json", "scoring-view.json"],
+  reason: "review closed",
+  status: "pending",
+}];
+const reviewSummary = {
+  review_count: 1,
+  event_count: 2,
+  applied_event_count: 1,
+  open_blocking_count: 0,
+  review_item_ids: ["review-c"],
+  review_event_ids: ["event-good"],
+  recompute_marker_ids: ["marker-good"],
+};
+const acquisition = {
+  request_id: "request-a",
+  model_version: "model-v1",
+  strategy: "qlognehvi",
+  candidates: [{candidate_id: "candidate-c", model_score: 0.8, heuristic_score: 0.2, model_selected: true}],
+};
+const artifacts = {
+  canonical_evidence: {payload: canonical},
+  screening_input_view: {payload: screening},
+  scoring_view: {payload: scoringView},
+  review_queue: {payload: reviewQueue},
+  review_events: {payload: reviewEvents},
+  recompute_markers: {payload: recomputeMarkers},
+  review_summary: {payload: reviewSummary},
+  acquisition_breakdown: {payload: acquisition},
+  literature_claims: {payload: [{claim_id: "claim-run-scope", doi: "10.000/run"}]},
+  source_assets: {payload: [{asset_id: "asset-run-scope", doi: "10.000/run"}]},
+};
+const availability = Object.fromEntries(Object.keys(artifacts).map((kind) => [kind, {status: "available", path: `${kind}.json`}]));
+const manifest = {run_id: "run-detail", artifacts: Object.keys(artifacts).map((kind) => ({kind, path: `${kind}.json`}))};
+const projection = context.SpiroCandidateProjection.project({manifest, manifestMetadata: {runId: "run-detail"}, artifacts, availability, diagnostics: []});
+const candidate = projection.groups.review[0];
+process.stdout.write(JSON.stringify({
+  candidateId: candidate.candidateId,
+  group: candidate.group,
+  componentArtifacts: candidate.detail.explanation.components.map((item) => item.artifactKind),
+  scoringIds: candidate.detail.explanation.eligibleScoringEvidence.map((item) => item.evidenceId),
+  scoringArtifacts: candidate.detail.explanation.eligibleScoringEvidence.map((item) => item.artifactKind),
+  unavailableEvidenceIds: candidate.detail.explanation.unavailableEvidenceIds,
+  explanationDiagnostics: candidate.detail.explanation.diagnostics.map((item) => item.code),
+  appliedEventIds: candidate.detail.diagnostics.appliedReviewEvents.map((item) => item.eventId),
+  auditEventIds: candidate.detail.diagnostics.auditReviewEvents.map((item) => item.eventId),
+  marker: candidate.detail.diagnostics.recomputeMarkers[0],
+  reviewSummary: candidate.detail.diagnostics.reviewSummary,
+  acquisition: candidate.detail.explanation.acquisition,
+  paperEvidence: candidate.detail.paperEvidence,
+  frozen: Object.isFrozen(candidate.detail) && Object.isFrozen(candidate.detail.explanation.eligibleScoringEvidence[0]),
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/candidate-projection.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["candidateId"], "candidate-c")
+        self.assertEqual(observed["group"], "review")
+        self.assertEqual(set(observed["componentArtifacts"]), {"screening_input_view"})
+        self.assertEqual(observed["scoringIds"], ["e-eligible"])
+        self.assertEqual(observed["scoringArtifacts"], ["scoring_view"])
+        self.assertCountEqual(observed["unavailableEvidenceIds"], ["e-not-admitted", "e-contradictory"])
+        self.assertIn("contradictory_scoring_evidence", observed["explanationDiagnostics"])
+        self.assertEqual(observed["appliedEventIds"], ["event-good"])
+        self.assertEqual(observed["auditEventIds"], ["event-wrong-target"])
+        self.assertEqual(observed["marker"]["markerId"], "marker-good")
+        self.assertEqual(observed["marker"]["artifactKind"], "recompute_markers")
+        self.assertEqual(observed["reviewSummary"]["artifactKind"], "review_summary")
+        self.assertEqual(observed["acquisition"]["artifactKind"], "acquisition_breakdown")
+        self.assertEqual(observed["paperEvidence"]["status"], "unavailable")
+        self.assertIn("run/DOI scope", observed["paperEvidence"]["message"])
+        self.assertTrue(observed["frozen"])
+
     def test_candidate_workspace_renders_groups_controls_selection_and_empty_state(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for workspace test")
         runner = r"""
@@ -668,6 +842,143 @@ process.stdout.write(JSON.stringify({
         self.assertIn("No candidates match", rendered["emptyTable"])
         self.assertIn("Adjust search or status filters", rendered["emptyDetail"])
         self.assertIn("screening_only_identity_contradiction", rendered["diagnostics"])
+
+    def test_candidate_detail_tabs_render_roles_and_keyboard_activation(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for workspace tab test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) {
+    elements.set(id, {
+      id,
+      textContent: "",
+      innerHTML: "",
+      value: id === "candidateStatusFilter" ? "all" : id === "candidateSort" ? "candidate-asc" : "",
+      style: {},
+      dataset: {},
+      focused: false,
+      handlers: {},
+      addEventListener(type, handler) {
+        if (!this.handlers[type]) this.handlers[type] = [];
+        this.handlers[type].push(handler);
+      },
+      focus() {
+        this.focused = true;
+      },
+    });
+  }
+  return elements.get(id);
+}
+const context = {
+  console, JSON, Map, Set, Object, Array, String, Number, Error,
+  document: {getElementById: element},
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
+
+context.workspaceProjection = {
+  capabilities: {},
+  diagnostics: [],
+  groups: {
+    continue: [{
+      candidateId: "Alpha",
+      group: "continue",
+      backendStatus: "pass",
+      identity: {materialId: "material-a", useInstanceId: "use-a", role: "HTL", materialKind: "small_molecule", supplierStatus: "available"},
+      blockers: {codes: [], reviewIds: [], joinedReviews: [], missingReviewIds: []},
+      evidenceCoverage: {declared: 1, joined: 1, ratio: 1, evidenceIds: ["e-a"], missingEvidenceIds: []},
+      screening: {coverage: 1, weightedUtility: 0.9, profileVersion: "profile-v1"},
+      recommendation: {capability: "not-declared", requests: []},
+      lineage: {capability: "not-declared", events: []},
+      diagnostic: null,
+      detail: {
+        explanation: {
+          components: [{artifactKind: "screening_input_view", name: "homo_alignment", utility: 0.9, quality: 1, observed: true, evidenceIds: ["e-a"]}],
+          eligibleScoringEvidence: [{artifactKind: "scoring_view", evidenceId: "e-a", propertyName: "homo_ev", valueEv: -5.2, unit: "eV", quality: {trust_level: "T4_literature_curated"}}],
+          unavailableEvidenceIds: [],
+          diagnostics: [],
+          acquisition: {artifactKind: "acquisition_breakdown", modelScore: 0.8, heuristicScore: 0.2, strategy: "qlognehvi", requestId: "request-a"},
+        },
+        diagnostics: {
+          blockingReviews: [{artifactKind: "review_queue", reviewItemId: "review-a", targetType: "use_instance", targetId: "use-a", resolutionStatus: "open"}],
+          appliedReviewEvents: [{artifactKind: "review_events", eventId: "event-a", reviewItemId: "review-a", targetType: "use_instance", targetId: "use-a", decision: "accept", resolutionStatus: "resolved"}],
+          auditReviewEvents: [],
+          recomputeMarkers: [{artifactKind: "recompute_markers", markerId: "marker-a", reviewEventId: "event-a", reviewItemId: "review-a", targetType: "use_instance", targetId: "use-a", status: "pending", affectedArtifacts: ["scoring-view.json"]}],
+          reviewSummary: {artifactKind: "review_summary", reviewCount: 1, eventCount: 1, appliedEventCount: 1, openBlockingCount: 0},
+          artifactStatuses: [{kind: "scoring_view", status: "available", path: "scoring-view.json"}],
+          contradictions: [],
+        },
+        paperEvidence: {status: "unavailable", message: "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.", runArtifacts: [{kind: "literature_claims", status: "available"}], records: []},
+      },
+    }],
+    review: [],
+    reject: [],
+    "insufficient-data": [],
+  },
+};
+vm.runInContext("state.candidateProjection = workspaceProjection; renderCandidateWorkspace();", context);
+const initial = element("candidateDetail").innerHTML;
+const keydown = element("candidateDetail").handlers.keydown[0];
+const click = element("candidateDetail").handlers.click[0];
+function tabTarget(tab) {
+  return {closest: () => ({dataset: {candidateTab: tab}})};
+}
+let prevented = false;
+keydown({key: "ArrowRight", target: tabTarget("overview"), preventDefault: () => { prevented = true; }});
+const afterArrowTab = vm.runInContext("state.selectedCandidateTab", context);
+const afterArrowHtml = element("candidateDetail").innerHTML;
+const explanationFocused = element("candidate-tab-explanation").focused;
+keydown({key: "End", target: tabTarget("explanation"), preventDefault: () => {}});
+const afterEndTab = vm.runInContext("state.selectedCandidateTab", context);
+const paperHtml = element("candidateDetail").innerHTML;
+click({target: tabTarget("diagnostics")});
+const afterClickTab = vm.runInContext("state.selectedCandidateTab", context);
+const diagnosticsHtml = element("candidateDetail").innerHTML;
+process.stdout.write(JSON.stringify({
+  initial,
+  prevented,
+  afterArrowTab,
+  afterArrowHtml,
+  explanationFocused,
+  afterEndTab,
+  paperHtml,
+  afterClickTab,
+  diagnosticsHtml,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/candidate-projection.js",
+                    "frontend/artifact-viewer/viewer.js",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        rendered = json.loads(result.stdout)
+        self.assertIn('role="tablist"', rendered["initial"])
+        self.assertIn('role="tab"', rendered["initial"])
+        self.assertIn('aria-selected="true"', rendered["initial"])
+        self.assertIn('role="tabpanel"', rendered["initial"])
+        self.assertTrue(rendered["prevented"])
+        self.assertEqual(rendered["afterArrowTab"], "explanation")
+        self.assertTrue(rendered["explanationFocused"])
+        self.assertIn("ScoringView eligible evidence", rendered["afterArrowHtml"])
+        self.assertEqual(rendered["afterEndTab"], "paper")
+        self.assertIn("No explicit backend candidate-to-paper join", rendered["paperHtml"])
+        self.assertEqual(rendered["afterClickTab"], "diagnostics")
+        self.assertIn("Observed immutable recompute markers", rendered["diagnosticsHtml"])
 
     def test_run_data_store_commits_exact_manifest_bundle_atomically(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for viewer behavior test")
