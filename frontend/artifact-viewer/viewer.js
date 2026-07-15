@@ -269,8 +269,15 @@ function renderProjectedCandidateDetail(candidate) {
     </div>
     <div class="context-block">
       <strong>Blockers</strong>
+      <div class="item-meta">
+        blocker codes ${escapeHtml(String((candidate.blockers?.codes || []).length))} /
+        blocking reviews ${escapeHtml(String((candidate.blockers?.reviewIds || []).length))}
+      </div>
       <div class="chip-row">
         ${(candidate.blockers?.codes || []).map((code) => `<span class="chip review-chip">${escapeHtml(code)}</span>`).join("") || `<span class="muted">No declared blocker codes</span>`}
+      </div>
+      <div class="chip-row">
+        ${(candidate.blockers?.reviewIds || []).map((reviewId) => `<span class="chip review-chip">${escapeHtml(reviewId)}</span>`).join("") || `<span class="muted">No blocking review IDs</span>`}
       </div>
     </div>
     <div class="context-block">

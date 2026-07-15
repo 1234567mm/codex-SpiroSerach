@@ -7,6 +7,27 @@
     "homo_alignment", "lumo_alignment", "band_gap", "solubility",
     "stability", "cost", "synthesis_complexity",
   ]);
+  const SCREENING_CODES = Object.freeze([
+    "HOMO_NOT_YET_RESOLVED",
+    "HOMO_REFERENCE_SCALE_MISSING",
+    "HOMO_MISMATCH",
+    "LUMO_NOT_YET_RESOLVED",
+    "LUMO_REFERENCE_SCALE_MISSING",
+    "LUMO_MISMATCH",
+    "BAND_GAP_NOT_YET_RESOLVED",
+    "BAND_GAP_TOO_LOW",
+  ]);
+  const SCREENING_PROFILE_VERSION = "v12.htl_screening.v1";
+  const SCREENING_SCHEMA_VERSION = "v19.screening_input_view.v1";
+  const SCREENING_WEIGHTS = Object.freeze({
+    homo_alignment: 0.3,
+    lumo_alignment: 0.2,
+    band_gap: 0.1,
+    solubility: 0.1,
+    stability: 0.15,
+    cost: 0.1,
+    synthesis_complexity: 0.05,
+  });
   const CONTEXT_KINDS = Object.freeze([
     "screening_input_view",
     "canonical_evidence",
@@ -112,7 +133,10 @@
     const index = new Map();
     for (const item of Array.isArray(record?.energy_evidence) ? record.energy_evidence : []) {
       const id = text(item?.energy_evidence_id);
-      if (id) index.set(id, item);
+      if (!id) continue;
+      const matches = index.get(id) || [];
+      matches.push(item);
+      index.set(id, matches);
     }
     return index;
   }
@@ -137,10 +161,13 @@
   function screeningRowIsStructurallyValid(row) {
     if (!row || typeof row !== "object" || Array.isArray(row)) return false;
     if (!text(row.candidate_id) || !Array.isArray(row.codes) || !uniqueNonEmptyStrings(row.codes)) return false;
+    if (!row.codes.every((code) => SCREENING_CODES.includes(code))) return false;
     if (!uniqueNonEmptyStrings(row.blocking_review_ids)) return false;
-    if (!text(row.profile_version) || !finiteUnitInterval(row.weighted_utility) || !finiteUnitInterval(row.coverage)) return false;
+    if (row.profile_version !== SCREENING_PROFILE_VERSION || !finiteUnitInterval(row.weighted_utility) || !finiteUnitInterval(row.coverage)) return false;
     if (!row.weights || typeof row.weights !== "object" || Array.isArray(row.weights)) return false;
-    if (!COMPONENT_NAMES.every((name) => typeof row.weights[name] === "number" && Number.isFinite(row.weights[name]))) return false;
+    const weightNames = Object.keys(row.weights).sort(compareText);
+    if (weightNames.length !== COMPONENT_NAMES.length || !COMPONENT_NAMES.every((name) => weightNames.includes(name))) return false;
+    if (!COMPONENT_NAMES.every((name) => row.weights[name] === SCREENING_WEIGHTS[name])) return false;
     if (!Array.isArray(row.components) || row.components.length !== COMPONENT_NAMES.length) return false;
     const names = row.components.map((component) => text(component?.name));
     if (new Set(names).size !== COMPONENT_NAMES.length || !COMPONENT_NAMES.every((name) => names.includes(name))) return false;
@@ -156,14 +183,35 @@
     const index = new Map();
     for (const item of Array.isArray(record?.review_items) ? record.review_items : []) {
       const id = text(item?.review_item_id);
-      if (id) index.set(id, item);
+      if (!id) continue;
+      const matches = index.get(id) || [];
+      matches.push(item);
+      index.set(id, matches);
     }
     const queue = payload(snapshot, "review_queue");
     for (const item of Array.isArray(queue) ? queue : []) {
       const id = text(item?.review_item_id);
-      if (id && text(item?.candidate_id) === candidateId) index.set(id, item);
+      if (!id || text(item?.candidate_id) !== candidateId) continue;
+      const matches = index.get(id) || [];
+      matches.push(item);
+      index.set(id, matches);
     }
     return index;
+  }
+
+  function reviewTargetMatches(review, identity, evidenceById) {
+    const anchors = {
+      candidate: identity.candidateId,
+      material: identity.materialId,
+      use_instance: identity.useInstanceId,
+    };
+    const targetType = text(review?.target_type);
+    const targetId = text(review?.target_id);
+    if (targetType === "energy_evidence") {
+      return Boolean(targetId && (evidenceById.get(targetId) || []).length === 1);
+    }
+    return Boolean(Object.prototype.hasOwnProperty.call(anchors, targetType) &&
+      targetId && targetId === anchors[targetType]);
   }
 
   function recommendationsFor(snapshot, candidateId) {
@@ -228,11 +276,20 @@
     const screeningRows = screeningAvailable && Array.isArray(screening?.candidates)
       ? screening.candidates
       : [];
+    const screeningContractSupported = screeningAvailable &&
+      screening?.schema_version === SCREENING_SCHEMA_VERSION &&
+      screening?.profile_version === SCREENING_PROFILE_VERSION;
     if (!screeningAvailable || !Array.isArray(screening?.candidates)) {
       diagnostics.push(diagnostic(
         "screening_unavailable_or_invalid",
         "screening_input_view candidates are unavailable or invalid",
         {source: "screening_input_view", status: capabilities.screening_input_view.status}
+      ));
+    } else if (!screeningContractSupported) {
+      diagnostics.push(diagnostic(
+        "screening_contract_unsupported",
+        "Browser-local structural check does not support the screening schema/profile markers",
+        {source: "screening_input_view"}
       ));
     }
     const screeningById = new Map();
@@ -288,8 +345,11 @@
       }
 
       const backendStatus = row ? text(row.status) : "";
+      if (row && !screeningContractSupported) {
+        pushCandidateDiagnostic(candidateDiagnostics, candidateId, "screening_contract_unsupported", "Browser-local structural check does not support the screening schema/profile markers", "screening_input_view");
+      }
       if (row && !screeningRowIsStructurallyValid(row)) {
-        pushCandidateDiagnostic(candidateDiagnostics, candidateId, "screening_row_invalid", "screening row does not satisfy the required projection fields", "screening_input_view");
+        pushCandidateDiagnostic(candidateDiagnostics, candidateId, "screening_row_invalid", "Browser-local structural check rejected the screening row fields", "screening_input_view");
       }
       if (row && !Object.prototype.hasOwnProperty.call(STATUS_TO_GROUP, backendStatus)) {
         pushCandidateDiagnostic(candidateDiagnostics, candidateId, "screening_status_unknown", `unsupported screening status: ${backendStatus || "missing"}`, "screening_input_view");
@@ -298,12 +358,23 @@
       const evidenceIds = row ? declaredEvidenceIds(row) : [];
       const evidenceById = canonicalEvidenceIndex(record);
       const missingEvidenceIds = evidenceIds.filter((id) => !evidenceById.has(id));
+      const ambiguousEvidenceIds = evidenceIds.filter((id) => (evidenceById.get(id) || []).length > 1);
       const conflictingEvidenceIds = evidenceIds.filter((id) => {
-        const evidence = evidenceById.get(id);
-        if (!evidence) return false;
+        const matches = evidenceById.get(id) || [];
+        if (matches.length !== 1) return false;
+        const evidence = matches[0];
         return text(evidence.material_id) !== identity.materialId ||
           text(evidence.use_instance_id) !== identity.useInstanceId;
       });
+      if (ambiguousEvidenceIds.length) {
+        pushCandidateDiagnostic(
+          candidateDiagnostics,
+          candidateId,
+          "ambiguous_evidence_reference",
+          "declared screening evidence_id resolves to multiple canonical records",
+          "canonical_evidence"
+        );
+      }
       if (missingEvidenceIds.length || conflictingEvidenceIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
@@ -316,18 +387,22 @@
 
       const reviewIds = row ? uniqueIds(Array.isArray(row.blocking_review_ids) ? row.blocking_review_ids : []) : [];
       const reviewsById = reviewIndex(snapshot, record, candidateId);
-      const allowedReviewTargets = new Set([
-        candidateId,
-        identity.materialId,
-        identity.useInstanceId,
-        ...evidenceById.keys(),
-      ].filter(Boolean));
       const missingReviewIds = reviewIds.filter((id) => !reviewsById.has(id));
+      const ambiguousReviewIds = reviewIds.filter((id) => (reviewsById.get(id) || []).length > 1);
       const conflictingReviewIds = reviewIds.filter((id) => {
-        const review = reviewsById.get(id);
-        return review && !allowedReviewTargets.has(text(review.target_id));
+        const matches = reviewsById.get(id) || [];
+        return matches.length === 1 && !reviewTargetMatches(matches[0], identity, evidenceById);
       });
-      const unjoinableReviewIds = uniqueIds([...missingReviewIds, ...conflictingReviewIds]);
+      if (ambiguousReviewIds.length) {
+        pushCandidateDiagnostic(
+          candidateDiagnostics,
+          candidateId,
+          "ambiguous_review_reference",
+          "declared blocking review_item_id resolves to multiple records",
+          "canonical_evidence, review_queue"
+        );
+      }
+      const unjoinableReviewIds = uniqueIds([...missingReviewIds, ...ambiguousReviewIds, ...conflictingReviewIds]);
       if (unjoinableReviewIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
@@ -351,17 +426,17 @@
         blockers: {
           codes: uniqueIds(Array.isArray(row?.codes) ? row.codes : []),
           reviewIds,
-          joinedReviews: reviewIds.filter((id) => reviewsById.has(id) && !conflictingReviewIds.includes(id)).map((id) => cloneJson(reviewsById.get(id))),
+          joinedReviews: reviewIds.filter((id) => (reviewsById.get(id) || []).length === 1 && !conflictingReviewIds.includes(id)).map((id) => cloneJson(reviewsById.get(id)[0])),
           missingReviewIds: unjoinableReviewIds,
         },
         evidenceCoverage: {
           declared: evidenceIds.length,
-          joined: evidenceIds.length - missingEvidenceIds.length - conflictingEvidenceIds.length,
+          joined: evidenceIds.length - uniqueIds([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]).length,
           ratio: evidenceIds.length
-            ? (evidenceIds.length - missingEvidenceIds.length - conflictingEvidenceIds.length) / evidenceIds.length
+            ? (evidenceIds.length - uniqueIds([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]).length) / evidenceIds.length
             : null,
           evidenceIds,
-          missingEvidenceIds: uniqueIds([...missingEvidenceIds, ...conflictingEvidenceIds]),
+          missingEvidenceIds: uniqueIds([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]),
         },
         screening: row ? cloneJson({
           coverage: row.coverage ?? null,

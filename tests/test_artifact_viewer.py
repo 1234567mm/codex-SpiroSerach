@@ -50,7 +50,7 @@ vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
 function artifact(payload) { return {payload, metadata: {}}; }
 const canonical = {records: [
   {candidate_id: "continue-c", material: {material_id: "material-c"}, use_instance: {material_id: "material-c", use_instance_id: "use-c", role: "HTL"}, energy_evidence: [{energy_evidence_id: "e-c", material_id: "material-c", use_instance_id: "use-c"}], review_items: []},
-  {candidate_id: "review-c", material: {material_id: "material-r"}, use_instance: {material_id: "material-r", use_instance_id: "use-r", role: "HTL"}, energy_evidence: [], review_items: [{review_item_id: "r-c", target_id: "use-r"}]},
+  {candidate_id: "review-c", material: {material_id: "material-r"}, use_instance: {material_id: "material-r", use_instance_id: "use-r", role: "HTL"}, energy_evidence: [], review_items: [{review_item_id: "r-c", target_type: "use_instance", target_id: "use-r"}]},
   {candidate_id: "reject-c", material: {material_id: "material-x"}, use_instance: {material_id: "material-x", use_instance_id: "use-x", role: "HTL"}, energy_evidence: [], review_items: []},
   {candidate_id: "missing-c", material: {material_id: "material-m"}, use_instance: {material_id: "material-m", use_instance_id: "use-m"}, energy_evidence: [], review_items: []},
   {candidate_id: "unknown-c", material: {material_id: "material-u"}, use_instance: {material_id: "material-u", use_instance_id: "use-u"}, energy_evidence: [], review_items: []},
@@ -59,7 +59,7 @@ const canonical = {records: [
   {candidate_id: "mapping-c", material: {material_id: "material-a"}, use_instance: {material_id: "material-b", use_instance_id: "use-map"}, energy_evidence: [], review_items: []},
   {candidate_id: "evidence-c", material: {material_id: "material-e"}, use_instance: {material_id: "material-e", use_instance_id: "use-e"}, energy_evidence: [], review_items: []},
   {candidate_id: "review-ref-c", material: {material_id: "material-rr"}, use_instance: {material_id: "material-rr", use_instance_id: "use-rr"}, energy_evidence: [], review_items: []},
-  {candidate_id: "review-map-c", material: {material_id: "material-rm"}, use_instance: {material_id: "material-rm", use_instance_id: "use-rm"}, energy_evidence: [], review_items: [{review_item_id: "r-wrong", target_id: "other-use"}]},
+  {candidate_id: "review-map-c", material: {material_id: "material-rm"}, use_instance: {material_id: "material-rm", use_instance_id: "use-rm"}, energy_evidence: [], review_items: [{review_item_id: "r-wrong", target_type: "candidate", target_id: "use-rm"}]},
   {candidate_id: "canonical-duplicate", material: {material_id: "material-one"}, use_instance: {material_id: "material-one", use_instance_id: "use-one"}, energy_evidence: [], review_items: []},
   {candidate_id: "canonical-duplicate", material: {material_id: "material-two"}, use_instance: {material_id: "material-two", use_instance_id: "use-two"}, energy_evidence: [], review_items: []},
 ]};
@@ -80,7 +80,7 @@ function screeningRow(candidateId, status, options = {}) {
     coverage: options.coverage ?? 0.5,
   };
 }
-const screening = {candidates: [
+const screening = {schema_version: "v19.screening_input_view.v1", profile_version: "v12.htl_screening.v1", candidates: [
   screeningRow("continue-c", "pass", {evidence: {homo_alignment: ["e-c"]}, coverage: 0.9}),
   screeningRow("review-c", "defer", {reviewIds: ["r-c"]}),
   screeningRow("reject-c", "reject"),
@@ -235,6 +235,142 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(queried["original"], "beta")
         self.assertFalse(queried["inputFrozen"])
 
+    def test_candidate_projection_checks_local_contract_typed_anchors_and_reference_cardinality(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+
+const componentNames = ["homo_alignment", "lumo_alignment", "band_gap", "solubility", "stability", "cost", "synthesis_complexity"];
+const exactWeights = {homo_alignment: 0.3, lumo_alignment: 0.2, band_gap: 0.1, solubility: 0.1, stability: 0.15, cost: 0.1, synthesis_complexity: 0.05};
+function row(overrides = {}) {
+  const evidenceIds = overrides.evidenceIds || [];
+  return {
+    candidate_id: "candidate-c",
+    status: "pass",
+    codes: [],
+    components: componentNames.map((name) => ({name, utility: 0.5, quality: 1, observed: false, evidence_ids: name === "homo_alignment" ? evidenceIds : []})),
+    blocking_review_ids: [],
+    profile_version: "v12.htl_screening.v1",
+    weights: {...exactWeights},
+    weighted_utility: 0.5,
+    coverage: 0.5,
+    ...overrides,
+  };
+}
+function record(overrides = {}) {
+  return {
+    candidate_id: "candidate-c",
+    material: {material_id: "material-c"},
+    use_instance: {material_id: "material-c", use_instance_id: "use-c"},
+    energy_evidence: [],
+    review_items: [],
+    ...overrides,
+  };
+}
+function snapshot(canonicalRecord, screeningRow, options = {}) {
+  const reviewQueue = options.reviewQueue;
+  const artifacts = {
+    canonical_evidence: {payload: {records: [canonicalRecord]}},
+    screening_input_view: {payload: {
+      schema_version: options.schemaVersion || "v19.screening_input_view.v1",
+      profile_version: options.topProfileVersion || "v12.htl_screening.v1",
+      candidates: [screeningRow],
+    }},
+  };
+  const declarations = [{kind: "canonical_evidence"}, {kind: "screening_input_view"}];
+  const availability = {canonical_evidence: {status: "available"}, screening_input_view: {status: "available"}};
+  if (reviewQueue) {
+    artifacts.review_queue = {payload: reviewQueue};
+    declarations.push({kind: "review_queue"});
+    availability.review_queue = {status: "available"};
+  }
+  return {manifest: {run_id: "run-contract", artifacts: declarations}, manifestMetadata: {runId: "run-contract"}, artifacts, availability, diagnostics: []};
+}
+function result(canonicalRecord, screeningRow, options = {}) {
+  const projection = context.SpiroCandidateProjection.project(snapshot(canonicalRecord, screeningRow, options));
+  const groups = Object.fromEntries(Object.entries(projection.groups).map(([group, values]) => [group, values.map((candidate) => candidate.candidateId)]));
+  return {groups, codes: projection.diagnostics.map((item) => item.code), messages: projection.diagnostics.map((item) => item.message)};
+}
+
+const invalidCode = result(record(), row({codes: ["NOT_A_FROZEN_CODE"]}));
+const invalidProfile = result(record(), row({profile_version: "future-profile"}));
+const extraWeight = result(record(), row({weights: {...exactWeights, invented: 0}}));
+const changedWeight = result(record(), row({weights: {...exactWeights, homo_alignment: 0.31}}));
+const unsupportedSchema = result(record(), row(), {schemaVersion: "v20.screening_input_view.v1"});
+const unsupportedTopProfile = result(record(), row(), {topProfileVersion: "future-profile"});
+
+const typedMismatch = result(
+  record({review_items: [{review_item_id: "review-c", target_type: "candidate", target_id: "use-c"}]}),
+  row({status: "defer", blocking_review_ids: ["review-c"]})
+);
+
+const evidenceA = {energy_evidence_id: "e-duplicate", material_id: "material-c", use_instance_id: "use-c", property_name: "homo_ev"};
+const evidenceB = {...evidenceA, property_name: "lumo_ev"};
+const duplicateEvidenceForward = result(record({energy_evidence: [evidenceA, evidenceB]}), row({evidenceIds: ["e-duplicate"]}));
+const duplicateEvidenceReverse = result(record({energy_evidence: [evidenceB, evidenceA]}), row({evidenceIds: ["e-duplicate"]}));
+const unreferencedEvidenceDuplicate = result(record({energy_evidence: [evidenceA, evidenceB]}), row());
+
+const canonicalReview = {review_item_id: "review-duplicate", target_type: "use_instance", target_id: "use-c"};
+const queueReviewA = {review_item_id: "review-duplicate", candidate_id: "candidate-c", target_type: "use_instance", target_id: "use-c", reason: "a"};
+const queueReviewB = {...queueReviewA, reason: "b"};
+const duplicateReviewForward = result(
+  record({review_items: [canonicalReview]}),
+  row({status: "defer", blocking_review_ids: ["review-duplicate"]}),
+  {reviewQueue: [queueReviewA, queueReviewB]}
+);
+const duplicateReviewReverse = result(
+  record({review_items: [canonicalReview]}),
+  row({status: "defer", blocking_review_ids: ["review-duplicate"]}),
+  {reviewQueue: [queueReviewB, queueReviewA]}
+);
+const unreferencedReviewDuplicate = result(
+  record({review_items: [canonicalReview]}),
+  row(),
+  {reviewQueue: [queueReviewA, queueReviewB]}
+);
+
+process.stdout.write(JSON.stringify({
+  invalidCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
+  typedMismatch, duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
+  duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate,
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                ["node", str(runner_path), "frontend/artifact-viewer/candidate-projection.js"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        observed = json.loads(result.stdout)
+        for name in ["invalidCode", "invalidProfile", "extraWeight", "changedWeight"]:
+            self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
+            self.assertIn("screening_row_invalid", observed[name]["codes"], name)
+            self.assertTrue(any("browser-local structural" in message.casefold() for message in observed[name]["messages"]), name)
+        for name in ["unsupportedSchema", "unsupportedTopProfile"]:
+            self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
+            self.assertIn("screening_contract_unsupported", observed[name]["codes"], name)
+            self.assertTrue(any("browser-local structural" in message.casefold() for message in observed[name]["messages"]), name)
+        self.assertEqual(observed["typedMismatch"]["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertIn("unjoinable_review_reference", observed["typedMismatch"]["codes"])
+        for name in ["duplicateEvidenceForward", "duplicateEvidenceReverse"]:
+            self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
+            self.assertIn("ambiguous_evidence_reference", observed[name]["codes"], name)
+        self.assertEqual(observed["unreferencedEvidenceDuplicate"]["groups"]["continue"], ["candidate-c"])
+        for name in ["duplicateReviewForward", "duplicateReviewReverse"]:
+            self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
+            self.assertIn("ambiguous_review_reference", observed[name]["codes"], name)
+        self.assertEqual(observed["unreferencedReviewDuplicate"]["groups"]["continue"], ["candidate-c"])
+
     def test_candidate_workspace_renders_groups_controls_selection_and_empty_state(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for workspace test")
         runner = r"""
@@ -267,7 +403,7 @@ function candidate(candidateId, group, backendStatus, materialId, ratio) {
   return {
     candidateId, group, backendStatus,
     identity: {materialId, useInstanceId: `use-${candidateId}`, role: "HTL", materialKind: "small_molecule", supplierStatus: "available"},
-    blockers: {codes: group === "review" ? ["NEEDS_REVIEW"] : [], reviewIds: [], missingReviewIds: []},
+    blockers: {codes: group === "review" ? ["NEEDS_REVIEW"] : [], reviewIds: group === "review" ? ["review-<unsafe>", "review-two"] : [], missingReviewIds: []},
     evidenceCoverage: {declared: 2, joined: ratio * 2, ratio, evidenceIds: [], missingEvidenceIds: []},
     screening: {coverage: ratio, weightedUtility: 0.9, profileVersion: "profile-v1"},
     recommendation: {capability: "available", requests: [{request_id: `request-${candidateId}`, acquisition_score: 0.99}]},
@@ -297,6 +433,7 @@ state.candidateControls = {search: "", statuses: ["review"], sort: "candidate-as
 renderCandidateWorkspace();
 `, context);
 const preservedSelection = vm.runInContext("state.selectedCandidateId", context);
+const reviewDetail = element("candidateDetail").innerHTML;
 
 vm.runInContext(`
 state.candidateControls = {search: "no-match", statuses: [], sort: "candidate-asc"};
@@ -311,6 +448,7 @@ process.stdout.write(JSON.stringify({
   initialDetail,
   selected: context.selected,
   preservedSelection,
+  reviewDetail,
   emptyTable,
   emptyDetail,
   diagnostics: element("candidateDiagnostics").innerHTML,
@@ -344,6 +482,10 @@ process.stdout.write(JSON.stringify({
         self.assertNotIn("<script>alert(1)</script>", rendered["initialTable"])
         self.assertEqual(rendered["selected"], "Alpha")
         self.assertEqual(rendered["preservedSelection"], "beta")
+        self.assertIn("blocker codes 1", rendered["reviewDetail"])
+        self.assertIn("blocking reviews 2", rendered["reviewDetail"])
+        self.assertIn("review-&lt;unsafe&gt;", rendered["reviewDetail"])
+        self.assertNotIn("review-<unsafe>", rendered["reviewDetail"])
         self.assertIn("No candidates match", rendered["emptyTable"])
         self.assertIn("Adjust search or status filters", rendered["emptyDetail"])
         self.assertIn("screening_only_identity_contradiction", rendered["diagnostics"])
