@@ -307,6 +307,13 @@ const typedMismatch = result(
   record({review_items: [{review_item_id: "review-c", target_type: "candidate", target_id: "use-c"}]}),
   row({status: "defer", blocking_review_ids: ["review-c"]})
 );
+const wrongMappedEnergyTarget = result(
+  record({
+    energy_evidence: [{energy_evidence_id: "energy-target", material_id: "wrong-material", use_instance_id: "use-c"}],
+    review_items: [{review_item_id: "review-energy", target_type: "energy_evidence", target_id: "energy-target"}],
+  }),
+  row({status: "defer", blocking_review_ids: ["review-energy"]})
+);
 
 const evidenceA = {energy_evidence_id: "e-duplicate", material_id: "material-c", use_instance_id: "use-c", property_name: "homo_ev"};
 const evidenceB = {...evidenceA, property_name: "lumo_ev"};
@@ -335,7 +342,7 @@ const unreferencedReviewDuplicate = result(
 
 process.stdout.write(JSON.stringify({
   invalidCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
-  typedMismatch, duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
+  typedMismatch, wrongMappedEnergyTarget, duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
   duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate,
 }));
 """
@@ -362,6 +369,8 @@ process.stdout.write(JSON.stringify({
             self.assertTrue(any("browser-local structural" in message.casefold() for message in observed[name]["messages"]), name)
         self.assertEqual(observed["typedMismatch"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("unjoinable_review_reference", observed["typedMismatch"]["codes"])
+        self.assertEqual(observed["wrongMappedEnergyTarget"]["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertIn("unjoinable_review_reference", observed["wrongMappedEnergyTarget"]["codes"])
         for name in ["duplicateEvidenceForward", "duplicateEvidenceReverse"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("ambiguous_evidence_reference", observed[name]["codes"], name)
@@ -370,6 +379,62 @@ process.stdout.write(JSON.stringify({
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("ambiguous_review_reference", observed[name]["codes"], name)
         self.assertEqual(observed["unreferencedReviewDuplicate"]["groups"]["continue"], ["candidate-c"])
+
+    def test_candidate_projection_preserves_v13_review_representation_across_canonical_and_queue(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
+        runner = r"""
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+const fixtureDir = process.argv[3];
+const readJson = (name) => JSON.parse(fs.readFileSync(path.join(fixtureDir, name), "utf8"));
+const readJsonl = (name) => fs.readFileSync(path.join(fixtureDir, name), "utf8")
+  .split(/\r?\n/).filter((line) => line.trim()).map((line) => JSON.parse(line));
+const manifest = readJson("run-manifest.json");
+const artifacts = {
+  canonical_evidence: {payload: readJson("canonical-evidence.json")},
+  screening_input_view: {payload: readJson("screening-input-view.json")},
+  review_queue: {payload: readJsonl("review-queue.jsonl")},
+};
+const availability = Object.fromEntries(Object.keys(artifacts).map((kind) => [kind, {status: "available"}]));
+const projection = context.SpiroCandidateProjection.project({
+  manifest,
+  manifestMetadata: {runId: manifest.run_id, schemaVersion: manifest.schema_version},
+  artifacts,
+  availability,
+  diagnostics: [],
+});
+process.stdout.write(JSON.stringify({
+  groups: Object.fromEntries(Object.entries(projection.groups).map(([group, candidates]) => [group, candidates.map((candidate) => candidate.candidateId)])),
+  deferJoinedReviews: projection.groups.review.find((candidate) => candidate.candidateId === "defer-1")?.blockers.joinedReviews || [],
+}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/candidate-projection.js",
+                    "tests/fixtures/artifact_viewer/v13_algorithm_run",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["groups"]["continue"], ["pass-1"])
+        self.assertEqual(observed["groups"]["review"], ["defer-1"])
+        self.assertEqual(observed["groups"]["reject"], ["reject-1"])
+        self.assertEqual(observed["groups"]["insufficient-data"], [])
+        self.assertEqual(len(observed["deferJoinedReviews"]), 1)
 
     def test_candidate_workspace_renders_groups_controls_selection_and_empty_state(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for workspace test")

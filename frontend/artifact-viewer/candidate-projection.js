@@ -179,21 +179,21 @@
     );
   }
 
-  function reviewIndex(snapshot, record, candidateId) {
+  function reviewIndex(snapshot, record) {
     const index = new Map();
     for (const item of Array.isArray(record?.review_items) ? record.review_items : []) {
       const id = text(item?.review_item_id);
       if (!id) continue;
-      const matches = index.get(id) || [];
-      matches.push(item);
+      const matches = index.get(id) || {canonical: [], queue: []};
+      matches.canonical.push(item);
       index.set(id, matches);
     }
     const queue = payload(snapshot, "review_queue");
     for (const item of Array.isArray(queue) ? queue : []) {
       const id = text(item?.review_item_id);
-      if (!id || text(item?.candidate_id) !== candidateId) continue;
-      const matches = index.get(id) || [];
-      matches.push(item);
+      if (!id) continue;
+      const matches = index.get(id) || {canonical: [], queue: []};
+      matches.queue.push(item);
       index.set(id, matches);
     }
     return index;
@@ -208,10 +208,40 @@
     const targetType = text(review?.target_type);
     const targetId = text(review?.target_id);
     if (targetType === "energy_evidence") {
-      return Boolean(targetId && (evidenceById.get(targetId) || []).length === 1);
+      const matches = evidenceById.get(targetId) || [];
+      if (matches.length !== 1) return false;
+      return text(matches[0]?.material_id) === identity.materialId &&
+        text(matches[0]?.use_instance_id) === identity.useInstanceId;
     }
     return Boolean(Object.prototype.hasOwnProperty.call(anchors, targetType) &&
       targetId && targetId === anchors[targetType]);
+  }
+
+  function reviewResolution(matches, candidateId, identity, evidenceById) {
+    const canonical = matches?.canonical || [];
+    const queue = matches?.queue || [];
+    if (!canonical.length && !queue.length) return {status: "missing", review: null};
+    if (canonical.length > 1 || queue.length > 1) return {status: "ambiguous", review: null};
+    if (queue.length === 1 && text(queue[0]?.candidate_id) !== candidateId) {
+      return {status: "conflict", review: null};
+    }
+    const canonicalReview = canonical[0] || null;
+    const queueReview = queue[0] || null;
+    if (canonicalReview && queueReview) {
+      const canonicalAnchor = `${text(canonicalReview.target_type)}\0${text(canonicalReview.target_id)}`;
+      const queueAnchor = `${text(queueReview.target_type)}\0${text(queueReview.target_id)}`;
+      if (canonicalAnchor !== queueAnchor) return {status: "conflict", review: null};
+    }
+    const represented = [canonicalReview, queueReview].filter(Boolean);
+    if (represented.some((review) => !reviewTargetMatches(review, identity, evidenceById))) {
+      return {status: "conflict", review: null};
+    }
+    return {
+      status: "valid",
+      review: canonicalReview && queueReview
+        ? {...queueReview, ...canonicalReview}
+        : (canonicalReview || queueReview),
+    };
   }
 
   function recommendationsFor(snapshot, candidateId) {
@@ -386,13 +416,14 @@
       }
 
       const reviewIds = row ? uniqueIds(Array.isArray(row.blocking_review_ids) ? row.blocking_review_ids : []) : [];
-      const reviewsById = reviewIndex(snapshot, record, candidateId);
-      const missingReviewIds = reviewIds.filter((id) => !reviewsById.has(id));
-      const ambiguousReviewIds = reviewIds.filter((id) => (reviewsById.get(id) || []).length > 1);
-      const conflictingReviewIds = reviewIds.filter((id) => {
-        const matches = reviewsById.get(id) || [];
-        return matches.length === 1 && !reviewTargetMatches(matches[0], identity, evidenceById);
-      });
+      const reviewsById = reviewIndex(snapshot, record);
+      const reviewResolutions = new Map(reviewIds.map((id) => [
+        id,
+        reviewResolution(reviewsById.get(id), candidateId, identity, evidenceById),
+      ]));
+      const missingReviewIds = reviewIds.filter((id) => reviewResolutions.get(id).status === "missing");
+      const ambiguousReviewIds = reviewIds.filter((id) => reviewResolutions.get(id).status === "ambiguous");
+      const conflictingReviewIds = reviewIds.filter((id) => reviewResolutions.get(id).status === "conflict");
       if (ambiguousReviewIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
@@ -426,7 +457,7 @@
         blockers: {
           codes: uniqueIds(Array.isArray(row?.codes) ? row.codes : []),
           reviewIds,
-          joinedReviews: reviewIds.filter((id) => (reviewsById.get(id) || []).length === 1 && !conflictingReviewIds.includes(id)).map((id) => cloneJson(reviewsById.get(id)[0])),
+          joinedReviews: reviewIds.filter((id) => reviewResolutions.get(id).status === "valid").map((id) => cloneJson(reviewResolutions.get(id).review)),
           missingReviewIds: unjoinableReviewIds,
         },
         evidenceCoverage: {
