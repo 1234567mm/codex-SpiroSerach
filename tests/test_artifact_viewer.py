@@ -1416,6 +1416,212 @@ main().catch((error) => {
         self.assertFalse(whitespace_kind["normalizedArtifactOwn"])
         self.assertFalse(whitespace_kind["viewerResolvable"])
 
+    def test_readonly_envelope_adapter_normalizes_to_bundle_projection_and_fails_closed(self):
+        self.assertIsNotNone(shutil.which("node"), "node is required for read-only envelope adapter test")
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = {console, JSON, Map, Set, Object, Array, String, Number, Error, Promise};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
+vm.runInContext(fs.readFileSync(process.argv[3], "utf8"), context);
+
+const {
+  RelativePathBundleAdapter,
+  ReadonlyEnvelopeAdapter,
+  RunDataStore,
+  DiagnosticProjection,
+} = context.SpiroRunData;
+
+function bundleFile(relativePath, payload) {
+  return {
+    relativePath,
+    text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+  };
+}
+
+function envelopeFile(name, payload) {
+  return {
+    name,
+    text: async () => JSON.stringify(payload),
+  };
+}
+
+function envelope(surface, runId, artifactKind, payload, status = "available", severity = "info", unavailable = null) {
+  return {
+    schema_version: "v11.readonly_api.envelope.v1",
+    status,
+    severity,
+    surface,
+    read_only: true,
+    run_id: runId,
+    artifact_kind: artifactKind,
+    source: {backend: "json_artifact_repository", manifest_path: "run-manifest.json"},
+    payload,
+    unavailable,
+  };
+}
+
+function manifest(runId) {
+  return {
+    schema_version: "v6.run_manifest.v1",
+    run_id: runId,
+    artifacts: [
+      {kind: "canonical_evidence", path: "canonical.json", format: "json", run_id: runId, schema_ref: "schemas/canonical-evidence.schema.json"},
+      {kind: "screening_input_view", path: "screening.json", format: "json", run_id: runId, schema_ref: "schemas/screening-input-view.schema.json"},
+      {kind: "review_events", path: "review-events.jsonl", format: "jsonl", run_id: runId, schema_ref: "schemas/review-event.schema.json"},
+      {kind: "model_evaluation", path: "model.json", format: "json", run_id: runId, schema_ref: "schemas/model-evaluation.schema.json"},
+    ],
+  };
+}
+
+function artifactEnvelope(runId, kind, path, format, payload) {
+  const metadata = {kind, path, format, run_id: runId, schema_ref: `schemas/${kind}.schema.json`};
+  return envelope("artifact_by_kind", runId, kind, {
+    kind,
+    path,
+    format,
+    schema_ref: metadata.schema_ref,
+    metadata,
+    schema_validation: {status: "valid"},
+    data: format === "json" ? payload : null,
+    records: format === "jsonl" ? payload : [],
+    record_count: format === "jsonl" ? payload.length : null,
+  });
+}
+
+function codes(result) {
+  return result.diagnostics.map((item) => item.code);
+}
+
+function groupIds(projection) {
+  return Object.fromEntries(
+    Object.entries(projection.groups).map(([group, candidates]) => [
+      group,
+      candidates.map((candidate) => candidate.candidateId),
+    ])
+  );
+}
+
+async function main() {
+  const runId = "run-envelope";
+  const runManifest = manifest(runId);
+  const canonical = {records: [{candidate_id: "candidate-1"}]};
+  const screening = {candidates: [{candidate_id: "candidate-1", status: "pass"}]};
+  const reviewEvents = [{event_id: "event-1", run_id: runId, decision: "accept"}];
+  const unavailable = {reason: "artifact_missing", status: "unavailable", kind: "model_evaluation", path: "model.json"};
+
+  const bundleFiles = [
+    bundleFile("run-manifest.json", runManifest),
+    bundleFile("canonical.json", canonical),
+    bundleFile("screening.json", screening),
+    bundleFile("review-events.jsonl", reviewEvents.map((event) => JSON.stringify(event)).join("\n")),
+  ];
+  const envelopeFiles = [
+    envelopeFile("manifest.json", envelope("manifest", runId, null, runManifest)),
+    envelopeFile("canonical-envelope.json", artifactEnvelope(runId, "canonical_evidence", "canonical.json", "json", canonical)),
+    envelopeFile("screening-envelope.json", artifactEnvelope(runId, "screening_input_view", "screening.json", "json", screening)),
+    envelopeFile("review-events-envelope.json", artifactEnvelope(runId, "review_events", "review-events.jsonl", "jsonl", reviewEvents)),
+    envelopeFile("model-envelope.json", envelope("artifact_by_kind", runId, "model_evaluation", null, "unavailable", "warning", unavailable)),
+  ];
+
+  const bundle = await new RunDataStore(new RelativePathBundleAdapter()).replace(bundleFiles);
+  const envelopeResult = await new RunDataStore(new ReadonlyEnvelopeAdapter()).replace(envelopeFiles);
+  const autoEnvelope = await new RunDataStore().replace(envelopeFiles);
+  const bundleProjection = context.SpiroCandidateProjection.project(bundle.snapshot);
+  const envelopeProjection = context.SpiroCandidateProjection.project(envelopeResult.snapshot);
+  const envelopeDiagnostics = DiagnosticProjection.project(envelopeResult.snapshot);
+
+  const notReadonly = await new RunDataStore(new ReadonlyEnvelopeAdapter()).replace([
+    envelopeFile("bad.json", {...envelope("manifest", runId, null, runManifest), read_only: false}),
+  ]);
+  const unknownSchema = await new RunDataStore(new ReadonlyEnvelopeAdapter()).replace([
+    envelopeFile("bad.json", {...envelope("manifest", runId, null, runManifest), schema_version: "v0"}),
+  ]);
+  const mixedRun = await new RunDataStore(new ReadonlyEnvelopeAdapter()).replace([
+    envelopeFile("manifest.json", envelope("manifest", runId, null, runManifest)),
+    envelopeFile("canonical-envelope.json", artifactEnvelope("other-run", "canonical_evidence", "canonical.json", "json", canonical)),
+  ]);
+  const duplicateKind = await new RunDataStore(new ReadonlyEnvelopeAdapter()).replace([
+    envelopeFile("manifest.json", envelope("manifest", runId, null, runManifest)),
+    envelopeFile("canonical-a.json", artifactEnvelope(runId, "canonical_evidence", "canonical.json", "json", canonical)),
+    envelopeFile("canonical-b.json", artifactEnvelope(runId, "canonical_evidence", "canonical.json", "json", canonical)),
+  ]);
+  const metadataConflict = await new RunDataStore(new ReadonlyEnvelopeAdapter()).replace([
+    envelopeFile("manifest.json", envelope("manifest", runId, null, runManifest)),
+    envelopeFile("canonical-envelope.json", artifactEnvelope(runId, "canonical_evidence", "other.json", "json", canonical)),
+  ]);
+
+  process.stdout.write(JSON.stringify({
+    bundleOk: bundle.ok,
+    envelopeOk: envelopeResult.ok,
+    autoOk: autoEnvelope.ok,
+    manifestPath: envelopeResult.snapshot.manifestMetadata.path,
+    canonicalCandidate: envelopeResult.snapshot.artifacts.canonical_evidence.payload.records[0].candidate_id,
+    reviewEventCount: envelopeResult.snapshot.artifacts.review_events.payload.length,
+    envelopeMetadataStatus: envelopeResult.snapshot.artifacts.canonical_evidence.readonlyEnvelope.schemaValidation.status,
+    envelopeReadOnly: envelopeResult.snapshot.artifacts.canonical_evidence.readonlyEnvelope.readOnly,
+    bundleGroups: groupIds(bundleProjection),
+    envelopeGroups: groupIds(envelopeProjection),
+    modelState: envelopeDiagnostics.panels.model_evaluation.state,
+    modelAvailability: envelopeResult.snapshot.availability.model_evaluation,
+    notReadonly: codes(notReadonly),
+    unknownSchema: codes(unknownSchema),
+    mixedRun: {ok: mixedRun.ok, codes: codes(mixedRun)},
+    duplicateKind: codes(duplicateKind),
+    metadataConflict: codes(metadataConflict),
+  }));
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
+            file.write(runner)
+            runner_path = Path(file.name)
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    str(runner_path),
+                    "frontend/artifact-viewer/run-data-store.js",
+                    "frontend/artifact-viewer/candidate-projection.js",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        observed = json.loads(result.stdout)
+        self.assertTrue(observed["bundleOk"])
+        self.assertTrue(observed["envelopeOk"])
+        self.assertTrue(observed["autoOk"])
+        self.assertEqual(observed["manifestPath"], "run-manifest.json")
+        self.assertEqual(observed["canonicalCandidate"], "candidate-1")
+        self.assertEqual(observed["reviewEventCount"], 1)
+        self.assertEqual(observed["envelopeMetadataStatus"], "valid")
+        self.assertTrue(observed["envelopeReadOnly"])
+        self.assertEqual(observed["bundleGroups"], observed["envelopeGroups"])
+        flattened_ids = [
+            candidate_id
+            for candidate_ids in observed["envelopeGroups"].values()
+            for candidate_id in candidate_ids
+        ]
+        self.assertIn("candidate-1", flattened_ids)
+        self.assertEqual(observed["modelState"], "unavailable")
+        self.assertEqual(observed["modelAvailability"]["status"], "unavailable")
+        self.assertEqual(observed["modelAvailability"]["unavailable"]["reason"], "artifact_missing")
+        self.assertIn("readonly_envelope_not_read_only", observed["notReadonly"])
+        self.assertIn("readonly_envelope_schema_version", observed["unknownSchema"])
+        self.assertFalse(observed["mixedRun"]["ok"])
+        self.assertIn("readonly_envelope_run_id_conflict", observed["mixedRun"]["codes"])
+        self.assertIn("duplicate_artifact_kind", observed["duplicateKind"])
+        self.assertIn("readonly_envelope_metadata_conflict", observed["metadataConflict"])
+
     def test_diagnostic_projection_lifecycle_and_stale_load_guard(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for run store lifecycle test")
         runner = r"""

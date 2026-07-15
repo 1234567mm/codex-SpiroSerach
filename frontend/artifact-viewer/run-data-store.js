@@ -2,6 +2,9 @@
   "use strict";
 
   const MANIFEST_FILE_NAME = "run-manifest.json";
+  const READONLY_ENVELOPE_SCHEMA_VERSION = "v11.readonly_api.envelope.v1";
+  const READONLY_ENVELOPE_STATUSES = Object.freeze(["available", "degraded", "invalid", "unavailable"]);
+  const READONLY_ENVELOPE_SEVERITIES = Object.freeze(["info", "warning", "error", "critical"]);
 
   function diagnostic(code, message, details = {}, severity = "error") {
     return {
@@ -74,6 +77,10 @@
       }
     });
     return records;
+  }
+
+  function isFailureDiagnostic(item) {
+    return item?.severity === "error" || item?.severity === "critical";
   }
 
   function payloadRunIdOwners(payload) {
@@ -165,6 +172,435 @@
     }
   }
 
+  function envelopeInputPath(file, index) {
+    const suppliedPath = inputRelativePath(file) || file?.name || `readonly-envelope-${index + 1}.json`;
+    return normalizeRelativePath(suppliedPath);
+  }
+
+  async function preloadNamedFiles(files, pathForFile) {
+    const diagnostics = [];
+    const entries = [];
+    const seenPaths = new Set();
+    const selected = Array.from(files || []);
+    await Promise.all(selected.map(async (file, index) => {
+      let path;
+      try {
+        path = pathForFile(file, index);
+      } catch (error) {
+        diagnostics.push(diagnostic(
+          "unsafe_readonly_envelope_path",
+          error.message,
+          {name: file?.name || null}
+        ));
+        return;
+      }
+      if (seenPaths.has(path)) {
+        diagnostics.push(diagnostic(
+          "duplicate_readonly_envelope_path",
+          `duplicate read-only envelope path: ${path}`,
+          {path}
+        ));
+        return;
+      }
+      seenPaths.add(path);
+      try {
+        const text = await file.text();
+        entries.push({
+          path,
+          text,
+          file: {
+            name: file?.name || path.split("/").pop(),
+            relativePath: path,
+            webkitRelativePath: path,
+            text: async () => text,
+          },
+        });
+      } catch (error) {
+        diagnostics.push(diagnostic(
+          "file_read_error",
+          `could not read ${path}: ${error.message}`,
+          {path}
+        ));
+      }
+    }));
+    entries.sort((a, b) => a.path.localeCompare(b.path));
+    return {diagnostics, entries};
+  }
+
+  function validateReadonlyEnvelope(envelope, path) {
+    const diagnostics = [];
+    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_invalid",
+        "read-only envelope must be a JSON object",
+        {path}
+      ));
+      return diagnostics;
+    }
+    if (envelope.schema_version !== READONLY_ENVELOPE_SCHEMA_VERSION) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_schema_version",
+        "read-only envelope schema_version is not supported",
+        {path, schemaVersion: envelope.schema_version ?? null}
+      ));
+    }
+    if (envelope.read_only !== true) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_not_read_only",
+        "read-only envelope import requires read_only true",
+        {path}
+      ));
+    }
+    if (!READONLY_ENVELOPE_STATUSES.includes(envelope.status)) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_status_invalid",
+        "read-only envelope status is not supported",
+        {path, status: envelope.status ?? null}
+      ));
+    }
+    if (!READONLY_ENVELOPE_SEVERITIES.includes(envelope.severity)) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_severity_invalid",
+        "read-only envelope severity is not supported",
+        {path, severity: envelope.severity ?? null}
+      ));
+    }
+    if (typeof envelope.surface !== "string" || !envelope.surface.trim()) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_surface_invalid",
+        "read-only envelope requires a non-empty surface",
+        {path}
+      ));
+    }
+    if (envelope.run_id !== null && typeof envelope.run_id !== "string") {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_run_id_invalid",
+        "read-only envelope run_id must be a string or null",
+        {path}
+      ));
+    }
+    if (envelope.artifact_kind !== null && typeof envelope.artifact_kind !== "string") {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_artifact_kind_invalid",
+        "read-only envelope artifact_kind must be a string or null",
+        {path}
+      ));
+    }
+    if (
+      !envelope.source ||
+      typeof envelope.source !== "object" ||
+      Array.isArray(envelope.source) ||
+      envelope.source.backend !== "json_artifact_repository" ||
+      typeof envelope.source.manifest_path !== "string" ||
+      !envelope.source.manifest_path
+    ) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_source_invalid",
+        "read-only envelope source must identify the json artifact repository manifest path",
+        {path}
+      ));
+    }
+    if (!Object.prototype.hasOwnProperty.call(envelope, "payload")) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_payload_missing",
+        "read-only envelope requires a payload field",
+        {path}
+      ));
+    }
+    if (!Object.prototype.hasOwnProperty.call(envelope, "unavailable")) {
+      diagnostics.push(diagnostic(
+        "readonly_envelope_unavailable_missing",
+        "read-only envelope requires an unavailable field",
+        {path}
+      ));
+    }
+    return diagnostics;
+  }
+
+  function readonlyEnvelopeState(envelope) {
+    return {
+      status: envelope.status,
+      severity: envelope.severity,
+      surface: envelope.surface,
+      readOnly: envelope.read_only,
+      runId: envelope.run_id,
+      artifactKind: envelope.artifact_kind,
+      source: cloneJson(envelope.source),
+      unavailable: cloneJson(envelope.unavailable),
+      payloadMetadata: cloneJson(envelope.payload?.metadata || null),
+      schemaValidation: cloneJson(envelope.payload?.schema_validation || null),
+    };
+  }
+
+  class ReadonlyEnvelopeAdapter {
+    async index(files) {
+      const {diagnostics, entries: inputEntries} = await preloadNamedFiles(files, envelopeInputPath);
+      const envelopes = [];
+
+      for (const entry of inputEntries) {
+        let envelope;
+        try {
+          envelope = JSON.parse(entry.text);
+        } catch (error) {
+          diagnostics.push(diagnostic(
+            "readonly_envelope_parse_error",
+            `${entry.path} JSON parse failed: ${error.message}`,
+            {path: entry.path}
+          ));
+          continue;
+        }
+        const envelopeDiagnostics = validateReadonlyEnvelope(envelope, entry.path);
+        diagnostics.push(...envelopeDiagnostics);
+        if (!envelopeDiagnostics.length) {
+          envelopes.push({path: entry.path, envelope});
+        }
+      }
+
+      const manifestEnvelopes = envelopes.filter(({envelope}) => envelope.surface === "manifest");
+      if (manifestEnvelopes.length !== 1) {
+        diagnostics.push(diagnostic(
+          manifestEnvelopes.length ? "duplicate_readonly_manifest_envelope" : "readonly_manifest_envelope_missing",
+          manifestEnvelopes.length ? "exactly one manifest envelope is allowed" : "read-only envelope import requires a manifest envelope",
+          {count: manifestEnvelopes.length}
+        ));
+      }
+
+      const runIds = [...new Set(envelopes
+        .map(({envelope}) => envelope.run_id)
+        .filter((runId) => runId !== null))];
+      if (runIds.length > 1) {
+        diagnostics.push(diagnostic(
+          "readonly_envelope_run_id_conflict",
+          "read-only envelope import contains mixed run_id values",
+          {runIds}
+        ));
+      }
+
+      const manifestEnvelope = manifestEnvelopes[0]?.envelope || null;
+      if (!manifestEnvelope || manifestEnvelope.status !== "available") {
+        diagnostics.push(diagnostic(
+          "readonly_manifest_unavailable",
+          "read-only envelope import requires an available manifest envelope",
+          {status: manifestEnvelope?.status || null}
+        ));
+      }
+      const manifest = manifestEnvelope?.payload;
+      if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+        diagnostics.push(diagnostic(
+          "readonly_manifest_payload_invalid",
+          "read-only manifest envelope payload must be a run manifest object"
+        ));
+      }
+      if (
+        manifest &&
+        typeof manifest === "object" &&
+        !Array.isArray(manifest) &&
+        manifestEnvelope?.run_id !== null &&
+        manifest.run_id !== manifestEnvelope?.run_id
+      ) {
+        diagnostics.push(diagnostic(
+          "readonly_envelope_run_id_conflict",
+          "manifest envelope run_id does not match manifest payload run_id",
+          {expectedRunId: manifest.run_id ?? null, actualRunId: manifestEnvelope?.run_id ?? null}
+        ));
+      }
+
+      if (diagnostics.some(isFailureDiagnostic)) {
+        return deepFreeze({
+          ok: false,
+          paths: inputEntries.map((entry) => entry.path),
+          manifestPath: null,
+          entries: Object.create(null),
+          diagnostics,
+        });
+      }
+
+      let manifestPath;
+      try {
+        manifestPath = normalizeRelativePath(manifestEnvelope.source.manifest_path);
+      } catch (error) {
+        diagnostics.push(diagnostic(
+          "unsafe_readonly_manifest_path",
+          error.message,
+          {path: manifestEnvelope.source.manifest_path}
+        ));
+      }
+      const manifestBasePath = manifestPath ? manifestDirectory(manifestPath) : "";
+      const manifestArtifacts = new Map();
+      for (const metadata of Array.isArray(manifest.artifacts) ? manifest.artifacts : []) {
+        if (!metadata || typeof metadata !== "object" || typeof metadata.kind !== "string") continue;
+        manifestArtifacts.set(metadata.kind, metadata);
+      }
+
+      const outputEntries = Object.create(null);
+      const artifactStateOverrides = Object.create(null);
+      if (manifestPath) {
+        outputEntries[manifestPath] = {path: manifestPath, text: JSON.stringify(manifest)};
+      }
+
+      const seenKinds = new Set();
+      for (const {path, envelope} of envelopes) {
+        if (envelope.surface === "manifest" || envelope.artifact_kind === null) continue;
+        const kind = envelope.artifact_kind;
+        if (!kind) {
+          diagnostics.push(diagnostic(
+            "artifact_kind_missing",
+            "artifact envelope requires a non-empty artifact_kind",
+            {path}
+          ));
+          continue;
+        }
+        if (seenKinds.has(kind)) {
+          diagnostics.push(diagnostic(
+            "duplicate_artifact_kind",
+            `duplicate artifact kind: ${kind}`,
+            {kind, path}
+          ));
+          continue;
+        }
+        seenKinds.add(kind);
+        const metadata = manifestArtifacts.get(kind);
+        if (!metadata) {
+          diagnostics.push(diagnostic(
+            "readonly_envelope_kind_not_declared",
+            `artifact envelope kind is not declared by the manifest: ${kind}`,
+            {kind, path}
+          ));
+          continue;
+        }
+
+        let declaredPath;
+        try {
+          declaredPath = normalizeRelativePath(metadata.path);
+        } catch (error) {
+          diagnostics.push(diagnostic(
+            "unsafe_artifact_path",
+            error.message,
+            {kind, path: metadata.path || null}
+          ));
+          continue;
+        }
+        const resolvedPath = joinRelativePath(manifestBasePath, declaredPath);
+        const state = readonlyEnvelopeState(envelope);
+        artifactStateOverrides[kind] = state;
+        if (envelope.status !== "available") {
+          continue;
+        }
+
+        const payload = envelope.payload;
+        const payloadMetadata = payload?.metadata || {};
+        const conflicts = [];
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          conflicts.push("payload");
+        }
+        if (payload?.kind !== kind) conflicts.push("payload.kind");
+        if (payload?.path !== declaredPath) conflicts.push("payload.path");
+        if (payload?.format !== metadata.format) conflicts.push("payload.format");
+        if (payloadMetadata.kind !== undefined && payloadMetadata.kind !== kind) conflicts.push("payload.metadata.kind");
+        if (payloadMetadata.path !== undefined && payloadMetadata.path !== declaredPath) conflicts.push("payload.metadata.path");
+        if (payloadMetadata.format !== undefined && payloadMetadata.format !== metadata.format) conflicts.push("payload.metadata.format");
+        if (payloadMetadata.run_id !== undefined && payloadMetadata.run_id !== manifest.run_id) conflicts.push("payload.metadata.run_id");
+        if (conflicts.length) {
+          diagnostics.push(diagnostic(
+            "readonly_envelope_metadata_conflict",
+            `artifact envelope metadata conflicts with manifest for ${kind}`,
+            {kind, path, conflicts}
+          ));
+          continue;
+        }
+
+        if (metadata.format === "json") {
+          if (!Object.prototype.hasOwnProperty.call(payload, "data")) {
+            diagnostics.push(diagnostic(
+              "readonly_envelope_payload_invalid",
+              `artifact envelope ${kind} requires data for json format`,
+              {kind, path}
+            ));
+            continue;
+          }
+          outputEntries[resolvedPath] = {path: resolvedPath, text: JSON.stringify(payload.data)};
+        } else if (metadata.format === "jsonl") {
+          if (!Array.isArray(payload.records)) {
+            diagnostics.push(diagnostic(
+              "readonly_envelope_payload_invalid",
+              `artifact envelope ${kind} requires records for jsonl format`,
+              {kind, path}
+            ));
+            continue;
+          }
+          outputEntries[resolvedPath] = {
+            path: resolvedPath,
+            text: payload.records.map((record) => JSON.stringify(record)).join("\n"),
+          };
+        }
+      }
+
+      return deepFreeze({
+        ok: !diagnostics.some(isFailureDiagnostic),
+        paths: Object.keys(outputEntries).sort(),
+        manifestPath: manifestPath || null,
+        entries: outputEntries,
+        diagnostics,
+        artifactStateOverrides,
+      });
+    }
+  }
+
+  class AutoRunDataAdapter {
+    async index(files) {
+      const diagnostics = [];
+      const selected = Array.from(files || []);
+      const entries = await Promise.all(selected.map(async (file, index) => {
+        try {
+          return {
+            path: file?.name || inputRelativePath(file) || `selected-file-${index + 1}`,
+            text: await file.text(),
+            file,
+          };
+        } catch (error) {
+          diagnostics.push(diagnostic(
+            "file_read_error",
+            `could not read selected file: ${error.message}`,
+            {name: file?.name || null}
+          ));
+          return null;
+        }
+      }));
+      if (diagnostics.length) {
+        return deepFreeze({
+          ok: false,
+          paths: entries.filter(Boolean).map((entry) => entry.path),
+          manifestPath: null,
+          entries: Object.create(null),
+          diagnostics,
+        });
+      }
+      const parsed = entries.filter(Boolean).map((entry) => {
+        try {
+          return JSON.parse(entry.text);
+        } catch (error) {
+          return null;
+        }
+      });
+      const allReadonlyEnvelopes = parsed.length > 0 && parsed.every((value) =>
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        value.schema_version === READONLY_ENVELOPE_SCHEMA_VERSION
+      );
+      if (allReadonlyEnvelopes) {
+        const preloadedFiles = entries.filter(Boolean).map((entry, index) => ({
+          name: entry.file?.name || `readonly-envelope-${index + 1}.json`,
+          relativePath: inputRelativePath(entry.file) || entry.file?.name || `readonly-envelope-${index + 1}.json`,
+          webkitRelativePath: inputRelativePath(entry.file) || entry.file?.name || `readonly-envelope-${index + 1}.json`,
+          text: async () => entry.text,
+        }));
+        return new ReadonlyEnvelopeAdapter().index(preloadedFiles);
+      }
+      return new RelativePathBundleAdapter().index(files);
+    }
+  }
+
   const EMPTY_SNAPSHOT = deepFreeze({
     manifest: null,
     manifestMetadata: null,
@@ -220,19 +656,29 @@
       return {
         kind,
         state: "degraded",
-        severity: "warning",
+        severity: availability.severity || "warning",
         source: "manifest",
         reason: warningOrError?.message || "Declared optional artifact is unavailable",
         path: availability.path || null,
       };
     }
-    if (availability?.status === "parse_error" || availability?.status === "unsupported_format") {
+    if (availability?.status === "parse_error" || availability?.status === "unsupported_format" || availability?.status === "invalid") {
       return {
         kind,
         state: "invalid",
-        severity: availability.status === "parse_error" ? "error" : "warning",
-        source: "browser-local",
+        severity: availability.severity || (availability.status === "parse_error" ? "error" : "warning"),
+        source: availability.source?.backend || "browser-local",
         reason: warningOrError?.message || `Artifact status is ${availability.status}`,
+        path: availability.path || null,
+      };
+    }
+    if (availability?.status === "degraded") {
+      return {
+        kind,
+        state: "degraded",
+        severity: availability.severity || "warning",
+        source: availability.source?.backend || "read-only-envelope",
+        reason: warningOrError?.message || "Artifact envelope reported degraded status",
         path: availability.path || null,
       };
     }
@@ -240,9 +686,9 @@
       return {
         kind,
         state: "unavailable",
-        severity: "warning",
-        source: "manifest",
-        reason: warningOrError?.message || `Artifact status is ${availability.status}`,
+        severity: availability.severity || "warning",
+        source: availability.source?.backend || "manifest",
+        reason: warningOrError?.message || availability.unavailable?.message || `Artifact status is ${availability.status}`,
         path: availability.path || null,
       };
     }
@@ -276,7 +722,7 @@
   });
 
   class RunDataStore {
-    constructor(adapter = new RelativePathBundleAdapter()) {
+    constructor(adapter = new AutoRunDataAdapter()) {
       this.adapter = adapter;
       this.committedSnapshot = EMPTY_SNAPSHOT;
       this.loadGeneration = 0;
@@ -434,6 +880,35 @@
           };
           continue;
         }
+        const readonlyState = bundle.artifactStateOverrides?.[kind] || null;
+        if (readonlyState && readonlyState.status !== "available") {
+          const statusDiagnostic = diagnostic(
+            `readonly_envelope_${readonlyState.status}`,
+            `read-only envelope reported ${readonlyState.status} for ${kind}`,
+            {
+              kind,
+              path: declaredPath,
+              resolvedPath,
+              surface: readonlyState.surface,
+              unavailable: readonlyState.unavailable,
+            },
+            readonlyState.severity || "warning"
+          );
+          diagnostics.push(statusDiagnostic);
+          availability[kind] = {
+            kind,
+            path: declaredPath,
+            resolvedPath,
+            status: readonlyState.status,
+            severity: readonlyState.severity || "warning",
+            surface: readonlyState.surface,
+            readOnly: readonlyState.readOnly,
+            source: cloneJson(readonlyState.source || null),
+            unavailable: cloneJson(readonlyState.unavailable || null),
+            diagnosticCodes: [statusDiagnostic.code],
+          };
+          continue;
+        }
         const selectedFile = bundle.entries[resolvedPath];
         if (!selectedFile) {
           const severity = kind === "canonical_evidence" ? "error" : "warning";
@@ -500,11 +975,30 @@
           metadata: normalizedMetadata,
           payload,
         };
+        if (readonlyState) {
+          artifacts[kind].readonlyEnvelope = {
+            status: readonlyState.status,
+            severity: readonlyState.severity,
+            surface: readonlyState.surface,
+            readOnly: readonlyState.readOnly,
+            runId: readonlyState.runId,
+            artifactKind: readonlyState.artifactKind,
+            source: cloneJson(readonlyState.source),
+            unavailable: cloneJson(readonlyState.unavailable),
+            payloadMetadata: cloneJson(readonlyState.payloadMetadata),
+            schemaValidation: cloneJson(readonlyState.schemaValidation),
+          };
+        }
         availability[kind] = {
           kind,
           path: declaredPath,
           resolvedPath,
           status: "available",
+          severity: readonlyState?.severity || "info",
+          surface: readonlyState?.surface || null,
+          readOnly: readonlyState?.readOnly || false,
+          source: cloneJson(readonlyState?.source || null),
+          unavailable: cloneJson(readonlyState?.unavailable || null),
           diagnosticCodes: [],
         };
       }
@@ -553,7 +1047,7 @@
         }
       }
 
-      if (diagnostics.some((item) => item.severity === "error")) {
+      if (diagnostics.some(isFailureDiagnostic)) {
         return this.failure(diagnostics);
       }
 
@@ -605,8 +1099,10 @@
   }
 
   global.SpiroRunData = Object.freeze({
+    AutoRunDataAdapter,
     DiagnosticProjection,
     RelativePathBundleAdapter,
+    ReadonlyEnvelopeAdapter,
     RunDataStore,
     normalizeRelativePath,
     parseArtifactPayload,
