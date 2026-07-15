@@ -5,3 +5,4 @@ tests/fixtures/v20_project_evolution/* -text
 tests/fixtures/v20_project_evolution/run-001/* -text
 tests/fixtures/v20_project_evolution/run-002/* -text
 tests/fixtures/v21_identity_closure/* text eol=lf
+tests/fixtures/v22_scientific_validation/* text eol=lf
