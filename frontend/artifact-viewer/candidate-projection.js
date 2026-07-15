@@ -51,6 +51,7 @@
     "literature_claims",
     "source_assets",
     "extraction_evaluation",
+    "candidate_identity_projection",
     "conflict_report",
     "provider_capabilities",
     "training_snapshot",
@@ -546,6 +547,83 @@
   }
 
   function paperEvidenceFor(snapshot, capabilities, candidateId) {
+    const identityProjection = payload(snapshot, "candidate_identity_projection");
+    const identityCandidates = Array.isArray(identityProjection?.candidates)
+      ? identityProjection.candidates
+      : [];
+    const identityCandidate = identityCandidates.find((item) => identifier(item?.candidate_id) === candidateId);
+    const identityDiagnostics = [];
+    if (identityCandidate?.identity_diagnostics) {
+      const state = text(identityCandidate.identity_diagnostics.reviewer_state);
+      for (const code of uniqueRawStrings(identityCandidate.identity_diagnostics.reason_codes || [])) {
+        identityDiagnostics.push(diagnostic(
+          code,
+          `candidate identity reviewer state is ${state || "unknown"}; paper association remains diagnostic-only`,
+          {
+            source: "candidate_identity_projection",
+            candidateId,
+            reviewerState: state || "unknown",
+            reviewItemIds: uniqueIdentifiers(identityCandidate.identity_diagnostics.blocking_review_ids || []),
+          }
+        ));
+      }
+    }
+    const linkDiagnostics = Array.isArray(identityProjection?.link_diagnostics)
+      ? identityProjection.link_diagnostics
+          .filter((item) => identifier(item?.candidate_id) === candidateId)
+          .map((item) => diagnostic(
+            text(item?.reason_code) || "identity_link_diagnostic",
+            text(item?.message) || "identity link is diagnostic-only and is not displayed as a candidate-paper association",
+            {
+              source: "candidate_identity_projection",
+              candidateId,
+              linkId: identifier(item?.link_id) || null,
+              evidenceId: identifier(item?.evidence_id) || null,
+              reviewerState: text(item?.reviewer_state) || null,
+            }
+          ))
+      : [];
+    const acceptedLinks = Array.isArray(identityCandidate?.accepted_links)
+      ? identityCandidate.accepted_links
+      : [];
+    const acceptedRecords = acceptedLinks
+      .filter((link) => text(link?.reviewer_state) === "accepted")
+      .map((link) => ({
+        artifactKind: "candidate_identity_projection",
+        linkId: identifier(link?.link_id) || null,
+        candidateId,
+        stableIdentityId: identifier(link?.stable_identity_id) || null,
+        evidenceId: identifier(link?.evidence_id) || null,
+        evidenceKind: text(link?.evidence_kind) || null,
+        doi: text(link?.paper?.doi) || null,
+        sourceId: text(link?.paper?.source_id) || null,
+        title: text(link?.paper?.title) || null,
+        reviewerState: text(link?.reviewer_state) || null,
+        confidenceCategory: text(link?.confidence_category) || null,
+        linkBasis: cloneJson(Array.isArray(link?.link_basis) ? link.link_basis : []),
+        lineage: cloneJson(link?.lineage || {}),
+      }))
+      .sort((left, right) => compareText(left.evidenceId, right.evidenceId) || compareText(left.linkId, right.linkId));
+    if (identityCandidate || identityProjection) {
+      const diagnostics = [...identityDiagnostics, ...linkDiagnostics].sort((left, right) =>
+        compareText(left.code, right.code) || compareText(left.evidenceId, right.evidenceId)
+      );
+      return {
+        status: acceptedRecords.length ? "available" : "unavailable",
+        message: acceptedRecords.length
+          ? "Accepted explicit V21 candidate identity links are available."
+          : "No accepted explicit V21 identity links; proposed, blocked, or conflicting links are diagnostics only.",
+        records: acceptedRecords,
+        diagnostics,
+        runArtifacts: artifactStatusesFor(capabilities, [
+          "candidate_identity_projection",
+          "literature_claims",
+          "source_assets",
+          "literature_search_results",
+        ]),
+      };
+    }
+
     const explicit = payload(snapshot, "candidate_paper_evidence");
     const records = Array.isArray(explicit?.records)
       ? explicit.records
@@ -558,6 +636,7 @@
         status: "available",
         message: "Explicit backend candidate-to-paper join is available.",
         records: candidateRecords,
+        diagnostics: [],
         runArtifacts: artifactStatusesFor(capabilities, ["literature_claims", "source_assets", "literature_search_results"]),
       };
     }
@@ -565,6 +644,7 @@
       status: "unavailable",
       message: "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.",
       records: [],
+      diagnostics: [],
       runArtifacts: artifactStatusesFor(capabilities, ["literature_claims", "source_assets", "literature_search_results"]),
     };
   }

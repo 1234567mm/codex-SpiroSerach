@@ -83,6 +83,16 @@ def create_readonly_run_tools(output_dir: str | Path) -> tuple[MCPTool, ...]:
         _tool("read_review_summary", EMPTY_INPUT_SCHEMA, lambda payload, context: api.review_summary()),
         _tool("read_provider_lineage", EMPTY_INPUT_SCHEMA, lambda payload, context: api.provider_lineage()),
         _tool(
+            "read_candidate_identity_registry",
+            EMPTY_INPUT_SCHEMA,
+            lambda payload, context: api.candidate_identity_registry(),
+        ),
+        _tool(
+            "read_candidate_evidence_links",
+            EMPTY_INPUT_SCHEMA,
+            lambda payload, context: api.candidate_evidence_links(),
+        ),
+        _tool(
             "read_artifact_validation_report",
             READ_VALIDATION_INPUT_SCHEMA,
             lambda payload, context: api.artifact_validation_report(

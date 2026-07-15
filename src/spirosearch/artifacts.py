@@ -32,6 +32,8 @@ V4_ARTIFACT_KINDS = {
     "provider_cache",
     "enrichment_results",
     "canonical_evidence",
+    "candidate_identity_registry",
+    "candidate_evidence_links",
     "scoring_view",
     "review_events",
     "review_summary",
@@ -152,6 +154,16 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/canonical-evidence.schema.json",
         "join_keys": ("candidate_id", "material_id", "use_instance_id", "energy_evidence_id", "review_item_id"),
         "depends_on": ("enrichment_results", "review_events"),
+    },
+    "candidate_identity_registry": {
+        "schema_ref": "schemas/candidate-identity-registry.schema.json",
+        "join_keys": ("candidate_id", "material_id", "use_instance_id", "source_identity_id"),
+        "depends_on": ("canonical_evidence",),
+    },
+    "candidate_evidence_links": {
+        "schema_ref": "schemas/candidate-evidence-link.schema.json",
+        "join_keys": ("link_id", "candidate_id", "evidence_id", "doi", "review_item_id"),
+        "depends_on": ("candidate_identity_registry", "canonical_evidence", "literature_claims"),
     },
     "scoring_view": {
         "schema_ref": "schemas/scoring-view.schema.json",
