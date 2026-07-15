@@ -28,6 +28,10 @@ COMPATIBILITY_DIMENSIONS = (
 )
 
 
+class ProjectEnvelopeImportError(ValueError):
+    """Raised when exported read-only project envelopes cannot form one state."""
+
+
 @dataclass(frozen=True)
 class RunCompatibilityPolicy:
     policy_version: str = PROJECT_COMPARISON_POLICY_VERSION
@@ -313,6 +317,259 @@ class ReadOnlyProjectAPI:
             "payload": payload,
             "unavailable": None,
         }
+
+
+def export_project_envelopes(
+    project_root: str | Path,
+    *,
+    index_path: str | Path = "project-run-index.json",
+    comparisons: Iterable[tuple[str, str]] = (),
+) -> list[dict[str, Any]]:
+    api = ReadOnlyProjectAPI(project_root, index_path)
+    return [api.inventory(), *(api.comparison(source, target) for source, target in comparisons)]
+
+
+class normalize_project_state:
+    @staticmethod
+    def from_bundle(
+        project_root: str | Path,
+        *,
+        index_path: str | Path = "project-run-index.json",
+    ) -> dict[str, Any]:
+        inventory = ReadOnlyProjectAPI(project_root, index_path).inventory()
+        comparisons = [
+            (str(item.get("source_run_id")), str(item.get("target_run_id")))
+            for item in inventory.get("payload", {}).get("comparisons", [])
+            if isinstance(item, Mapping)
+        ]
+        return normalize_project_state.from_envelopes(
+            export_project_envelopes(project_root, index_path=index_path, comparisons=comparisons)
+        )
+
+    @staticmethod
+    def from_envelopes(envelopes: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+        rows = [_copy_envelope(envelope) for envelope in envelopes]
+        _validate_project_envelopes(rows)
+        project_id = _project_id_from_envelopes(rows)
+        run_hashes = _run_hashes_from_envelopes(rows)
+        inventory = next((row for row in rows if row["surface"] == "project_inventory" and row["payload"] is not None), None)
+        unavailable = [
+            _envelope_metadata(row) | {"unavailable": deepcopy(row.get("unavailable"))}
+            for row in rows
+            if row["status"] == "unavailable"
+        ]
+        comparisons = [
+            _comparison_state(row)
+            for row in rows
+            if row["surface"] == "run_comparison" and row.get("payload") is not None
+        ]
+        run_ids = sorted(run_hashes)
+        return {
+            "schema_version": "v20.normalized_project_state.v1",
+            "project_id": project_id,
+            "inventory": _inventory_state(inventory) if inventory else None,
+            "run_ids": run_ids,
+            "run_hashes": run_hashes,
+            "comparisons": comparisons,
+            "unavailable": unavailable,
+        }
+
+
+def _copy_envelope(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    row = deepcopy(dict(envelope))
+    required = {"schema_version", "status", "severity", "surface", "read_only", "source", "payload", "unavailable"}
+    missing = sorted(required - set(row))
+    if missing:
+        raise ProjectEnvelopeImportError(f"malformed_envelope:{','.join(missing)}")
+    if row.get("schema_version") != READONLY_API_SCHEMA_VERSION or row.get("read_only") is not True:
+        raise ProjectEnvelopeImportError("not_readonly_project_envelope")
+    return row
+
+
+def _validate_project_envelopes(envelopes: list[dict[str, Any]]) -> None:
+    project_ids = {
+        project_id
+        for envelope in envelopes
+        for project_id in _project_ids_from_envelope(envelope)
+        if project_id
+    }
+    if len(project_ids) > 1:
+        raise ProjectEnvelopeImportError("mixed_project_id")
+
+    hash_conflicts = _conflicting_run_hashes(envelopes)
+    if hash_conflicts:
+        raise ProjectEnvelopeImportError("conflicting_run_hash")
+
+    seen_surfaces: set[tuple[str, str | None, str | None]] = set()
+    for envelope in envelopes:
+        surface_key = _surface_key(envelope)
+        if surface_key in seen_surfaces:
+            raise ProjectEnvelopeImportError("duplicate_surface")
+        seen_surfaces.add(surface_key)
+
+    run_ids = set(_run_hashes_from_envelopes(envelopes))
+    for envelope in envelopes:
+        if envelope.get("surface") != "run_comparison" or envelope.get("payload") is None:
+            continue
+        payload = envelope["payload"]
+        source_run_id = str(payload.get("source_run_id") or payload.get("comparison", {}).get("source_run_id") or "")
+        target_run_id = str(payload.get("target_run_id") or payload.get("comparison", {}).get("target_run_id") or "")
+        comparison_entry = payload.get("comparison", {})
+        if isinstance(comparison_entry, Mapping):
+            source_run_id = str(comparison_entry.get("source_run_id") or source_run_id)
+            target_run_id = str(comparison_entry.get("target_run_id") or target_run_id)
+        if run_ids and source_run_id not in run_ids:
+            raise ProjectEnvelopeImportError("stale_comparison_source")
+        if run_ids and target_run_id not in run_ids:
+            raise ProjectEnvelopeImportError("stale_comparison_target")
+
+
+def _project_id_from_envelopes(envelopes: list[dict[str, Any]]) -> str | None:
+    for envelope in envelopes:
+        project_id = _project_id_from_envelope(envelope)
+        if project_id:
+            return project_id
+    return None
+
+
+def _project_id_from_envelope(envelope: Mapping[str, Any]) -> str | None:
+    return next(iter(_project_ids_from_envelope(envelope)), None)
+
+
+def _project_ids_from_envelope(envelope: Mapping[str, Any]) -> set[str]:
+    project_ids: set[str] = set()
+    payload = envelope.get("payload")
+    if isinstance(payload, Mapping) and payload.get("project_id"):
+        project_ids.add(str(payload["project_id"]))
+    if isinstance(payload, Mapping):
+        for run in payload.get("runs", []):
+            if isinstance(run, Mapping) and run.get("project_id"):
+                project_ids.add(str(run["project_id"]))
+        for item in payload.get("comparisons", []):
+            if isinstance(item, Mapping) and item.get("project_id"):
+                project_ids.add(str(item["project_id"]))
+    unavailable = envelope.get("unavailable")
+    if isinstance(unavailable, Mapping):
+        detail = unavailable.get("detail")
+        if isinstance(detail, Mapping) and detail.get("project_id"):
+            project_ids.add(str(detail["project_id"]))
+    return project_ids
+
+
+def _conflicting_run_hashes(envelopes: list[dict[str, Any]]) -> dict[str, set[str]]:
+    hashes: dict[str, set[str]] = {}
+    for envelope in envelopes:
+        payload = envelope.get("payload")
+        if not isinstance(payload, Mapping):
+            continue
+        for run in payload.get("runs", []):
+            if isinstance(run, Mapping) and run.get("run_id") and run.get("manifest_sha256"):
+                hashes.setdefault(str(run["run_id"]), set()).add(str(run["manifest_sha256"]))
+    return {run_id: values for run_id, values in hashes.items() if len(values) > 1}
+
+
+def _run_hashes_from_envelopes(envelopes: list[dict[str, Any]]) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    for envelope in envelopes:
+        payload = envelope.get("payload")
+        if not isinstance(payload, Mapping):
+            continue
+        for run in payload.get("runs", []):
+            if isinstance(run, Mapping) and run.get("run_id") and run.get("manifest_sha256"):
+                hashes[str(run["run_id"])] = str(run["manifest_sha256"])
+        source_run_id = payload.get("source_run_id")
+        source_hash = payload.get("source_manifest_sha256")
+        if source_run_id and source_hash:
+            hashes.setdefault(str(source_run_id), str(source_hash))
+        target_run_id = payload.get("target_run_id")
+        target_hash = payload.get("target_manifest_sha256")
+        if target_run_id and target_hash:
+            hashes.setdefault(str(target_run_id), str(target_hash))
+        delta = payload.get("delta")
+        if isinstance(delta, Mapping):
+            source_run_id = delta.get("source_run_id")
+            source_hash = delta.get("source_manifest_sha256")
+            if source_run_id and source_hash:
+                hashes.setdefault(str(source_run_id), str(source_hash))
+            target_run_id = delta.get("target_run_id")
+            target_hash = delta.get("target_manifest_sha256")
+            if target_run_id and target_hash:
+                hashes.setdefault(str(target_run_id), str(target_hash))
+    return dict(sorted(hashes.items()))
+
+
+def _surface_key(envelope: Mapping[str, Any]) -> tuple[str, str | None, str | None]:
+    surface = str(envelope.get("surface"))
+    if surface != "run_comparison":
+        return (surface, None, None)
+    payload = envelope.get("payload")
+    if isinstance(payload, Mapping):
+        return (surface, str(payload.get("source_run_id")), str(payload.get("target_run_id")))
+    unavailable = envelope.get("unavailable")
+    detail = unavailable.get("detail", {}) if isinstance(unavailable, Mapping) else {}
+    if isinstance(detail, Mapping):
+        return (surface, str(detail.get("source_run_id")), str(detail.get("target_run_id")))
+    return (surface, None, None)
+
+
+def _envelope_metadata(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "status": envelope.get("status"),
+        "severity": envelope.get("severity"),
+        "surface": envelope.get("surface"),
+        "read_only": envelope.get("read_only"),
+        "run_id": envelope.get("run_id"),
+        "artifact_kind": envelope.get("artifact_kind"),
+        "source": deepcopy(envelope.get("source")),
+        "payload_metadata": _payload_metadata(envelope.get("payload")),
+    }
+
+
+def _payload_metadata(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, Mapping):
+        return {}
+    keys = (
+        "schema_version",
+        "status",
+        "project_id",
+        "run_count",
+        "comparison_count",
+        "source_run_id",
+        "target_run_id",
+    )
+    return {key: deepcopy(payload[key]) for key in keys if key in payload}
+
+
+def _inventory_state(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    payload = envelope.get("payload") if isinstance(envelope, Mapping) else None
+    metadata = _envelope_metadata(envelope)
+    if isinstance(payload, Mapping):
+        metadata["runs"] = [
+            {
+                "run_id": run.get("run_id"),
+                "project_id": run.get("project_id"),
+                "manifest_path": run.get("manifest_path"),
+                "manifest_sha256": run.get("manifest_sha256"),
+                "validation": deepcopy(run.get("validation")),
+                "artifact_validation": deepcopy(run.get("artifact_validation")),
+            }
+            for run in payload.get("runs", [])
+            if isinstance(run, Mapping)
+        ]
+    return metadata
+
+
+def _comparison_state(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    payload = envelope["payload"]
+    return {
+        **_envelope_metadata(envelope),
+        "project_id": payload.get("project_id"),
+        "source_run_id": payload.get("source_run_id"),
+        "target_run_id": payload.get("target_run_id"),
+        "compatibility": deepcopy(payload.get("compatibility")),
+        "delta": deepcopy(payload.get("delta")),
+        "comparison": deepcopy(payload.get("comparison")),
+    }
 
 
 @dataclass(frozen=True)
