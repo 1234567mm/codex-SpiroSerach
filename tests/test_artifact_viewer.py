@@ -204,6 +204,25 @@ async function main() {
     file("canonical.json", canonical),
     file("model.json", {activation_status: "disabled"}),
   ]);
+  const jsonlPayloadConflict = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-jsonl-conflict", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+      {kind: "review_events", path: "review-events.jsonl", format: "jsonl"},
+    ])),
+    file("canonical.json", canonical),
+    file("review-events.jsonl", '{"event_id":"event-1","run_id":"other-run"}\n{"event_id":"event-2"}\n'),
+  ]);
+  const jsonlPayloadWithoutRunId = await new RunDataStore().replace([
+    file("run-manifest.json", manifest("run-jsonl-without-id", [
+      {kind: "canonical_evidence", path: "canonical.json"},
+      {kind: "review_events", path: "review-events.jsonl", format: "jsonl"},
+    ])),
+    file("canonical.json", canonical),
+    file("review-events.jsonl", '{"event_id":"event-without-run-id"}\n'),
+  ]);
+  const jsonlConflictDiagnostic = jsonlPayloadConflict.diagnostics.find(
+    (item) => item.code === "artifact_run_id_conflict" && item.kind === "review_events"
+  );
 
   function reachableValuesAreFrozen(value, seen = new Set()) {
     if (!value || typeof value !== "object" || seen.has(value)) return true;
@@ -282,6 +301,13 @@ async function main() {
       missingOptionalOk: missingOptionalFormat.ok,
       missingOptionalStatus: missingOptionalFormat.snapshot.availability.model_evaluation?.status,
       missingOptionalCodes: codes(missingOptionalFormat),
+    },
+    jsonlPayloadIdentity: {
+      conflictOk: jsonlPayloadConflict.ok,
+      conflictCodes: codes(jsonlPayloadConflict),
+      conflictRecordIndex: jsonlConflictDiagnostic?.recordIndex,
+      conflictActualRunId: jsonlConflictDiagnostic?.actualRunId,
+      missingRunIdOk: jsonlPayloadWithoutRunId.ok,
     },
   }));
 }
@@ -370,6 +396,12 @@ main().catch((error) => {
         self.assertTrue(manifest_formats["missingOptionalOk"])
         self.assertEqual(manifest_formats["missingOptionalStatus"], "unsupported_format")
         self.assertIn("artifact_format_unsupported", manifest_formats["missingOptionalCodes"])
+        jsonl_identity = observed["jsonlPayloadIdentity"]
+        self.assertFalse(jsonl_identity["conflictOk"])
+        self.assertIn("artifact_run_id_conflict", jsonl_identity["conflictCodes"])
+        self.assertEqual(jsonl_identity["conflictRecordIndex"], 0)
+        self.assertEqual(jsonl_identity["conflictActualRunId"], "other-run")
+        self.assertTrue(jsonl_identity["missingRunIdOk"])
 
     def test_viewer_script_renders_manifest_artifacts(self):
         script = Path("frontend/artifact-viewer/viewer.js").read_text(encoding="utf-8")

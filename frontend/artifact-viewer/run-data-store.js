@@ -76,6 +76,18 @@
     return records;
   }
 
+  function payloadRunIdOwners(payload) {
+    const values = Array.isArray(payload)
+      ? payload.map((value, recordIndex) => ({value, recordIndex}))
+      : [{value: payload, recordIndex: null}];
+    return values.filter(({value}) =>
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.prototype.hasOwnProperty.call(value, "run_id")
+    );
+  }
+
   class RelativePathBundleAdapter {
     async index(files) {
       const diagnostics = [];
@@ -335,17 +347,19 @@
           continue;
         }
 
-        if (
-          payload &&
-          typeof payload === "object" &&
-          !Array.isArray(payload) &&
-          Object.prototype.hasOwnProperty.call(payload, "run_id") &&
-          payload.run_id !== runId
-        ) {
+        for (const {value, recordIndex} of payloadRunIdOwners(payload)) {
+          if (value.run_id === runId) continue;
+          const details = {
+            kind,
+            path: declaredPath,
+            expectedRunId: runId,
+            actualRunId: value.run_id ?? null,
+          };
+          if (recordIndex !== null) details.recordIndex = recordIndex;
           diagnostics.push(diagnostic(
             "artifact_run_id_conflict",
             `artifact ${kind} payload run_id does not match manifest run_id`,
-            {kind, path: declaredPath, expectedRunId: runId, actualRunId: payload.run_id ?? null}
+            details
           ));
         }
 
