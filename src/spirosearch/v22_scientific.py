@@ -323,6 +323,145 @@ def build_v22_model_activation_report(
     }
 
 
+def build_v22_scientific_closure_report(
+    *,
+    quality_report: Mapping[str, Any],
+    zero_leakage_report: Mapping[str, Any],
+    independent_snapshot_report: Mapping[str, Any],
+    model_activation_report: Mapping[str, Any],
+    manifest_artifacts: Iterable[Mapping[str, Any]],
+    closure_id: str = "v22-scientific-closure",
+) -> dict[str, Any]:
+    """Build a V22 closure report from manifest-discovered source artifacts."""
+
+    artifacts_by_kind = {
+        _text(artifact.get("kind")): artifact
+        for artifact in manifest_artifacts
+        if isinstance(artifact, Mapping) and _text(artifact.get("kind"))
+    }
+
+    grouped = model_activation_report.get("grouped_evaluation", {})
+    grouped = grouped if isinstance(grouped, Mapping) else {}
+    activation_reasons = {
+        _text(reason)
+        for reason in model_activation_report.get("activation_reasons", ())
+        if _text(reason)
+    }
+    independent_reasons = [
+        _text(item.get("reason_code"))
+        for item in independent_snapshot_report.get("diagnostics", ())
+        if isinstance(item, Mapping) and _text(item.get("reason_code"))
+    ]
+    leakage_reasons = [
+        f"{_text(check.get('dimension'))}_leakage"
+        for check in zero_leakage_report.get("checks", ())
+        if isinstance(check, Mapping) and _text(check.get("status")) == "blocked"
+    ]
+
+    gate_specs = [
+        ("production_snapshot", "scientific", "production_beard_cole_snapshot", "pass", []),
+        (
+            "quality",
+            "scientific",
+            "v22_quality_report",
+            _status_from_report(quality_report),
+            _quality_reason_codes(quality_report),
+        ),
+        (
+            "zero_leakage",
+            "scientific",
+            "v22_zero_leakage_report",
+            _status_from_report(zero_leakage_report),
+            leakage_reasons,
+        ),
+        (
+            "independent_data",
+            "scientific",
+            "v22_independent_snapshot_report",
+            _status_from_report(independent_snapshot_report),
+            independent_reasons,
+        ),
+        (
+            "grouped_evaluation",
+            "scientific",
+            "v22_model_activation_report",
+            "pass" if len(grouped.get("folds", ())) >= 2 else "blocked",
+            [] if len(grouped.get("folds", ())) >= 2 else ["grouped_evaluation_missing"],
+        ),
+        (
+            "calibration",
+            "scientific",
+            "v22_model_activation_report",
+            "blocked" if "uncertainty_not_calibrated" in activation_reasons else "pass",
+            ["uncertainty_not_calibrated"] if "uncertainty_not_calibrated" in activation_reasons else [],
+        ),
+        (
+            "replay",
+            "scientific",
+            "v22_model_activation_report",
+            "pass" if _text(grouped.get("replay_status")) == "non_regression"
+            and not activation_reasons.intersection({
+                "offline_replay_regressed",
+                "offline_replay_tampered",
+                "offline_replay_untrusted",
+                "offline_replay_unavailable",
+            }) else "blocked",
+            sorted(activation_reasons.intersection({
+                "offline_replay_regressed",
+                "offline_replay_tampered",
+                "offline_replay_untrusted",
+                "offline_replay_unavailable",
+            })),
+        ),
+        (
+            "activation",
+            "scientific",
+            "v22_model_activation_report",
+            "pass" if _text(model_activation_report.get("activation_status")) == "eligible" else "blocked",
+            sorted(activation_reasons),
+        ),
+    ]
+    gates = [
+        _closure_gate(gate_id, decision_type, kind, status, reasons, artifacts_by_kind)
+        for gate_id, decision_type, kind, status, reasons in gate_specs
+    ]
+    source_missing = any("source_artifact_missing" in gate["reason_codes"] for gate in gates)
+    closure_status = "blocked" if source_missing or any(gate["status"] == "blocked" for gate in gates) else "pass"
+    activation_enabled = (
+        closure_status == "pass"
+        and _text(model_activation_report.get("activation_status")) == "eligible"
+    )
+    return {
+        "schema_version": "v22.scientific_closure_report.v1",
+        "closure_id": _text(closure_id) or "v22-scientific-closure",
+        "closure_gate_status": closure_status,
+        "validation_scope": {
+            "software_validation": {
+                "status": "blocked" if source_missing else "pass",
+                "meaning": "schemas_artifacts_and_readers_are_software_validated",
+            },
+            "scientific_validation": {
+                "status": closure_status,
+                "meaning": "scientific_claims_are_limited_to_accepted_v22_datasets",
+            },
+        },
+        "claims": {
+            "scientific_validation_claimed": closure_status == "pass",
+            "model_activation_claimed": activation_enabled,
+            "external_validation_claimed": False,
+            "accepted_dataset_scope": (
+                "production_and_retained_independent_snapshot"
+                if closure_status == "pass" else "production_snapshot"
+            ),
+        },
+        "gates": gates,
+        "downstream_impact": (
+            "models_enabled_for_v24_admission"
+            if activation_enabled else "models_disabled_for_v24_admission"
+        ),
+    }
+
+
 def _target_key(target: Mapping[str, Any]) -> dict[str, Any]:
     key = (
         _text(target.get("material_id")),
@@ -330,6 +469,54 @@ def _target_key(target: Mapping[str, Any]) -> dict[str, Any]:
         _text(target.get("property_name")),
     )
     return {"key": key if all(key) else None, "record": target}
+
+
+def _status_from_report(report: Mapping[str, Any]) -> str:
+    return "pass" if _text(report.get("closure_gate_status")) == "pass" else "blocked"
+
+
+def _quality_reason_codes(report: Mapping[str, Any]) -> list[str]:
+    reasons = []
+    for key in ("rejected_records", "blocked_records", "duplicate_records", "conflicting_records", "ambiguous_records"):
+        for item in report.get(key, ()):
+            if isinstance(item, Mapping) and _text(item.get("reason_code")):
+                reasons.append(_text(item.get("reason_code")))
+    return sorted(set(reasons))
+
+
+def _closure_gate(
+    gate_id: str,
+    decision_type: str,
+    artifact_kind: str,
+    status: str,
+    reason_codes: Iterable[str],
+    artifacts_by_kind: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    artifact = artifacts_by_kind.get(artifact_kind, {})
+    reasons = sorted({_text(reason) for reason in reason_codes if _text(reason)})
+    source_artifacts = []
+    if artifact:
+        source = {
+            "kind": artifact_kind,
+            "path": _text(artifact.get("path")),
+        }
+        if _text(artifact.get("sha256")):
+            source["sha256"] = _text(artifact.get("sha256"))
+        source_artifacts.append(source)
+    else:
+        source_artifacts.append({"kind": artifact_kind, "path": f"missing:{artifact_kind}"})
+        reasons.append("source_artifact_missing")
+        status = "blocked"
+    return {
+        "gate_id": gate_id,
+        "decision_type": decision_type,
+        "status": status,
+        "source_artifacts": source_artifacts,
+        "reason_codes": sorted(set(reasons)),
+        "downstream_impact": (
+            "allows_downstream_activation" if status == "pass" else "blocks_downstream_activation"
+        ),
+    }
 
 
 def _identity_state(record: Mapping[str, Any]) -> str:
