@@ -16,6 +16,67 @@ from spirosearch.readonly_api import READONLY_API_SCHEMA_VERSION
 PROJECT_INDEX_SCHEMA_VERSION = "v20.project_run_index.v1"
 PROJECT_COMPARISON_POLICY_VERSION = "v20.run_compatibility_policy.v1"
 PROJECT_INDEX_SCHEMA_REF = "schemas/project-run-index.schema.json"
+COMPATIBILITY_DIMENSIONS = (
+    "run_manifest_schema_version",
+    "screening_policy_version",
+    "scoring_formula_version",
+    "scoring_weights_version",
+    "target_profile_version",
+    "dataset_snapshot_id",
+    "candidate_pool_semantics_version",
+    "candidate_identity_version",
+)
+
+
+@dataclass(frozen=True)
+class RunCompatibilityPolicy:
+    policy_version: str = PROJECT_COMPARISON_POLICY_VERSION
+
+    def dimension_rules(self) -> tuple[str, ...]:
+        return COMPATIBILITY_DIMENSIONS
+
+    def evaluate(self, source: Mapping[str, Any], target: Mapping[str, Any]) -> dict[str, Any]:
+        dimensions = [self._dimension_result(dimension, source, target) for dimension in COMPATIBILITY_DIMENSIONS]
+        score_rank_reasons = [
+            reason
+            for dimension in dimensions
+            if dimension["status"] != "comparable"
+            for reason in dimension["reason_codes"]
+        ]
+        dimensions.append(
+            {
+                "dimension": "score_rank",
+                "status": "non_comparable" if score_rank_reasons else "comparable",
+                "reason_codes": sorted(set(score_rank_reasons)),
+            }
+        )
+        comparable_count = sum(1 for item in dimensions[:-1] if item["status"] == "comparable")
+        status = "comparable" if not score_rank_reasons else ("partially_comparable" if comparable_count else "non_comparable")
+        return {
+            "schema_version": "v20.run_compatibility.v1",
+            "comparison_policy_version": self.policy_version,
+            "status": status,
+            "reason_codes": sorted(set(score_rank_reasons)),
+            "dimensions": dimensions,
+            "score_rank_comparable": not score_rank_reasons,
+        }
+
+    def _dimension_result(self, dimension: str, source: Mapping[str, Any], target: Mapping[str, Any]) -> dict[str, Any]:
+        source_value = source.get(dimension)
+        target_value = target.get(dimension)
+        if source_value in (None, "") or target_value in (None, ""):
+            return {
+                "dimension": dimension,
+                "status": "non_comparable",
+                "reason_codes": [f"MISSING_{dimension.upper()}"],
+            }
+        if source_value != target_value:
+            return {
+                "dimension": dimension,
+                "status": "non_comparable",
+                "reason_codes": [f"{dimension.upper()}_CHANGED"],
+            }
+        return {"dimension": dimension, "status": "comparable", "reason_codes": []}
 
 
 @dataclass(frozen=True)
@@ -103,6 +164,32 @@ class ProjectRunRepository:
             "comparisons": deepcopy(index.get("comparisons", [])),
         }
 
+    def comparison(self, source_run_id: str, target_run_id: str) -> dict[str, Any] | None:
+        index = self.index()
+        comparison = next(
+            (
+                item
+                for item in index.get("comparisons", [])
+                if item.get("source_run_id") == source_run_id and item.get("target_run_id") == target_run_id
+            ),
+            None,
+        )
+        if comparison is None:
+            return None
+        compatibility_path = _resolve_contained(
+            self.project_root,
+            _safe_project_relative_path(str(comparison["compatibility_path"])),
+        )
+        compatibility = _load_json(compatibility_path)
+        return {
+            "schema_version": "v20.project_comparison.v1",
+            "project_id": index.get("project_id"),
+            "source_run_id": source_run_id,
+            "target_run_id": target_run_id,
+            "compatibility": compatibility,
+            "comparison": deepcopy(comparison),
+        }
+
     def _run_inventory(self, run: Mapping[str, Any]) -> dict[str, Any]:
         manifest_path = str(run.get("manifest_path", ""))
         base = {
@@ -176,6 +263,45 @@ class ReadOnlyProjectAPI:
                 "backend": "json_artifact_repository",
                 "manifest_path": str(repository.index_path),
             },
+            "payload": payload,
+            "unavailable": None,
+        }
+
+    def comparison(self, source_run_id: str, target_run_id: str) -> dict[str, Any]:
+        repository = ProjectRunRepository(self.project_root, self.index_path)
+        payload = repository.comparison(source_run_id, target_run_id)
+        if payload is None:
+            return {
+                "schema_version": READONLY_API_SCHEMA_VERSION,
+                "status": "unavailable",
+                "severity": "warning",
+                "surface": "run_comparison",
+                "read_only": True,
+                "run_id": None,
+                "artifact_kind": None,
+                "source": {"backend": "json_artifact_repository", "manifest_path": str(repository.index_path)},
+                "payload": None,
+                "unavailable": {
+                    "status": "unavailable",
+                    "code": "comparison_not_declared",
+                    "reason": "comparison_not_declared",
+                    "message": "Project index does not declare this run comparison.",
+                    "scope": "project",
+                    "recoverable": True,
+                    "detail": {"source_run_id": source_run_id, "target_run_id": target_run_id},
+                },
+            }
+        compatibility_status = str(payload["compatibility"].get("status", "non_comparable"))
+        status = "available" if compatibility_status == "comparable" else "degraded"
+        return {
+            "schema_version": READONLY_API_SCHEMA_VERSION,
+            "status": status,
+            "severity": "info" if status == "available" else "warning",
+            "surface": "run_comparison",
+            "read_only": True,
+            "run_id": None,
+            "artifact_kind": None,
+            "source": {"backend": "json_artifact_repository", "manifest_path": str(repository.index_path)},
             "payload": payload,
             "unavailable": None,
         }

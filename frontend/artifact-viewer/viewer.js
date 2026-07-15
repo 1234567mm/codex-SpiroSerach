@@ -742,6 +742,35 @@ function renderProjectionDiagnostics(items) {
   </div>`;
 }
 
+function renderRunCompatibilityDiagnostics(compatibility) {
+  if (!compatibility) {
+    return `<div class="empty">No run compatibility loaded</div>`;
+  }
+  const dimensions = Array.isArray(compatibility.dimensions) ? compatibility.dimensions : [];
+  const reasonCodes = Array.isArray(compatibility.reason_codes) ? compatibility.reason_codes : [];
+  const rows = dimensions.map((dimension) => {
+    const codes = Array.isArray(dimension.reason_codes) ? dimension.reason_codes : [];
+    const label = dimension.status === "non_comparable" ? "non-comparable raw values only" : "comparable";
+    return `<tr>
+      <td>${escapeHtml(dimension.dimension || "-")}</td>
+      <td>${escapeHtml(dimension.status || "-")}</td>
+      <td>${escapeHtml(label)}</td>
+      <td>${escapeHtml(codes.join(", ") || "-")}</td>
+    </tr>`;
+  }).join("");
+  return `<section class="panel compatibility-panel">
+    <h3>Run Compatibility</h3>
+    <p>Status: <strong>${escapeHtml(compatibility.status || "unknown")}</strong></p>
+    <p>Reason codes: ${escapeHtml(reasonCodes.join(", ") || "-")}</p>
+    <table>
+      <thead><tr><th>Dimension</th><th>Status</th><th>Display rule</th><th>Codes</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4">No dimensions declared</td></tr>`}</tbody>
+    </table>
+  </section>`;
+}
+
+globalThis.renderRunCompatibilityDiagnostics = renderRunCompatibilityDiagnostics;
+
 function getKnownArtifact(kind) {
   return getArtifact(kind);
 }
