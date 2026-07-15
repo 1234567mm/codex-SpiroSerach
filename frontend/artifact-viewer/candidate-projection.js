@@ -513,7 +513,7 @@
           candidateDiagnostics,
           candidateId,
           "ambiguous_review_reference",
-          "declared blocking review_item_id resolves to multiple records",
+          "review_item_id resolves to multiple records",
           "canonical_evidence, review_queue"
         );
       }

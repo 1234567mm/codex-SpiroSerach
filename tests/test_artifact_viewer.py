@@ -386,13 +386,21 @@ const canonicalOnlyReviewDuplicate = result(
   ]}),
   row()
 );
+const mixedQueueAmbiguousReviewReference = result(
+  record({review_items: [{review_item_id: "review-mixed-ambiguous", target_type: "use_instance", target_id: "use-c"}]}),
+  row(),
+  {reviewQueue: [
+    {review_item_id: "review-mixed-ambiguous", candidate_id: "candidate-c", target_type: "use_instance", target_id: "use-c", reason: "a"},
+    {review_item_id: "review-mixed-ambiguous", candidate_id: " candidate-c ", target_type: "use_instance", target_id: "use-c", reason: "b"},
+  ]}
+);
 
 process.stdout.write(JSON.stringify({
   invalidCode, whitespaceFrozenCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
   payloadExtraProperty, rowExtraProperty, componentExtraProperty, statusWhitespace, componentNameWhitespace,
   typedMismatch, wrongMappedEnergyTarget, queueCandidateWhitespace, queueTargetWhitespace, queueWrongCandidateSameReview, unreferencedCanonicalWrongCandidate,
   duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
-  duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate, unrelatedQueueDuplicate, canonicalOnlyReviewDuplicate,
+  duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate, unrelatedQueueDuplicate, canonicalOnlyReviewDuplicate, mixedQueueAmbiguousReviewReference,
 }));
 """
         with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
@@ -465,6 +473,15 @@ process.stdout.write(JSON.stringify({
         self.assertNotIn("review_queue", canonical_duplicate["message"])
         canonical_only_diagnostics = observed["canonicalOnlyReviewDuplicate"]["diagnostics"]
         self.assertEqual(len(canonical_only_diagnostics), 1)
+        mixed_ambiguous = observed["mixedQueueAmbiguousReviewReference"]
+        self.assertEqual(mixed_ambiguous["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertIn("ambiguous_review_reference", mixed_ambiguous["codes"])
+        mixed_ambiguous_diag = next(
+            item for item in mixed_ambiguous["diagnostics"]
+            if item["code"] == "ambiguous_review_reference"
+        )
+        self.assertEqual(mixed_ambiguous_diag["source"], "canonical_evidence, review_queue")
+        self.assertNotIn("declared blocking", mixed_ambiguous_diag["message"])
 
     def test_candidate_projection_preserves_v13_review_representation_across_canonical_and_queue(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for projection test")
