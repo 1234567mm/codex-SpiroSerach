@@ -477,6 +477,37 @@ th {
   line-height: 1.45;
 }
 
+.project-selector {
+  padding: 14px 16px;
+}
+
+.project-selector [role="listbox"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-selector [role="option"] {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 7px 10px;
+}
+
+.project-selector [aria-selected="true"] {
+  background: var(--soft);
+  border-color: #7c9cff;
+  font-weight: 700;
+}
+
+.project-comparison-status {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .chip-row,
 .review-inline {
   display: flex;

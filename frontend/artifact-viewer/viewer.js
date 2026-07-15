@@ -7,6 +7,8 @@ const state = {
   candidateProjection: null,
   candidateControls: {search: "", statuses: [], sort: "group"},
   projectEvolution: {documents: [], diagnostics: []},
+  projectSnapshot: null,
+  projectSelection: null,
 };
 
 const CANDIDATE_DETAIL_TABS = Object.freeze([
@@ -18,6 +20,9 @@ const CANDIDATE_DETAIL_TABS = Object.freeze([
 
 const runDataStore = globalThis.SpiroRunData
   ? new globalThis.SpiroRunData.RunDataStore()
+  : null;
+const projectStore = globalThis.SpiroRunData
+  ? new globalThis.SpiroRunData.ProjectStore()
   : null;
 
 document.getElementById("bundleFiles").addEventListener("change", async (event) => {
@@ -35,10 +40,65 @@ document.getElementById("bundleFiles").addEventListener("change", async (event) 
   renderKnownArtifacts();
 });
 
+document.getElementById("projectBundleFiles").addEventListener("change", async (event) => {
+  if (!projectStore) {
+    showError("Load failed: project store is unavailable");
+    return;
+  }
+  const result = await projectStore.replace(event.target.files);
+  state.projectSnapshot = result.snapshot;
+  state.projectSelection = result.selection;
+  if (!result.ok) {
+    showError(`Project load failed: ${result.diagnostics.map((item) => item.code).join(", ") || "unknown error"}`);
+    renderProjectSelector();
+    return;
+  }
+  const runIds = result.snapshot.runIds || [];
+  if (runIds.length) {
+    state.projectSelection = projectStore.selectRuns(runIds[0], runIds[1] || runIds[0]);
+    const sourceRun = result.snapshot.runs.find((run) => run.runId === state.projectSelection.sourceRunId);
+    if (sourceRun?.snapshot) {
+      applyCommittedSnapshot(sourceRun.snapshot);
+      renderKnownArtifacts();
+    }
+  }
+  clearError();
+  renderProjectSelector();
+});
+
 document.getElementById("projectEvolutionFiles").addEventListener("change", async (event) => {
   const result = await loadProjectEvolutionFiles(event.target.files);
   state.projectEvolution = result;
   renderProjectEvolution(result);
+});
+
+document.getElementById("projectRunSelector").addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-run-id]");
+  if (!button || !projectStore) return;
+  const sourceRunId = button.dataset.runId;
+  const targetRunId = (state.projectSnapshot?.runIds || []).find((runId) => runId !== sourceRunId) || sourceRunId;
+  state.projectSelection = projectStore.selectRuns(sourceRunId, targetRunId);
+  const sourceRun = state.projectSnapshot?.runs?.find((run) => run.runId === sourceRunId);
+  if (sourceRun?.snapshot) {
+    applyCommittedSnapshot(sourceRun.snapshot);
+    renderKnownArtifacts();
+  }
+  renderProjectSelector();
+});
+
+document.getElementById("projectRunSelector").addEventListener("keydown", (event) => {
+  const button = event.target.closest?.("[data-run-id]");
+  if (!button || !globalThis.SpiroRunData?.ProjectSelectorProjection) return;
+  const nextRunId = globalThis.SpiroRunData.ProjectSelectorProjection.nextRunId(
+    state.projectSnapshot?.runIds || [],
+    button.dataset.runId,
+    event.key
+  );
+  if (!nextRunId || nextRunId === button.dataset.runId) return;
+  event.preventDefault?.();
+  const next = Array.from(document.querySelectorAll?.("[data-run-id]") || [])
+    .find((item) => item.dataset?.runId === nextRunId);
+  next?.focus?.();
 });
 
 document.getElementById("candidateTable").addEventListener("click", (event) => {
@@ -348,6 +408,24 @@ function renderProjectEvolutionDocument(document) {
       ${(document.gateLanguage || []).map((line) => `<p class="item-meta">${escapeHtml(line)}</p>`).join("")}
     </div>` : ""}
   </section>`;
+}
+
+function renderProjectSelector() {
+  const selector = globalThis.SpiroRunData?.ProjectSelectorProjection?.project(
+    state.projectSnapshot,
+    state.projectSelection
+  );
+  const container = document.getElementById("projectRunSelector");
+  const count = document.getElementById("projectRunSelectorCount");
+  if (!selector || !globalThis.SpiroRunData?.ProjectSelectorProjection) {
+    container.innerHTML = `<div class="empty">Project store is unavailable</div>`;
+    count.textContent = "No project loaded";
+    return;
+  }
+  container.innerHTML = globalThis.SpiroRunData.ProjectSelectorProjection.render(selector);
+  count.textContent = selector.projectId
+    ? `${selector.projectId}: ${selector.runs.length} runs / ${selector.comparisons.length} comparisons`
+    : "No project loaded";
 }
 
 function projectionSnapshotFromViewerState() {
@@ -1494,5 +1572,6 @@ renderModelEvaluation(null);
 renderReviewClosure([], null, []);
 renderPaperDiagnostics([], [], null, null, null);
 renderProjectEvolution();
+renderProjectSelector();
 renderReviewQueue([]);
 renderCandidateTracer(null, null);

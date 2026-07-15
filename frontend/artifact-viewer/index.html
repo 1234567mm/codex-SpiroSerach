@@ -18,6 +18,10 @@
           <input id="bundleFiles" type="file" webkitdirectory directory multiple accept=".json,.jsonl,application/json">
         </label>
         <label class="file-control">
+          <span>Project bundle directory</span>
+          <input id="projectBundleFiles" type="file" webkitdirectory directory multiple accept=".json,.jsonl,application/json">
+        </label>
+        <label class="file-control">
           <span>Project evolution Markdown</span>
           <input id="projectEvolutionFiles" type="file" multiple accept=".md,.markdown,text/markdown,text/plain" aria-describedby="projectEvolutionHelp">
         </label>
@@ -52,6 +56,14 @@
 
       <section class="content-grid">
         <div id="errorState" class="error-state" role="alert"></div>
+
+        <div id="projectRunSelectorPanel" class="panel wide">
+          <div class="panel-head">
+            <h2>Project Run Selector</h2>
+            <span id="projectRunSelectorCount">No project loaded</span>
+          </div>
+          <div id="projectRunSelector" aria-live="polite"></div>
+        </div>
 
         <div id="candidateWorkspace" class="panel wide">
           <div class="panel-head">
