@@ -22,6 +22,15 @@ body {
   font-size: 15px;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #7c9cff;
+  outline-offset: 2px;
+}
+
 .topbar {
   min-height: 112px;
   display: flex;
@@ -59,6 +68,28 @@ h2 {
   flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-end;
+}
+
+.view-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.view-nav a {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.view-nav a:hover {
+  background: var(--soft);
 }
 
 .file-control {
@@ -164,6 +195,14 @@ select {
 .panel-head span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.panel-note {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .table-wrap {
@@ -433,6 +472,11 @@ th {
   overflow: auto;
 }
 
+.project-evolution-document p {
+  margin-top: 8px;
+  line-height: 1.45;
+}
+
 .chip-row,
 .review-inline {
   display: flex;
@@ -486,10 +530,15 @@ th {
   }
 
   .filebar,
+  .view-nav,
   .file-control,
   input[type="file"] {
     width: 100%;
     max-width: none;
+  }
+
+  .view-nav a {
+    width: 100%;
   }
 
   .overview-grid,

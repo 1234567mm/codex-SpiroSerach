@@ -6,6 +6,7 @@ const state = {
   selectedCandidateTab: "overview",
   candidateProjection: null,
   candidateControls: {search: "", statuses: [], sort: "group"},
+  projectEvolution: {documents: [], diagnostics: []},
 };
 
 const CANDIDATE_DETAIL_TABS = Object.freeze([
@@ -32,6 +33,12 @@ document.getElementById("bundleFiles").addEventListener("change", async (event) 
   applyCommittedSnapshot(result.snapshot);
   clearError();
   renderKnownArtifacts();
+});
+
+document.getElementById("projectEvolutionFiles").addEventListener("change", async (event) => {
+  const result = await loadProjectEvolutionFiles(event.target.files);
+  state.projectEvolution = result;
+  renderProjectEvolution(result);
 });
 
 document.getElementById("candidateTable").addEventListener("click", (event) => {
@@ -197,6 +204,150 @@ function renderKnownArtifacts() {
   } else {
     renderCandidateTracer(screeningInputView, canonicalEvidence);
   }
+}
+
+async function loadProjectEvolutionFiles(files) {
+  const documents = [];
+  const diagnostics = [];
+  for (const file of Array.from(files || [])) {
+    const name = file?.name || "selected document";
+    if (!/\.(md|markdown)$/i.test(name)) {
+      diagnostics.push({
+        code: "project_evolution_unsupported_file",
+        severity: "warning",
+        message: `${name} was skipped because only Markdown files are imported`,
+      });
+      continue;
+    }
+    let text;
+    try {
+      text = await file.text();
+    } catch (error) {
+      diagnostics.push({
+        code: "project_evolution_read_error",
+        severity: "warning",
+        message: `${name} could not be read: ${error.message}`,
+      });
+      continue;
+    }
+    const parsed = parseProjectEvolutionMarkdown(name, text);
+    diagnostics.push(...parsed.diagnostics);
+    if (parsed.document) documents.push(parsed.document);
+  }
+  return {documents, diagnostics};
+}
+
+function parseProjectEvolutionMarkdown(filename, text) {
+  const diagnostics = [];
+  const source = typeof text === "string" ? text : "";
+  if (!source.trim()) {
+    return {
+      document: null,
+      diagnostics: [{
+        code: "project_evolution_empty_document",
+        severity: "warning",
+        message: `${filename} is empty and was not imported`,
+      }],
+    };
+  }
+
+  const lines = source.split(/\r?\n/);
+  const frontMatter = parseFrontMatter(lines);
+  const titleLine = lines.find((line) => /^#\s+/.test(line));
+  const headings = lines
+    .filter((line) => /^#{1,6}\s+/.test(line))
+    .slice(0, 18)
+    .map((line) => {
+      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      return {level: match[1].length, text: match[2].trim()};
+    });
+  if (!headings.length) {
+    diagnostics.push({
+      code: "project_evolution_no_headings",
+      severity: "warning",
+      message: `${filename} has no Markdown headings; imported as context only`,
+    });
+  }
+  const metadata = {
+    version: frontMatter.version || findDeclaredValue(lines, "version"),
+    status: frontMatter.status || findDeclaredValue(lines, "status"),
+  };
+  const gateLanguage = lines
+    .filter((line) => /\b(gate|exit|acceptance|verification|completion|complete)\b/i.test(line))
+    .slice(0, 8)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    document: {
+      filename,
+      title: titleLine ? titleLine.replace(/^#\s+/, "").trim() : filename,
+      metadata,
+      headings,
+      gateLanguage,
+      lineCount: lines.length,
+    },
+    diagnostics,
+  };
+}
+
+function parseFrontMatter(lines) {
+  if (lines[0]?.trim() !== "---") return {};
+  const metadata = {};
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (line === "---") break;
+    const match = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+)$/);
+    if (match) metadata[match[1].toLowerCase()] = match[2].trim();
+  }
+  return metadata;
+}
+
+function findDeclaredValue(lines, key) {
+  const pattern = new RegExp(`^\\\\s*${key}\\\\s*:\\\\s*(.+)$`, "i");
+  const line = lines.find((item) => pattern.test(item));
+  return line ? line.match(pattern)[1].trim() : "";
+}
+
+function renderProjectEvolution(projectEvolution = state.projectEvolution) {
+  const documents = projectEvolution?.documents || [];
+  const diagnostics = projectEvolution?.diagnostics || [];
+  document.getElementById("projectEvolutionCount").textContent =
+    `${documents.length} documents / ${diagnostics.length} diagnostics`;
+  const list = document.getElementById("projectEvolutionList");
+  const documentHtml = documents.map(renderProjectEvolutionDocument).join("");
+  const diagnosticHtml = diagnostics.map((item) => `<div class="projection-diagnostic">
+    ${escapeHtml(item.code || "project_evolution_diagnostic")}: ${escapeHtml(item.message || "")}
+  </div>`).join("");
+  list.innerHTML = documentHtml || `<div class="empty">No project evolution Markdown imported</div>`;
+  if (diagnosticHtml) list.innerHTML += diagnosticHtml;
+}
+
+function renderProjectEvolutionDocument(document) {
+  return `<section class="flow-item project-evolution-document">
+    <div class="item-title">
+      <span>${escapeHtml(document.title || document.filename)}</span>
+      <span class="status">human context only</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["file", document.filename],
+        ["version", document.metadata?.version],
+        ["declared status", document.metadata?.status],
+        ["lines", document.lineCount],
+      ])}
+    </div>
+    <p class="muted">This imported Markdown is separated from immutable run facts and does not prove implementation completion.</p>
+    <div class="chip-row">
+      ${(document.headings || []).map((heading) =>
+        `<span class="chip">h${escapeHtml(heading.level)} ${escapeHtml(heading.text)}</span>`
+      ).join("") || `<span class="chip review-chip">no headings declared</span>`}
+    </div>
+    ${(document.gateLanguage || []).length ? `<div class="context-block">
+      <strong>Gate language found in human context</strong>
+      ${(document.gateLanguage || []).map((line) => `<p class="item-meta">${escapeHtml(line)}</p>`).join("")}
+    </div>` : ""}
+  </section>`;
 }
 
 function projectionSnapshotFromViewerState() {
@@ -1313,5 +1464,6 @@ renderScreeningEligibility(null);
 renderModelEvaluation(null);
 renderReviewClosure([], null, []);
 renderPaperDiagnostics([], [], null, null, null);
+renderProjectEvolution();
 renderReviewQueue([]);
 renderCandidateTracer(null, null);

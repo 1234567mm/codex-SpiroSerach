@@ -17,6 +17,10 @@
           <span>Run bundle directory</span>
           <input id="bundleFiles" type="file" webkitdirectory directory multiple accept=".json,.jsonl,application/json">
         </label>
+        <label class="file-control">
+          <span>Project evolution Markdown</span>
+          <input id="projectEvolutionFiles" type="file" multiple accept=".md,.markdown,text/markdown,text/plain" aria-describedby="projectEvolutionHelp">
+        </label>
       </div>
     </header>
 
@@ -39,11 +43,17 @@
           <strong id="needsReviewCount">0</strong>
         </div>
       </section>
+      <nav class="view-nav" aria-label="Viewer sections">
+        <a href="#candidateWorkspace">Candidate triage</a>
+        <a href="#artifactDiagnostics">Artifact diagnostics</a>
+        <a href="#paperDiagnosticsPanel">Paper diagnostics</a>
+        <a href="#projectEvolutionPanel">Project evolution</a>
+      </nav>
 
       <section class="content-grid">
         <div id="errorState" class="error-state" role="alert"></div>
 
-        <div class="panel wide">
+        <div id="candidateWorkspace" class="panel wide">
           <div class="panel-head">
             <h2>Candidate Triage Workspace</h2>
             <span>Authoritative screening disposition</span>
@@ -84,7 +94,7 @@
           </details>
         </div>
 
-        <div class="panel wide">
+        <div id="artifactDiagnostics" class="panel wide">
           <div class="panel-head">
             <h2>Artifact Diagnostics</h2>
             <span id="loadState">Waiting for files</span>
@@ -154,12 +164,23 @@
           <div id="reviewClosureList" class="flow-list"></div>
         </div>
 
-        <div class="panel wide">
+        <div id="paperDiagnosticsPanel" class="panel wide">
           <div class="panel-head">
             <h2>Paper Diagnostics</h2>
             <span id="paperDiagnosticsCount">0 source assets / 0 claims</span>
           </div>
           <div id="paperDiagnosticsList" class="flow-list"></div>
+        </div>
+
+        <div id="projectEvolutionPanel" class="panel wide">
+          <div class="panel-head">
+            <h2>Project Evolution</h2>
+            <span id="projectEvolutionCount">0 documents</span>
+          </div>
+          <p id="projectEvolutionHelp" class="panel-note">
+            Human context only. Markdown imports never change run facts, validation status, scoring, or candidate decisions.
+          </p>
+          <div id="projectEvolutionList" class="flow-list"></div>
         </div>
 
         <div class="panel">
