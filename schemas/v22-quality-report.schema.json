@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v22-quality-report.schema.json",
+  "title": "V22QualityReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "closure_gate_status",
+    "accepted_record_ids",
+    "rejected_records",
+    "blocked_records",
+    "duplicate_records",
+    "conflicting_records",
+    "ambiguous_records"
+  ],
+  "properties": {
+    "schema_version": { "const": "v22.quality_report.v1" },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "closure_gate_status": { "enum": ["pass", "blocked"] },
+    "accepted_record_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "rejected_records": { "$ref": "#/$defs/items" },
+    "blocked_records": { "$ref": "#/$defs/items" },
+    "duplicate_records": { "$ref": "#/$defs/items" },
+    "conflicting_records": { "$ref": "#/$defs/items" },
+    "ambiguous_records": { "$ref": "#/$defs/items" }
+  },
+  "$defs": {
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["record_id", "reason_code"],
+      "properties": {
+        "record_id": { "type": "string", "minLength": 1 },
+        "reason_code": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -162,6 +162,8 @@ class RunArtifactContractTests(unittest.TestCase):
                 "obsidian_notes",
                 "production_beard_cole_snapshot",
                 "scientific_source_ledger",
+                "v22_quality_report",
+                "v22_zero_leakage_report",
             },
         )
 

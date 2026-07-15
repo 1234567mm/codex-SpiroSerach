@@ -43,6 +43,8 @@ V4_ARTIFACT_KINDS = {
     "obsidian_notes",
     "production_beard_cole_snapshot",
     "scientific_source_ledger",
+    "v22_quality_report",
+    "v22_zero_leakage_report",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -211,6 +213,16 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/production-beard-cole-snapshot.schema.json",
         "join_keys": ("snapshot_id", "record_id", "candidate_id", "material_id", "source_id"),
         "depends_on": ("scientific_source_ledger",),
+    },
+    "v22_quality_report": {
+        "schema_ref": "schemas/v22-quality-report.schema.json",
+        "join_keys": ("snapshot_id", "record_id", "reason_code"),
+        "depends_on": ("production_beard_cole_snapshot",),
+    },
+    "v22_zero_leakage_report": {
+        "schema_ref": "schemas/v22-zero-leakage-report.schema.json",
+        "join_keys": ("snapshot_id", "dimension", "value"),
+        "depends_on": ("production_beard_cole_snapshot",),
     },
 }
 
