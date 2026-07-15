@@ -203,7 +203,7 @@
     );
   }
 
-  function reviewIndex(snapshot, record, candidateId) {
+  function reviewIndex(snapshot, record, candidateId, declaredReviewIds) {
     const index = new Map();
     for (const item of Array.isArray(record?.review_items) ? record.review_items : []) {
       const id = identifier(item?.review_item_id);
@@ -217,7 +217,10 @@
       const id = identifier(item?.review_item_id);
       if (!id) continue;
       const queueCandidateId = identifier(item?.candidate_id);
-      if (queueCandidateId !== candidateId && text(queueCandidateId) !== text(candidateId)) continue;
+      const relatedId = index.has(id) || declaredReviewIds.includes(id);
+      const relatedCandidate = queueCandidateId === candidateId ||
+        text(queueCandidateId) === text(candidateId);
+      if (!relatedId && !relatedCandidate) continue;
       const matches = index.get(id) || {canonical: [], queue: []};
       matches.queue.push(item);
       index.set(id, matches);
@@ -456,7 +459,7 @@
       }
 
       const reviewIds = row ? uniqueIdentifiers(Array.isArray(row.blocking_review_ids) ? row.blocking_review_ids : []) : [];
-      const reviewsById = reviewIndex(snapshot, record, candidateId);
+      const reviewsById = reviewIndex(snapshot, record, candidateId, reviewIds);
       const ownedDuplicateReviewIds = [...reviewsById.entries()]
         .filter(([, matches]) => matches.canonical.length > 1 ||
           matches.queue.filter((item) => identifier(item?.candidate_id) === candidateId).length > 1)
