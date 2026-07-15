@@ -1,7 +1,7 @@
 {
   "artifacts": [
     {
-      "bytes": 4778,
+      "bytes": 4954,
       "depends_on": [
         "canonical_evidence"
       ],
@@ -21,10 +21,10 @@
       "run_id": "v21-identity-fixture",
       "schema_ref": "schemas/candidate-identity-registry.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "7c710f83d5b26129061c75490162b3c4fec8aa8df764705382ceb4dd1e5018c8"
+      "sha256": "6d30eb76e34c0385d308d599dc619ac6d15f472b074efc465a0556c5ffaf0867"
     },
     {
-      "bytes": 2550,
+      "bytes": 2553,
       "depends_on": [
         "candidate_identity_registry",
         "canonical_evidence",
@@ -47,7 +47,7 @@
       "run_id": "v21-identity-fixture",
       "schema_ref": "schemas/candidate-evidence-link.schema.json",
       "schema_version": "v6.run_artifact.v1",
-      "sha256": "1d6e1d0e955f0f6ec84ec098748e7f8be8e10b3bc1b30d9c0b562fc1d5279438"
+      "sha256": "53b784a5924853536e5cd15ee7d5a2739d37d0652f336ada7eb6ee039217113e"
     }
   ],
   "generated_at": "2026-07-15T09:07:00+00:00",
