@@ -269,8 +269,10 @@
     return {
       status: "valid",
       review: canonicalReview && queueReview
-        ? {...queueReview, ...canonicalReview}
-        : (canonicalReview || queueReview),
+        ? {...queueReview, ...canonicalReview, artifactKinds: ["canonical_evidence", "review_queue"]}
+        : (canonicalReview
+          ? {...canonicalReview, artifactKinds: ["canonical_evidence"]}
+          : {...queueReview, artifactKinds: ["review_queue"]}),
     };
   }
 
@@ -298,6 +300,273 @@
         provider: text(event?.provider) || null,
         outcome: text(event?.outcome) || null,
       }));
+  }
+
+  function screeningComponentsFor(row) {
+    return (Array.isArray(row?.components) ? row.components : [])
+      .map((component) => ({
+        artifactKind: "screening_input_view",
+        name: identifier(component?.name) || null,
+        utility: component?.utility ?? null,
+        quality: component?.quality ?? null,
+        observed: typeof component?.observed === "boolean" ? component.observed : null,
+        evidenceIds: uniqueIdentifiers(Array.isArray(component?.evidence_ids) ? component.evidence_ids : []),
+      }))
+      .sort((left, right) => {
+        const leftIndex = COMPONENT_NAMES.indexOf(left.name);
+        const rightIndex = COMPONENT_NAMES.indexOf(right.name);
+        return (leftIndex === -1 ? Number.POSITIVE_INFINITY : leftIndex) -
+          (rightIndex === -1 ? Number.POSITIVE_INFINITY : rightIndex) ||
+          compareText(left.name, right.name);
+      });
+  }
+
+  function scoringEvidenceFor(snapshot, identity, evidenceIds) {
+    const diagnostics = [];
+    const unavailable = new Set();
+    const facts = payload(snapshot, "scoring_view")?.energy_facts;
+    if (!Array.isArray(facts)) {
+      if (evidenceIds.length) {
+        diagnostics.push(diagnostic(
+          "scoring_view_unavailable_or_invalid",
+          "declared screening evidence cannot be described as eligible because scoring_view is unavailable or invalid",
+          {source: "scoring_view"}
+        ));
+      }
+      evidenceIds.forEach((id) => unavailable.add(id));
+      return {
+        eligibleScoringEvidence: [],
+        unavailableEvidenceIds: [...unavailable].sort(compareText),
+        diagnostics,
+      };
+    }
+    const requested = new Set(evidenceIds);
+    const byId = new Map();
+    facts.forEach((fact) => {
+      const id = identifier(fact?.evidence_id);
+      if (!id || !requested.has(id)) return;
+      const matches = byId.get(id) || [];
+      matches.push(fact);
+      byId.set(id, matches);
+    });
+    const eligible = [];
+    for (const evidenceId of evidenceIds) {
+      const matches = byId.get(evidenceId) || [];
+      if (!matches.length) {
+        unavailable.add(evidenceId);
+        continue;
+      }
+      if (matches.length > 1) {
+        unavailable.add(evidenceId);
+        diagnostics.push(diagnostic(
+          "ambiguous_scoring_evidence",
+          "declared screening evidence_id resolves to multiple scoring_view facts",
+          {source: "scoring_view", evidenceId}
+        ));
+        continue;
+      }
+      const fact = matches[0];
+      if (identifier(fact?.material_id) !== identity.materialId ||
+          identifier(fact?.use_instance_id) !== identity.useInstanceId) {
+        unavailable.add(evidenceId);
+        diagnostics.push(diagnostic(
+          "contradictory_scoring_evidence",
+          "scoring_view fact does not match the selected candidate material/use-instance identity",
+          {source: "scoring_view", evidenceId}
+        ));
+        continue;
+      }
+      if (fact?.quality?.eligible_for_scoring !== true) {
+        unavailable.add(evidenceId);
+        diagnostics.push(diagnostic(
+          "scoring_evidence_not_policy_admitted",
+          "scoring_view fact is present but not marked eligible_for_scoring",
+          {source: "scoring_view", evidenceId}
+        ));
+        continue;
+      }
+      eligible.push({
+        artifactKind: "scoring_view",
+        evidenceId,
+        materialId: identifier(fact.material_id) || null,
+        useInstanceId: identifier(fact.use_instance_id) || null,
+        propertyName: text(fact.property_name) || null,
+        valueEv: fact.value_ev ?? null,
+        unit: text(fact.unit) || null,
+        method: text(fact.method) || null,
+        referenceScale: text(fact.reference_scale) || null,
+        computed: typeof fact.computed === "boolean" ? fact.computed : null,
+        quality: cloneJson(fact.quality || {}),
+      });
+    }
+    return {
+      eligibleScoringEvidence: eligible.sort((left, right) => compareText(left.evidenceId, right.evidenceId)),
+      unavailableEvidenceIds: [...unavailable].sort(compareText),
+      diagnostics,
+    };
+  }
+
+  function acquisitionFor(snapshot, candidateId) {
+    const acquisition = payload(snapshot, "acquisition_breakdown");
+    const candidates = Array.isArray(acquisition?.candidates) ? acquisition.candidates : [];
+    const matches = candidates.filter((item) => identifier(item?.candidate_id) === candidateId);
+    if (matches.length !== 1) return null;
+    const item = matches[0];
+    return {
+      artifactKind: "acquisition_breakdown",
+      requestId: text(acquisition?.request_id) || null,
+      modelVersion: text(acquisition?.model_version) || null,
+      strategy: text(acquisition?.strategy) || null,
+      modelScore: item.model_score ?? null,
+      heuristicScore: item.heuristic_score ?? null,
+      observedUtility: item.observed_utility ?? null,
+      modelSelected: typeof item.model_selected === "boolean" ? item.model_selected : null,
+      heuristicSelected: typeof item.heuristic_selected === "boolean" ? item.heuristic_selected : null,
+    };
+  }
+
+  function reviewKey(value) {
+    return [
+      identifier(value?.review_item_id),
+      identifier(value?.target_type),
+      identifier(value?.target_id),
+    ].join("\0");
+  }
+
+  function projectReview(review) {
+    return {
+      artifactKind: Array.isArray(review?.artifactKinds) ? review.artifactKinds.join(", ") : "canonical_evidence, review_queue",
+      reviewItemId: identifier(review?.review_item_id) || null,
+      targetType: identifier(review?.target_type) || null,
+      targetId: identifier(review?.target_id) || null,
+      candidateId: identifier(review?.candidate_id) || null,
+      reason: text(review?.reason) || text(review?.reason_code) || null,
+      reasonCode: text(review?.reason_code) || null,
+      resolutionStatus: text(review?.resolution_status) || null,
+      severity: text(review?.severity) || null,
+      assignedQueue: text(review?.assigned_queue) || null,
+      blockingSurface: text(review?.blocking_surface) || null,
+    };
+  }
+
+  function projectReviewEvent(event, status) {
+    return {
+      artifactKind: "review_events",
+      eventId: identifier(event?.event_id) || null,
+      reviewItemId: identifier(event?.review_item_id) || null,
+      targetType: identifier(event?.target_type) || null,
+      targetId: identifier(event?.target_id) || null,
+      decision: text(event?.decision) || null,
+      resolutionStatus: text(event?.resolution_status) || null,
+      reason: text(event?.reason) || null,
+      status,
+      recomputeMarkerIds: uniqueIdentifiers(Array.isArray(event?.recompute_marker_ids) ? event.recompute_marker_ids : []),
+    };
+  }
+
+  function reviewEventsFor(snapshot, joinedReviews, reviewIds) {
+    const diagnostics = [];
+    const events = payload(snapshot, "review_events");
+    if (!Array.isArray(events)) return {appliedReviewEvents: [], auditReviewEvents: [], diagnostics};
+    const knownReviewIds = new Set(uniqueIdentifiers([
+      ...reviewIds,
+      ...joinedReviews.map((review) => review.review_item_id),
+    ]));
+    const exactTargets = new Set(joinedReviews.map(reviewKey));
+    const appliedReviewEvents = [];
+    const auditReviewEvents = [];
+    events.forEach((event) => {
+      const reviewItemId = identifier(event?.review_item_id);
+      if (!reviewItemId || !knownReviewIds.has(reviewItemId)) return;
+      if (exactTargets.has(reviewKey(event))) {
+        appliedReviewEvents.push(projectReviewEvent(event, "applied"));
+        return;
+      }
+      auditReviewEvents.push(projectReviewEvent(event, "wrong-target"));
+      diagnostics.push(diagnostic(
+        "wrong_target_review_event",
+        "review_event shares review_item_id but does not match target_type and target_id for the selected candidate",
+        {source: "review_events", reviewItemId}
+      ));
+    });
+    appliedReviewEvents.sort((left, right) => compareText(left.eventId, right.eventId));
+    auditReviewEvents.sort((left, right) => compareText(left.eventId, right.eventId));
+    return {appliedReviewEvents, auditReviewEvents, diagnostics};
+  }
+
+  function recomputeMarkersFor(snapshot, candidateId, identity, evidenceById, appliedReviewEvents, reviewIds) {
+    const markers = payload(snapshot, "recompute_markers");
+    if (!Array.isArray(markers)) return [];
+    const appliedEventIds = new Set(appliedReviewEvents.map((event) => event.eventId).filter(Boolean));
+    const knownReviewIds = new Set(reviewIds);
+    return markers
+      .filter((marker) =>
+        identifier(marker?.candidate_id) === candidateId &&
+        (appliedEventIds.has(identifier(marker?.review_event_id)) || knownReviewIds.has(identifier(marker?.review_item_id))) &&
+        reviewTargetMatches(marker, identity, evidenceById)
+      )
+      .map((marker) => ({
+        artifactKind: "recompute_markers",
+        markerId: identifier(marker?.marker_id) || null,
+        reviewEventId: identifier(marker?.review_event_id) || null,
+        reviewItemId: identifier(marker?.review_item_id) || null,
+        targetType: identifier(marker?.target_type) || null,
+        targetId: identifier(marker?.target_id) || null,
+        status: text(marker?.status) || null,
+        reason: text(marker?.reason) || null,
+        affectedArtifacts: uniqueRawStrings(Array.isArray(marker?.affected_artifacts) ? marker.affected_artifacts : []),
+      }))
+      .sort((left, right) => compareText(left.markerId, right.markerId));
+  }
+
+  function reviewSummaryFor(snapshot) {
+    const summary = payload(snapshot, "review_summary");
+    if (!summary || typeof summary !== "object" || Array.isArray(summary)) return null;
+    return {
+      artifactKind: "review_summary",
+      reviewCount: summary.review_count ?? null,
+      eventCount: summary.event_count ?? null,
+      appliedEventCount: summary.applied_event_count ?? null,
+      openBlockingCount: summary.open_blocking_count ?? null,
+      resolvedCount: summary.resolved_count ?? null,
+      rejectedCount: summary.rejected_count ?? null,
+      reviewItemIds: uniqueIdentifiers(Array.isArray(summary.review_item_ids) ? summary.review_item_ids : []),
+      reviewEventIds: uniqueIdentifiers(Array.isArray(summary.review_event_ids) ? summary.review_event_ids : []),
+      recomputeMarkerIds: uniqueIdentifiers(Array.isArray(summary.recompute_marker_ids) ? summary.recompute_marker_ids : []),
+    };
+  }
+
+  function artifactStatusesFor(capabilities, kinds) {
+    return kinds.map((kind) => ({
+      kind,
+      status: capabilities[kind]?.status || "not-declared",
+      declared: Boolean(capabilities[kind]?.declared),
+      path: capabilities[kind]?.path || null,
+    }));
+  }
+
+  function paperEvidenceFor(snapshot, capabilities, candidateId) {
+    const explicit = payload(snapshot, "candidate_paper_evidence");
+    const records = Array.isArray(explicit?.records)
+      ? explicit.records
+      : (Array.isArray(explicit) ? explicit : []);
+    const candidateRecords = records
+      .filter((record) => identifier(record?.candidate_id) === candidateId)
+      .map((record) => ({artifactKind: "candidate_paper_evidence", ...cloneJson(record)}));
+    if (candidateRecords.length) {
+      return {
+        status: "available",
+        message: "Explicit backend candidate-to-paper join is available.",
+        records: candidateRecords,
+        runArtifacts: artifactStatusesFor(capabilities, ["literature_claims", "source_assets", "literature_search_results"]),
+      };
+    }
+    return {
+      status: "unavailable",
+      message: "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.",
+      records: [],
+      runArtifacts: artifactStatusesFor(capabilities, ["literature_claims", "source_assets", "literature_search_results"]),
+    };
   }
 
   function project(snapshot) {
@@ -546,6 +815,25 @@
         ? "insufficient-data"
         : STATUS_TO_GROUP[backendStatus];
       const requests = recommendationsFor(snapshot, candidateId);
+      const joinedReviews = reviewIds
+        .filter((id) => reviewResolutions.get(id)?.status === "valid")
+        .map((id) => cloneJson(reviewResolutions.get(id).review));
+      const components = screeningComponentsFor(row);
+      const scoringDetail = scoringEvidenceFor(snapshot, identity, evidenceIds);
+      const acquisition = acquisitionFor(snapshot, candidateId);
+      const reviewEvents = reviewEventsFor(snapshot, joinedReviews, reviewIds);
+      const recomputeMarkers = recomputeMarkersFor(
+        snapshot,
+        candidateId,
+        identity,
+        evidenceById,
+        reviewEvents.appliedReviewEvents,
+        reviewIds
+      );
+      const detailDiagnostics = [
+        ...scoringDetail.diagnostics,
+        ...reviewEvents.diagnostics,
+      ];
       const candidate = {
         candidateId,
         group,
@@ -554,7 +842,7 @@
         blockers: {
           codes: uniqueRawStrings(Array.isArray(row?.codes) ? row.codes : []),
           reviewIds,
-          joinedReviews: reviewIds.filter((id) => reviewResolutions.get(id)?.status === "valid").map((id) => cloneJson(reviewResolutions.get(id).review)),
+          joinedReviews,
           missingReviewIds: uniqueIdentifiers([
             ...declaredUnjoinableReviewIds,
             ...reviewIds.filter((id) => sameSourceDuplicateReviewIds.includes(id)),
@@ -573,6 +861,8 @@
           coverage: row.coverage ?? null,
           weightedUtility: row.weighted_utility ?? null,
           profileVersion: row.profile_version ?? null,
+          weights: row.weights ?? null,
+          components,
         }) : null,
         recommendation: {
           capability: capabilities.recommendations.status,
@@ -587,6 +877,53 @@
           reason: candidateDiagnostics.map((item) => item.message).join("; "),
           codes: candidateDiagnostics.map((item) => item.code),
         } : null,
+        detail: {
+          overview: {
+            artifactKind: row ? "screening_input_view" : null,
+            availability: artifactStatusesFor(capabilities, [
+              "screening_input_view",
+              "canonical_evidence",
+              "scoring_view",
+              "review_queue",
+              "review_events",
+              "recompute_markers",
+              "acquisition_breakdown",
+            ]),
+          },
+          explanation: {
+            components,
+            weights: row ? cloneJson(row.weights || {}) : {},
+            weightedUtility: row?.weighted_utility ?? null,
+            coverage: row?.coverage ?? null,
+            profileVersion: row?.profile_version ?? null,
+            eligibleScoringEvidence: scoringDetail.eligibleScoringEvidence,
+            unavailableEvidenceIds: scoringDetail.unavailableEvidenceIds,
+            diagnostics: scoringDetail.diagnostics,
+            acquisition,
+          },
+          diagnostics: {
+            blockingReviews: joinedReviews.map(projectReview),
+            appliedReviewEvents: reviewEvents.appliedReviewEvents,
+            auditReviewEvents: reviewEvents.auditReviewEvents,
+            recomputeMarkers,
+            reviewSummary: reviewSummaryFor(snapshot),
+            lineageEvents: lineageFor(snapshot, candidateId),
+            artifactStatuses: artifactStatusesFor(capabilities, [
+              "canonical_evidence",
+              "scoring_view",
+              "screening_input_view",
+              "review_queue",
+              "review_events",
+              "review_summary",
+              "recompute_markers",
+              "agent_trace",
+              "provider_capabilities",
+              "conflict_report",
+            ]),
+            contradictions: [...candidateDiagnostics, ...detailDiagnostics].map(cloneJson),
+          },
+          paperEvidence: paperEvidenceFor(snapshot, capabilities, candidateId),
+        },
       };
       groups[group].push(candidate);
     }

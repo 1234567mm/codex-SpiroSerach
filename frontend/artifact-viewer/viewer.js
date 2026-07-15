@@ -3,9 +3,17 @@ const state = {
   artifacts: new Map(),
   snapshot: null,
   selectedCandidateId: null,
+  selectedCandidateTab: "overview",
   candidateProjection: null,
   candidateControls: {search: "", statuses: [], sort: "group"},
 };
+
+const CANDIDATE_DETAIL_TABS = Object.freeze([
+  {id: "overview", label: "Overview"},
+  {id: "explanation", label: "Explanation"},
+  {id: "diagnostics", label: "Diagnostics"},
+  {id: "paper", label: "Paper Evidence"},
+]);
 
 const runDataStore = globalThis.SpiroRunData
   ? new globalThis.SpiroRunData.RunDataStore()
@@ -40,6 +48,28 @@ document.getElementById("candidateTable").addEventListener("click", (event) => {
   }
 });
 
+document.getElementById("candidateDetail").addEventListener("click", (event) => {
+  const tab = event.target.closest?.("[data-candidate-tab]");
+  if (!tab) return;
+  selectCandidateTab(tab.dataset.candidateTab);
+});
+
+document.getElementById("candidateDetail").addEventListener("keydown", (event) => {
+  const tab = event.target.closest?.("[data-candidate-tab]");
+  if (!tab) return;
+  const currentIndex = CANDIDATE_DETAIL_TABS.findIndex((item) => item.id === tab.dataset.candidateTab);
+  if (currentIndex < 0) return;
+  let nextIndex = currentIndex;
+  if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % CANDIDATE_DETAIL_TABS.length;
+  else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + CANDIDATE_DETAIL_TABS.length) % CANDIDATE_DETAIL_TABS.length;
+  else if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = CANDIDATE_DETAIL_TABS.length - 1;
+  else if (event.key === "Enter" || event.key === " ") nextIndex = currentIndex;
+  else return;
+  event.preventDefault?.();
+  selectCandidateTab(CANDIDATE_DETAIL_TABS[nextIndex].id, {focus: true});
+});
+
 document.getElementById("candidateSearch").addEventListener("input", (event) => {
   state.candidateControls.search = event.target.value || "";
   renderCandidateWorkspace();
@@ -62,6 +92,7 @@ function applyCommittedSnapshot(snapshot) {
     Object.values(snapshot.artifacts).map((artifact) => [artifact.path, artifact.payload])
   );
   state.selectedCandidateId = null;
+  state.selectedCandidateTab = "overview";
   state.candidateProjection = null;
 }
 
@@ -248,14 +279,67 @@ function renderProjectedCandidateDetail(candidate) {
     detail.innerHTML = `<div class="empty">No candidate selected</div>`;
     return;
   }
-  const requests = candidate.recommendation?.requests || [];
-  const events = candidate.lineage?.events || [];
-  const coverage = candidate.evidenceCoverage || {};
+  if (!CANDIDATE_DETAIL_TABS.some((tab) => tab.id === state.selectedCandidateTab)) {
+    state.selectedCandidateTab = "overview";
+  }
+  const activeTab = state.selectedCandidateTab;
+  const panelId = `candidate-panel-${activeTab}`;
+  const tabHtml = CANDIDATE_DETAIL_TABS.map((tab) => `<button
+      id="candidate-tab-${escapeHtml(tab.id)}"
+      class="candidate-detail-tab"
+      type="button"
+      role="tab"
+      data-candidate-tab="${escapeHtml(tab.id)}"
+      aria-selected="${tab.id === activeTab}"
+      aria-controls="candidate-panel-${escapeHtml(tab.id)}"
+      tabindex="${tab.id === activeTab ? "0" : "-1"}">${escapeHtml(tab.label)}</button>`)
+    .join("");
   detail.innerHTML = `<section>
     <div class="item-title">
       <span>${escapeHtml(candidate.candidateId)}</span>
       <span class="status">${escapeHtml(candidate.group)}</span>
     </div>
+    <div class="candidate-detail-tabs" role="tablist" aria-label="Candidate detail sections">
+      ${tabHtml}
+    </div>
+    <div
+      id="${escapeHtml(panelId)}"
+      class="candidate-detail-panel"
+      role="tabpanel"
+      aria-labelledby="candidate-tab-${escapeHtml(activeTab)}">
+      ${renderCandidateDetailTab(candidate, activeTab)}
+    </div>
+  </section>`;
+}
+
+function selectCandidateTab(tabId, options = {}) {
+  if (!CANDIDATE_DETAIL_TABS.some((tab) => tab.id === tabId)) return;
+  state.selectedCandidateTab = tabId;
+  if (state.candidateProjection && globalThis.SpiroCandidateProjection) {
+    renderCandidateWorkspace();
+  }
+  if (options.focus) {
+    focusCandidateTab(tabId);
+  }
+}
+
+function focusCandidateTab(tabId) {
+  document.getElementById(`candidate-tab-${tabId}`)?.focus?.();
+}
+
+function renderCandidateDetailTab(candidate, tabId) {
+  if (tabId === "explanation") return renderCandidateExplanationTab(candidate);
+  if (tabId === "diagnostics") return renderCandidateDiagnosticsTab(candidate);
+  if (tabId === "paper") return renderCandidatePaperEvidenceTab(candidate);
+  return renderCandidateOverviewTab(candidate);
+}
+
+function renderCandidateOverviewTab(candidate) {
+  const requests = candidate.recommendation?.requests || [];
+  const events = candidate.lineage?.events || candidate.detail?.diagnostics?.lineageEvents || [];
+  const coverage = candidate.evidenceCoverage || {};
+  const availability = candidate.detail?.overview?.availability || [];
+  return `
     <div class="item-meta">
       ${compactMeta([
         ["status", candidate.backendStatus],
@@ -265,6 +349,7 @@ function renderProjectedCandidateDetail(candidate) {
         ["role", candidate.identity?.role],
         ["supplier", candidate.identity?.supplierStatus],
         ["profile", candidate.screening?.profileVersion],
+        ["source", candidate.detail?.overview?.artifactKind],
       ])}
     </div>
     <div class="context-block">
@@ -295,11 +380,203 @@ function renderProjectedCandidateDetail(candidate) {
         ${escapeHtml(request.request_id || "request")} score ${formatNumber(request.acquisition_score)}
       </div>`).join("") || `<div class="muted">No recommendation joined</div>`}
     </div>
+    <div class="context-block">
+      <strong>Availability summary</strong>
+      <div class="chip-row">
+        ${availability.map((item) => `<span class="chip">${escapeHtml(item.kind)} ${escapeHtml(item.status)}</span>`).join("") || `<span class="muted">No detail availability metadata</span>`}
+      </div>
+    </div>
     ${candidate.diagnostic ? `<div class="projection-diagnostic">
       <strong>Insufficient data</strong>
       source ${escapeHtml(candidate.diagnostic.source || "unknown")}: ${escapeHtml(candidate.diagnostic.reason || "unknown")}
     </div>` : ""}
-  </section>`;
+  `;
+}
+
+function renderCandidateExplanationTab(candidate) {
+  const explanation = candidate.detail?.explanation || {};
+  const components = explanation.components || candidate.screening?.components || [];
+  const evidence = explanation.eligibleScoringEvidence || [];
+  const unavailable = explanation.unavailableEvidenceIds || candidate.evidenceCoverage?.missingEvidenceIds || [];
+  const diagnostics = explanation.diagnostics || [];
+  const acquisition = explanation.acquisition;
+  return `
+    <div class="context-block">
+      <strong>Frozen screening components</strong>
+      <div class="item-meta">backend output from screening_input_view; frontend does not recompute weighted utility</div>
+      ${components.map((component) => `<div class="detail-row">
+        <strong>${escapeHtml(component.name || "component")}</strong>
+        <span>${compactMeta([
+          ["source", component.artifactKind || "screening_input_view"],
+          ["utility", formatNumber(component.utility)],
+          ["quality", formatNumber(component.quality)],
+          ["observed", component.observed === null || component.observed === undefined ? null : String(component.observed)],
+          ["evidence", (component.evidenceIds || []).join(", ")],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No screening components joined</div>`}
+    </div>
+    <div class="context-block">
+      <strong>ScoringView eligible evidence</strong>
+      <div class="item-meta">Only policy-admitted scoring_view facts are described as eligible scoring evidence</div>
+      ${evidence.map((fact) => `<div class="detail-row">
+        <strong>${escapeHtml(fact.evidenceId || "evidence")}</strong>
+        <span>${compactMeta([
+          ["source", fact.artifactKind || "scoring_view"],
+          ["property", fact.propertyName],
+          ["value_ev", formatNumber(fact.valueEv)],
+          ["unit", fact.unit],
+          ["method", fact.method],
+          ["reference", fact.referenceScale],
+          ["trust", fact.quality?.trust_level],
+          ["curation", fact.quality?.curation_status],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No eligible ScoringView facts joined for this candidate</div>`}
+      ${unavailable.length ? `<div class="projection-diagnostic">
+        <strong>Evidence not described as eligible</strong>
+        ${unavailable.map((id) => `<span class="chip review-chip">${escapeHtml(id)}</span>`).join("")}
+      </div>` : ""}
+    </div>
+    <div class="context-block">
+      <strong>Acquisition context</strong>
+      ${acquisition ? `<div class="item-meta">${compactMeta([
+        ["source", acquisition.artifactKind],
+        ["request", acquisition.requestId],
+        ["model", acquisition.modelVersion],
+        ["strategy", acquisition.strategy],
+        ["model_score", formatNumber(acquisition.modelScore)],
+        ["heuristic_score", formatNumber(acquisition.heuristicScore)],
+        ["model_selected", acquisition.modelSelected === null || acquisition.modelSelected === undefined ? null : String(acquisition.modelSelected)],
+      ])}</div>` : `<div class="muted">No acquisition breakdown joined</div>`}
+    </div>
+    ${renderProjectionDiagnostics(diagnostics)}
+  `;
+}
+
+function renderCandidateDiagnosticsTab(candidate) {
+  const diagnostics = candidate.detail?.diagnostics || {};
+  const blockingReviews = diagnostics.blockingReviews || (candidate.blockers?.joinedReviews || []);
+  const appliedEvents = diagnostics.appliedReviewEvents || [];
+  const auditEvents = diagnostics.auditReviewEvents || [];
+  const markers = diagnostics.recomputeMarkers || [];
+  const artifactStatuses = diagnostics.artifactStatuses || [];
+  const contradictions = diagnostics.contradictions || [];
+  const reviewSummary = diagnostics.reviewSummary;
+  return `
+    <div class="context-block">
+      <strong>Blocking reviews</strong>
+      ${blockingReviews.map((review) => `<div class="detail-row">
+        <strong>${escapeHtml(review.reviewItemId || review.review_item_id || "review")}</strong>
+        <span>${compactMeta([
+          ["source", review.artifactKind || "review_queue"],
+          ["target_type", review.targetType || review.target_type],
+          ["target_id", review.targetId || review.target_id],
+          ["status", review.resolutionStatus || review.resolution_status],
+          ["reason", review.reason || review.reason_code],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No joined blocking reviews</div>`}
+    </div>
+    <div class="context-block">
+      <strong>Applied review events</strong>
+      <div class="item-meta">Applied closure requires exact review_item_id, target_type, and target_id</div>
+      ${appliedEvents.map((event) => `<div class="detail-row">
+        <strong>${escapeHtml(event.eventId || "event")}</strong>
+        <span>${compactMeta([
+          ["source", event.artifactKind],
+          ["review", event.reviewItemId],
+          ["target_type", event.targetType],
+          ["target_id", event.targetId],
+          ["decision", event.decision],
+          ["status", event.resolutionStatus],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No applied review events</div>`}
+      ${auditEvents.length ? `<div class="projection-diagnostic">
+        <strong>Wrong-target review events</strong>
+        ${auditEvents.map((event) => `<span class="chip review-chip">${escapeHtml(event.eventId || event.reviewItemId || "event")}</span>`).join("")}
+      </div>` : ""}
+    </div>
+    <div class="context-block">
+      <strong>Observed immutable recompute markers</strong>
+      <div class="item-meta">Viewer displays recompute markers as artifacts only; it cannot execute recompute</div>
+      ${markers.map((marker) => `<div class="detail-row">
+        <strong>${escapeHtml(marker.markerId || "marker")}</strong>
+        <span>${compactMeta([
+          ["source", marker.artifactKind],
+          ["event", marker.reviewEventId],
+          ["review", marker.reviewItemId],
+          ["target_type", marker.targetType],
+          ["target_id", marker.targetId],
+          ["status", marker.status],
+          ["affected", (marker.affectedArtifacts || []).join(", ")],
+        ])}</span>
+      </div>`).join("") || `<div class="muted">No recompute markers observed for this candidate</div>`}
+    </div>
+    <div class="context-block">
+      <strong>Review summary</strong>
+      ${reviewSummary ? `<div class="item-meta">${compactMeta([
+        ["source", reviewSummary.artifactKind],
+        ["reviews", reviewSummary.reviewCount],
+        ["events", reviewSummary.eventCount],
+        ["applied", reviewSummary.appliedEventCount],
+        ["open_blocking", reviewSummary.openBlockingCount],
+      ])}</div>` : `<div class="muted">No review summary artifact joined</div>`}
+    </div>
+    <div class="context-block">
+      <strong>Artifact/schema status</strong>
+      <div class="chip-row">
+        ${artifactStatuses.map((item) => `<span class="chip">${escapeHtml(item.kind)} ${escapeHtml(item.status || "unknown")}</span>`).join("") || `<span class="muted">No artifact status metadata</span>`}
+      </div>
+    </div>
+    ${renderProjectionDiagnostics(contradictions)}
+  `;
+}
+
+function renderCandidatePaperEvidenceTab(candidate) {
+  const paper = candidate.detail?.paperEvidence || {
+    status: "unavailable",
+    message: "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.",
+    records: [],
+    runArtifacts: [],
+  };
+  return `
+    <div class="context-block">
+      <strong>Paper Evidence</strong>
+      <div class="item-meta">status ${escapeHtml(paper.status || "unavailable")}</div>
+      <p>${escapeHtml(paper.message || "No explicit backend candidate-to-paper join; literature is available only at run/DOI scope.")}</p>
+      ${(paper.records || []).map((record) => `<div class="detail-row">
+        <strong>${escapeHtml(record.claim_id || record.asset_id || record.doi || "paper-record")}</strong>
+        <span>${compactMeta([
+          ["source", record.artifactKind || "candidate_paper_evidence"],
+          ["doi", record.doi],
+          ["asset", record.asset_id],
+          ["chunk", record.chunk_id],
+        ])}</span>
+      </div>`).join("")}
+    </div>
+    <div class="context-block">
+      <strong>Run/DOI-scope literature artifacts</strong>
+      <div class="chip-row">
+        ${(paper.runArtifacts || []).map((item) => `<span class="chip">${escapeHtml(item.kind)} ${escapeHtml(item.status || "unknown")}</span>`).join("") || `<span class="muted">No run-level paper artifacts declared</span>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderProjectionDiagnostics(items) {
+  const diagnostics = items || [];
+  if (!diagnostics.length) return "";
+  return `<div class="context-block">
+    <strong>Detail diagnostics</strong>
+    ${diagnostics.map((item) => `<div class="projection-diagnostic">
+      <strong>${escapeHtml(item.code || "diagnostic")}</strong>
+      ${compactMeta([
+        ["source", item.source],
+        ["candidate", item.candidateId],
+        ["evidence", item.evidenceId],
+        ["review", item.reviewItemId],
+      ])}
+      ${escapeHtml(item.message || "")}
+    </div>`).join("")}
+  </div>`;
 }
 
 function getKnownArtifact(kind) {
