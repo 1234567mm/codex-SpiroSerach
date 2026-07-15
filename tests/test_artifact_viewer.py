@@ -279,6 +279,7 @@ function snapshot(canonicalRecord, screeningRow, options = {}) {
       schema_version: options.schemaVersion || "v19.screening_input_view.v1",
       profile_version: options.topProfileVersion || "v12.htl_screening.v1",
       candidates: [screeningRow],
+      ...(options.payloadExtra || {}),
     }},
   };
   const declarations = [{kind: "canonical_evidence"}, {kind: "screening_input_view"}];
@@ -302,6 +303,11 @@ const extraWeight = result(record(), row({weights: {...exactWeights, invented: 0
 const changedWeight = result(record(), row({weights: {...exactWeights, homo_alignment: 0.31}}));
 const unsupportedSchema = result(record(), row(), {schemaVersion: "v20.screening_input_view.v1"});
 const unsupportedTopProfile = result(record(), row(), {topProfileVersion: "future-profile"});
+const payloadExtraProperty = result(record(), row(), {payloadExtra: {invented: true}});
+const rowExtraProperty = result(record(), row({invented: true}));
+const componentExtra = row();
+componentExtra.components[0] = {...componentExtra.components[0], invented: true};
+const componentExtraProperty = result(record(), componentExtra);
 
 const typedMismatch = result(
   record({review_items: [{review_item_id: "review-c", target_type: "candidate", target_id: "use-c"}]}),
@@ -313,6 +319,16 @@ const wrongMappedEnergyTarget = result(
     review_items: [{review_item_id: "review-energy", target_type: "energy_evidence", target_id: "energy-target"}],
   }),
   row({status: "defer", blocking_review_ids: ["review-energy"]})
+);
+const queueCandidateWhitespace = result(
+  record({review_items: [{review_item_id: "review-exact-candidate", target_type: "use_instance", target_id: "use-c"}]}),
+  row({status: "defer", blocking_review_ids: ["review-exact-candidate"]}),
+  {reviewQueue: [{review_item_id: "review-exact-candidate", candidate_id: " candidate-c ", target_type: "use_instance", target_id: "use-c"}]}
+);
+const queueTargetWhitespace = result(
+  record({review_items: [{review_item_id: "review-exact-target", target_type: "use_instance", target_id: "use-c"}]}),
+  row({status: "defer", blocking_review_ids: ["review-exact-target"]}),
+  {reviewQueue: [{review_item_id: "review-exact-target", candidate_id: "candidate-c", target_type: "use_instance", target_id: " use-c "}]}
 );
 
 const evidenceA = {energy_evidence_id: "e-duplicate", material_id: "material-c", use_instance_id: "use-c", property_name: "homo_ev"};
@@ -339,11 +355,21 @@ const unreferencedReviewDuplicate = result(
   row(),
   {reviewQueue: [queueReviewA, queueReviewB]}
 );
+const unrelatedQueueDuplicate = result(
+  record(),
+  row(),
+  {reviewQueue: [
+    {...queueReviewA, candidate_id: "other-candidate"},
+    {...queueReviewB, candidate_id: "other-candidate"},
+  ]}
+);
 
 process.stdout.write(JSON.stringify({
   invalidCode, invalidProfile, extraWeight, changedWeight, unsupportedSchema, unsupportedTopProfile,
-  typedMismatch, wrongMappedEnergyTarget, duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
-  duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate,
+  payloadExtraProperty, rowExtraProperty, componentExtraProperty,
+  typedMismatch, wrongMappedEnergyTarget, queueCandidateWhitespace, queueTargetWhitespace,
+  duplicateEvidenceForward, duplicateEvidenceReverse, unreferencedEvidenceDuplicate,
+  duplicateReviewForward, duplicateReviewReverse, unreferencedReviewDuplicate, unrelatedQueueDuplicate,
 }));
 """
         with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as file:
@@ -367,18 +393,29 @@ process.stdout.write(JSON.stringify({
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("screening_contract_unsupported", observed[name]["codes"], name)
             self.assertTrue(any("browser-local structural" in message.casefold() for message in observed[name]["messages"]), name)
+        self.assertEqual(observed["payloadExtraProperty"]["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertIn("screening_contract_unsupported", observed["payloadExtraProperty"]["codes"])
+        for name in ["rowExtraProperty", "componentExtraProperty"]:
+            self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
+            self.assertIn("screening_row_invalid", observed[name]["codes"], name)
         self.assertEqual(observed["typedMismatch"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("unjoinable_review_reference", observed["typedMismatch"]["codes"])
         self.assertEqual(observed["wrongMappedEnergyTarget"]["groups"]["insufficient-data"], ["candidate-c"])
         self.assertIn("unjoinable_review_reference", observed["wrongMappedEnergyTarget"]["codes"])
+        for name in ["queueCandidateWhitespace", "queueTargetWhitespace"]:
+            self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
+            self.assertIn("unjoinable_review_reference", observed[name]["codes"], name)
         for name in ["duplicateEvidenceForward", "duplicateEvidenceReverse"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("ambiguous_evidence_reference", observed[name]["codes"], name)
-        self.assertEqual(observed["unreferencedEvidenceDuplicate"]["groups"]["continue"], ["candidate-c"])
+        self.assertEqual(observed["unreferencedEvidenceDuplicate"]["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertIn("duplicate_owned_evidence_id", observed["unreferencedEvidenceDuplicate"]["codes"])
         for name in ["duplicateReviewForward", "duplicateReviewReverse"]:
             self.assertEqual(observed[name]["groups"]["insufficient-data"], ["candidate-c"], name)
             self.assertIn("ambiguous_review_reference", observed[name]["codes"], name)
-        self.assertEqual(observed["unreferencedReviewDuplicate"]["groups"]["continue"], ["candidate-c"])
+        self.assertEqual(observed["unreferencedReviewDuplicate"]["groups"]["insufficient-data"], ["candidate-c"])
+        self.assertIn("duplicate_owned_review_id", observed["unreferencedReviewDuplicate"]["codes"])
+        self.assertEqual(observed["unrelatedQueueDuplicate"]["groups"]["continue"], ["candidate-c"])
 
     def test_candidate_projection_preserves_v13_review_representation_across_canonical_and_queue(self):
         self.assertIsNotNone(shutil.which("node"), "node is required for projection test")

@@ -28,6 +28,14 @@
     cost: 0.1,
     synthesis_complexity: 0.05,
   });
+  const SCREENING_PAYLOAD_FIELDS = Object.freeze(["schema_version", "profile_version", "candidates"]);
+  const SCREENING_ROW_FIELDS = Object.freeze([
+    "candidate_id", "status", "codes", "components", "blocking_review_ids",
+    "profile_version", "weights", "weighted_utility", "coverage",
+  ]);
+  const SCREENING_COMPONENT_FIELDS = Object.freeze([
+    "name", "utility", "quality", "observed", "evidence_ids",
+  ]);
   const CONTEXT_KINDS = Object.freeze([
     "screening_input_view",
     "canonical_evidence",
@@ -62,6 +70,10 @@
 
   function text(value) {
     return typeof value === "string" ? value.trim() : "";
+  }
+
+  function identifier(value) {
+    return typeof value === "string" && value.length ? value : "";
   }
 
   function compareText(left, right) {
@@ -102,11 +114,22 @@
     return [...new Set(values.map(text).filter(Boolean))].sort(compareText);
   }
 
+  function uniqueIdentifiers(values) {
+    return [...new Set(values.map(identifier).filter(Boolean))].sort(compareText);
+  }
+
+  function hasExactFields(value, fields) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const actual = Object.keys(value).sort(compareText);
+    const expected = [...fields].sort(compareText);
+    return actual.length === expected.length && expected.every((field, index) => actual[index] === field);
+  }
+
   function buildIdentity(record) {
-    const candidateId = text(record?.candidate_id);
-    const materialId = text(record?.material?.material_id);
-    const useMaterialId = text(record?.use_instance?.material_id);
-    const useInstanceId = text(record?.use_instance?.use_instance_id);
+    const candidateId = identifier(record?.candidate_id);
+    const materialId = identifier(record?.material?.material_id);
+    const useMaterialId = identifier(record?.use_instance?.material_id);
+    const useInstanceId = identifier(record?.use_instance?.use_instance_id);
     return {
       candidateId,
       materialId: materialId || null,
@@ -132,7 +155,7 @@
   function canonicalEvidenceIndex(record) {
     const index = new Map();
     for (const item of Array.isArray(record?.energy_evidence) ? record.energy_evidence : []) {
-      const id = text(item?.energy_evidence_id);
+      const id = identifier(item?.energy_evidence_id);
       if (!id) continue;
       const matches = index.get(id) || [];
       matches.push(item);
@@ -146,7 +169,7 @@
     for (const component of Array.isArray(row?.components) ? row.components : []) {
       if (Array.isArray(component?.evidence_ids)) values.push(...component.evidence_ids);
     }
-    return uniqueIds(values);
+    return uniqueIdentifiers(values);
   }
 
   function finiteUnitInterval(value) {
@@ -159,8 +182,8 @@
   }
 
   function screeningRowIsStructurallyValid(row) {
-    if (!row || typeof row !== "object" || Array.isArray(row)) return false;
-    if (!text(row.candidate_id) || !Array.isArray(row.codes) || !uniqueNonEmptyStrings(row.codes)) return false;
+    if (!hasExactFields(row, SCREENING_ROW_FIELDS)) return false;
+    if (!identifier(row.candidate_id) || !Array.isArray(row.codes) || !uniqueNonEmptyStrings(row.codes)) return false;
     if (!row.codes.every((code) => SCREENING_CODES.includes(code))) return false;
     if (!uniqueNonEmptyStrings(row.blocking_review_ids)) return false;
     if (row.profile_version !== SCREENING_PROFILE_VERSION || !finiteUnitInterval(row.weighted_utility) || !finiteUnitInterval(row.coverage)) return false;
@@ -172,6 +195,7 @@
     const names = row.components.map((component) => text(component?.name));
     if (new Set(names).size !== COMPONENT_NAMES.length || !COMPONENT_NAMES.every((name) => names.includes(name))) return false;
     return row.components.every((component) =>
+      hasExactFields(component, SCREENING_COMPONENT_FIELDS) &&
       finiteUnitInterval(component?.utility) &&
       finiteUnitInterval(component?.quality) &&
       typeof component?.observed === "boolean" &&
@@ -179,10 +203,10 @@
     );
   }
 
-  function reviewIndex(snapshot, record) {
+  function reviewIndex(snapshot, record, candidateId) {
     const index = new Map();
     for (const item of Array.isArray(record?.review_items) ? record.review_items : []) {
-      const id = text(item?.review_item_id);
+      const id = identifier(item?.review_item_id);
       if (!id) continue;
       const matches = index.get(id) || {canonical: [], queue: []};
       matches.canonical.push(item);
@@ -190,8 +214,10 @@
     }
     const queue = payload(snapshot, "review_queue");
     for (const item of Array.isArray(queue) ? queue : []) {
-      const id = text(item?.review_item_id);
+      const id = identifier(item?.review_item_id);
       if (!id) continue;
+      const queueCandidateId = identifier(item?.candidate_id);
+      if (queueCandidateId !== candidateId && text(queueCandidateId) !== text(candidateId)) continue;
       const matches = index.get(id) || {canonical: [], queue: []};
       matches.queue.push(item);
       index.set(id, matches);
@@ -205,13 +231,13 @@
       material: identity.materialId,
       use_instance: identity.useInstanceId,
     };
-    const targetType = text(review?.target_type);
-    const targetId = text(review?.target_id);
+    const targetType = identifier(review?.target_type);
+    const targetId = identifier(review?.target_id);
     if (targetType === "energy_evidence") {
       const matches = evidenceById.get(targetId) || [];
       if (matches.length !== 1) return false;
-      return text(matches[0]?.material_id) === identity.materialId &&
-        text(matches[0]?.use_instance_id) === identity.useInstanceId;
+      return identifier(matches[0]?.material_id) === identity.materialId &&
+        identifier(matches[0]?.use_instance_id) === identity.useInstanceId;
     }
     return Boolean(Object.prototype.hasOwnProperty.call(anchors, targetType) &&
       targetId && targetId === anchors[targetType]);
@@ -222,14 +248,14 @@
     const queue = matches?.queue || [];
     if (!canonical.length && !queue.length) return {status: "missing", review: null};
     if (canonical.length > 1 || queue.length > 1) return {status: "ambiguous", review: null};
-    if (queue.length === 1 && text(queue[0]?.candidate_id) !== candidateId) {
+    if (queue.length === 1 && identifier(queue[0]?.candidate_id) !== candidateId) {
       return {status: "conflict", review: null};
     }
     const canonicalReview = canonical[0] || null;
     const queueReview = queue[0] || null;
     if (canonicalReview && queueReview) {
-      const canonicalAnchor = `${text(canonicalReview.target_type)}\0${text(canonicalReview.target_id)}`;
-      const queueAnchor = `${text(queueReview.target_type)}\0${text(queueReview.target_id)}`;
+      const canonicalAnchor = `${identifier(canonicalReview.target_type)}\0${identifier(canonicalReview.target_id)}`;
+      const queueAnchor = `${identifier(queueReview.target_type)}\0${identifier(queueReview.target_id)}`;
       if (canonicalAnchor !== queueAnchor) return {status: "conflict", review: null};
     }
     const represented = [canonicalReview, queueReview].filter(Boolean);
@@ -248,7 +274,7 @@
     const requests = payload(snapshot, "recommendations")?.requests;
     if (!Array.isArray(requests)) return [];
     return requests
-      .filter((request) => text(request?.candidate_id) === candidateId)
+      .filter((request) => identifier(request?.candidate_id) === candidateId)
       .map(cloneJson)
       .sort((left, right) => {
         const leftRank = Number.isFinite(left.rank) ? left.rank : Number.POSITIVE_INFINITY;
@@ -261,7 +287,7 @@
     const trace = payload(snapshot, "agent_trace");
     if (!Array.isArray(trace)) return [];
     return trace
-      .filter((event) => text(event?.candidate_id) === candidateId)
+      .filter((event) => identifier(event?.candidate_id) === candidateId)
       .map((event) => ({
         eventId: text(event?.event_id) || null,
         eventType: text(event?.event_type) || null,
@@ -287,7 +313,7 @@
 
     const canonicalById = new Map();
     records.forEach((record, index) => {
-      const candidateId = text(record?.candidate_id);
+      const candidateId = identifier(record?.candidate_id);
       if (!candidateId) {
         diagnostics.push(diagnostic(
           "canonical_candidate_id_missing",
@@ -307,6 +333,7 @@
       ? screening.candidates
       : [];
     const screeningContractSupported = screeningAvailable &&
+      hasExactFields(screening, SCREENING_PAYLOAD_FIELDS) &&
       screening?.schema_version === SCREENING_SCHEMA_VERSION &&
       screening?.profile_version === SCREENING_PROFILE_VERSION;
     if (!screeningAvailable || !Array.isArray(screening?.candidates)) {
@@ -324,7 +351,7 @@
     }
     const screeningById = new Map();
     screeningRows.forEach((row, index) => {
-      const candidateId = text(row?.candidate_id);
+      const candidateId = identifier(row?.candidate_id);
       if (!candidateId) {
         diagnostics.push(diagnostic(
           "screening_candidate_id_missing",
@@ -387,14 +414,27 @@
 
       const evidenceIds = row ? declaredEvidenceIds(row) : [];
       const evidenceById = canonicalEvidenceIndex(record);
+      const ownedDuplicateEvidenceIds = [...evidenceById.entries()]
+        .filter(([, matches]) => matches.length > 1)
+        .map(([id]) => id)
+        .sort(compareText);
+      if (ownedDuplicateEvidenceIds.length) {
+        pushCandidateDiagnostic(
+          candidateDiagnostics,
+          candidateId,
+          "duplicate_owned_evidence_id",
+          "canonical candidate contains duplicate energy_evidence_id records",
+          "canonical_evidence"
+        );
+      }
       const missingEvidenceIds = evidenceIds.filter((id) => !evidenceById.has(id));
       const ambiguousEvidenceIds = evidenceIds.filter((id) => (evidenceById.get(id) || []).length > 1);
       const conflictingEvidenceIds = evidenceIds.filter((id) => {
         const matches = evidenceById.get(id) || [];
         if (matches.length !== 1) return false;
         const evidence = matches[0];
-        return text(evidence.material_id) !== identity.materialId ||
-          text(evidence.use_instance_id) !== identity.useInstanceId;
+        return identifier(evidence.material_id) !== identity.materialId ||
+          identifier(evidence.use_instance_id) !== identity.useInstanceId;
       });
       if (ambiguousEvidenceIds.length) {
         pushCandidateDiagnostic(
@@ -415,8 +455,22 @@
         );
       }
 
-      const reviewIds = row ? uniqueIds(Array.isArray(row.blocking_review_ids) ? row.blocking_review_ids : []) : [];
-      const reviewsById = reviewIndex(snapshot, record);
+      const reviewIds = row ? uniqueIdentifiers(Array.isArray(row.blocking_review_ids) ? row.blocking_review_ids : []) : [];
+      const reviewsById = reviewIndex(snapshot, record, candidateId);
+      const ownedDuplicateReviewIds = [...reviewsById.entries()]
+        .filter(([, matches]) => matches.canonical.length > 1 ||
+          matches.queue.filter((item) => identifier(item?.candidate_id) === candidateId).length > 1)
+        .map(([id]) => id)
+        .sort(compareText);
+      if (ownedDuplicateReviewIds.length) {
+        pushCandidateDiagnostic(
+          candidateDiagnostics,
+          candidateId,
+          "duplicate_owned_review_id",
+          "candidate contains same-source duplicate review_item_id records",
+          "canonical_evidence, review_queue"
+        );
+      }
       const reviewResolutions = new Map(reviewIds.map((id) => [
         id,
         reviewResolution(reviewsById.get(id), candidateId, identity, evidenceById),
@@ -433,7 +487,7 @@
           "canonical_evidence, review_queue"
         );
       }
-      const unjoinableReviewIds = uniqueIds([...missingReviewIds, ...ambiguousReviewIds, ...conflictingReviewIds]);
+      const unjoinableReviewIds = uniqueIdentifiers([...missingReviewIds, ...ambiguousReviewIds, ...conflictingReviewIds]);
       if (unjoinableReviewIds.length) {
         pushCandidateDiagnostic(
           candidateDiagnostics,
@@ -462,12 +516,12 @@
         },
         evidenceCoverage: {
           declared: evidenceIds.length,
-          joined: evidenceIds.length - uniqueIds([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]).length,
+          joined: evidenceIds.length - uniqueIdentifiers([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]).length,
           ratio: evidenceIds.length
-            ? (evidenceIds.length - uniqueIds([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]).length) / evidenceIds.length
+            ? (evidenceIds.length - uniqueIdentifiers([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]).length) / evidenceIds.length
             : null,
           evidenceIds,
-          missingEvidenceIds: uniqueIds([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]),
+          missingEvidenceIds: uniqueIdentifiers([...missingEvidenceIds, ...ambiguousEvidenceIds, ...conflictingEvidenceIds]),
         },
         screening: row ? cloneJson({
           coverage: row.coverage ?? null,
