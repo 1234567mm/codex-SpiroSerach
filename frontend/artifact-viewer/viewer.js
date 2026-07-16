@@ -235,6 +235,8 @@ function renderKnownArtifacts() {
   const reviewEvents = getKnownArtifact("review_events") || [];
   const reviewSummary = getKnownArtifact("review_summary");
   const recomputeMarkers = getKnownArtifact("recompute_markers") || [];
+  const commandResults = getKnownArtifact("v23_action_results") || [];
+  const recomputeJobStatus = getKnownArtifact("v23_recompute_job_status");
   const sourceAssets = getKnownArtifact("source_assets") || [];
   const literatureClaims = getKnownArtifact("literature_claims") || [];
   const paperVaultSummary = getKnownArtifact("paper_vault_summary");
@@ -254,6 +256,7 @@ function renderKnownArtifacts() {
   renderModelEvaluation(modelEvaluation);
   renderV22ScientificClosure(v22ScientificClosure, v22ModelActivation);
   renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
+  renderCommandStates(commandResults, recomputeJobStatus);
   renderPaperDiagnostics(
     sourceAssets,
     literatureClaims,
@@ -1333,6 +1336,72 @@ function renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers) {
   list.innerHTML = [summaryHtml, eventHtml, markerHtml].filter(Boolean).join("");
 }
 
+function renderCommandStates(actionResults, recomputeJobStatus) {
+  const list = document.getElementById("commandStateList");
+  const results = Array.isArray(actionResults) ? actionResults : [];
+  const jobs = Array.isArray(recomputeJobStatus)
+    ? recomputeJobStatus
+    : (recomputeJobStatus ? [recomputeJobStatus] : []);
+  document.getElementById("commandStateCount").textContent = `${results.length} results / ${jobs.length} jobs`;
+  const capabilityHtml = `<section class="flow-item">
+    <div class="item-title">
+      <span>confirmation required</span>
+      <span class="gate-status gate-disabled">disabled</span>
+    </div>
+    <p class="muted">The static viewer is read-only: command capability is unavailable here and must be confirmed outside this surface.</p>
+  </section>`;
+  const resultHtml = results.map(renderCommandResult).join("");
+  const jobHtml = jobs.map(renderRecomputeJobStatus).join("");
+  list.innerHTML = [capabilityHtml, resultHtml, jobHtml].filter(Boolean).join("");
+}
+
+function renderCommandResult(result) {
+  const state = commandDisplayState(result);
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>${escapeHtml(result.action_type || "command")}</span>
+      <span class="gate-status gate-${escapeHtml(state)}">${escapeHtml(state)}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["request", shortId(result.request_id)],
+        ["status", result.status],
+        ["actor", result.actor_id],
+        ["reason", result.reason_code],
+        ["message", result.message],
+      ])}
+    </div>
+  </section>`;
+}
+
+function renderRecomputeJobStatus(job) {
+  const state = job.job_status === "queued" ? "pending" : commandDisplayState({status: job.job_status});
+  return `<section class="flow-item">
+    <div class="item-title">
+      <span>recompute job</span>
+      <span class="gate-status gate-${escapeHtml(state)}">${escapeHtml(state)}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["request", shortId(job.request_id)],
+        ["job", shortId(job.job_id)],
+        ["status", job.job_status],
+        ["result", job.result_status],
+        ["retry", job.retry_state ? stableJson(job.retry_state) : ""],
+      ])}
+    </div>
+  </section>`;
+}
+
+function commandDisplayState(result) {
+  if (result.status === "conflict") return "conflict";
+  if (["rejected", "timeout", "cancelled", "partial_failure"].includes(result.status)) return "failure";
+  if (result.status === "accepted" && result.action_type === "recompute_request") return "pending";
+  if (result.status === "queued") return "pending";
+  if (result.status === "accepted" || result.status === "replayed") return "success";
+  return "failure";
+}
+
 function renderPaperDiagnostics(
   sourceAssets,
   literatureClaims,
@@ -1665,6 +1734,7 @@ renderScreeningEligibility(null);
 renderModelEvaluation(null);
 renderV22ScientificClosure(null, null);
 renderReviewClosure([], null, []);
+renderCommandStates([], null);
 renderPaperDiagnostics([], [], null, null, null);
 renderProjectEvolution();
 renderProjectSelector();
