@@ -52,6 +52,16 @@ V4_ARTIFACT_KINDS = {
     "v23_action_results",
     "v23_command_audit",
     "v23_recompute_job_status",
+    "v24_admission_report",
+    "v24_loop_state",
+    "v24_recommendations",
+    "v24_experiment_requests",
+    "v24_handoff_export",
+    "v24_observation_import",
+    "v24_observation_projection",
+    "v24_loop_controls_report",
+    "v24_project_evolution",
+    "v24_stop_continue_report",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -271,6 +281,56 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v23-recompute-job-status.schema.json",
         "join_keys": ("job_id", "request_id"),
         "depends_on": ("v23_action_results",),
+    },
+    "v24_admission_report": {
+        "schema_ref": "schemas/v24-admission-report.schema.json",
+        "join_keys": ("admission_id", "source_run_id", "model_version"),
+        "depends_on": ("v22_scientific_closure_report", "v22_model_activation_report", "v23_action_results"),
+    },
+    "v24_loop_state": {
+        "schema_ref": "schemas/v24-loop-state.schema.json",
+        "join_keys": ("loop_state_id", "project_id", "round_id"),
+        "depends_on": ("v24_admission_report", "training_snapshot", "model_evaluation", "ledger"),
+    },
+    "v24_recommendations": {
+        "schema_ref": "schemas/v24-recommendations.schema.json",
+        "join_keys": ("recommendation_set_id", "loop_state_id", "candidate_id"),
+        "depends_on": ("v24_loop_state",),
+    },
+    "v24_experiment_requests": {
+        "schema_ref": "schemas/v24-experiment-requests.schema.json",
+        "join_keys": ("request_set_id", "request_id", "candidate_id"),
+        "depends_on": ("v24_recommendations", "v24_loop_state"),
+    },
+    "v24_handoff_export": {
+        "schema_ref": "schemas/v24-handoff-export.schema.json",
+        "join_keys": ("handoff_id", "request_set_id", "loop_state_id"),
+        "depends_on": ("v24_experiment_requests",),
+    },
+    "v24_observation_import": {
+        "schema_ref": "schemas/v24-observation-import.schema.json",
+        "join_keys": ("import_id", "request_set_id", "request_id"),
+        "depends_on": ("v24_handoff_export", "v24_experiment_requests"),
+    },
+    "v24_observation_projection": {
+        "schema_ref": "schemas/v24-observation-projection.schema.json",
+        "join_keys": ("projection_id", "import_id", "request_id", "review_item_id"),
+        "depends_on": ("v24_observation_import",),
+    },
+    "v24_loop_controls_report": {
+        "schema_ref": "schemas/v24-loop-controls-report.schema.json",
+        "join_keys": ("control_report_id", "loop_state_id", "request_set_id"),
+        "depends_on": ("v24_loop_state", "v24_recommendations", "v24_experiment_requests"),
+    },
+    "v24_project_evolution": {
+        "schema_ref": "schemas/v24-project-evolution.schema.json",
+        "join_keys": ("project_evolution_id", "loop_state_id", "round_id"),
+        "depends_on": ("v24_loop_state", "v24_recommendations", "v24_experiment_requests", "v24_loop_controls_report"),
+    },
+    "v24_stop_continue_report": {
+        "schema_ref": "schemas/v24-stop-continue-report.schema.json",
+        "join_keys": ("stop_continue_id",),
+        "depends_on": ("v24_admission_report", "v24_loop_controls_report", "v24_project_evolution"),
     },
 }
 

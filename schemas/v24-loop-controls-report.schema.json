@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-loop-controls-report.schema.json",
+  "title": "V24LoopControlsReport",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "control_report_id", "loop_state_id", "recommendation_set_id", "request_set_id", "control_status", "request_generation_allowed", "reason_codes", "replay_hash", "checks"],
+  "properties": {
+    "schema_version": { "const": "v24.loop_controls_report.v1" },
+    "control_report_id": { "type": "string" },
+    "loop_state_id": { "type": "string" },
+    "recommendation_set_id": { "type": "string" },
+    "request_set_id": { "type": "string" },
+    "control_status": { "enum": ["pass", "blocked"] },
+    "request_generation_allowed": { "type": "boolean" },
+    "reason_codes": { "type": "array" },
+    "replay_hash": { "type": "string" },
+    "checks": { "type": "array" }
+  }
+}

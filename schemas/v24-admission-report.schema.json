@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-admission-report.schema.json",
+  "title": "V24AdmissionReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "admission_id", "admission_status", "source_run_id", "model_version", "reason_codes", "checks", "source_artifacts", "command_facts"],
+  "properties": {
+    "schema_version": { "const": "v24.admission_report.v1" },
+    "admission_id": { "type": "string", "minLength": 1 },
+    "admission_status": { "enum": ["pass", "blocked"] },
+    "source_run_id": { "type": "string" },
+    "model_version": { "type": "string" },
+    "reason_codes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "reason_codes"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["pass", "blocked"] },
+          "reason_codes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "source_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "command_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "action_type", "status", "actor_id", "audit_event_id"],
+        "properties": {
+          "request_id": { "type": "string", "minLength": 1 },
+          "action_type": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "minLength": 1 },
+          "actor_id": { "type": "string", "minLength": 1 },
+          "audit_event_id": { "type": "string" }
+        }
+      }
+    }
+  }
+}
