@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v23-action-request.schema.json",
+  "title": "V23ActionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "action_type", "actor", "reason", "idempotency_key", "expected_source", "preconditions", "payload"],
+  "properties": {
+    "schema_version": { "const": "v23.action_request.v1" },
+    "request_id": { "type": "string", "minLength": 1 },
+    "action_type": { "enum": ["review_decision", "recompute_request"] },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "role"],
+      "properties": {
+        "actor_id": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["curator", "reviewer", "operator", "admin"] }
+      }
+    },
+    "reason": { "type": "string", "minLength": 1 },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "expected_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "input_hash"],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "input_hash": { "type": "string", "minLength": 1 }
+      }
+    },
+    "preconditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_target_version"],
+      "properties": {
+        "expected_target_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "not": {
+        "anyOf": [
+          { "required": ["provider_execution"] },
+          { "required": ["provider_request"] },
+          { "required": ["model_training"] },
+          { "required": ["experiment_dispatch"] }
+        ]
+      }
+    }
+  }
+}
