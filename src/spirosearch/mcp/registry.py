@@ -54,6 +54,7 @@ class MCPTool:
     output_schema: dict[str, Any]
     write: bool
     handler: Callable[[Mapping[str, Any], MCPToolContext], Any]
+    idempotency_cache: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the tool metadata to a JSON-compatible dictionary.
@@ -144,26 +145,28 @@ class MCPToolRegistry:
             raise ToolNotFoundError(f"MCP tool not found: {name}")
         tool = self._tools[name]
         payload_dict = dict(payload)
-        validate_json_schema(payload_dict, tool.input_schema, path="$")
-
         idempotency_key = str(payload_dict.get("idempotency_key", ""))
-        input_hash = stable_hash(payload_dict)
         if tool.write:
             if not idempotency_key:
                 raise IdempotencyKeyRequiredError(f"MCP write tool {name} requires idempotency_key")
-            cached = self._idempotency_cache.get((name, idempotency_key))
-            if cached is not None:
-                if cached.input_hash != input_hash:
-                    raise IdempotencyConflictError(
-                        f"MCP idempotency key {idempotency_key} reused for different input"
+        validate_json_schema(payload_dict, tool.input_schema, path="$")
+
+        input_hash = stable_hash(payload_dict)
+        if tool.write:
+            if tool.idempotency_cache:
+                cached = self._idempotency_cache.get((name, idempotency_key))
+                if cached is not None:
+                    if cached.input_hash != input_hash:
+                        raise IdempotencyConflictError(
+                            f"MCP idempotency key {idempotency_key} reused for different input"
+                        )
+                    self._write_audit_event(
+                        actor=actor,
+                        tool_name=name,
+                        reason="replayed idempotent MCP tool result",
+                        payload=payload_dict,
                     )
-                self._write_audit_event(
-                    actor=actor,
-                    tool_name=name,
-                    reason="replayed idempotent MCP tool result",
-                    payload=payload_dict,
-                )
-                return dict(cached.output_payload)
+                    return dict(cached.output_payload)
 
         started = time.perf_counter()
         try:
@@ -175,7 +178,7 @@ class MCPToolRegistry:
         output_payload = to_json_compatible(raw_output)
         validate_json_schema(output_payload, tool.output_schema, path="$")
 
-        if tool.write:
+        if tool.write and tool.idempotency_cache:
             self._idempotency_cache[(name, idempotency_key)] = ToolCallResult(
                 input_hash=input_hash,
                 output_payload=output_payload,
