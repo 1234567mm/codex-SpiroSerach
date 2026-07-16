@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, MutableMapping
 
 from spirosearch.artifact_repository import JsonArtifactRepository
 from spirosearch.orchestrator_contracts import stable_hash
@@ -28,6 +28,10 @@ _FORBIDDEN_COMMAND_PAYLOAD_KEYS = {
     "provider_request",
     "model_training",
     "experiment_dispatch",
+}
+DEFAULT_ACTION_ROLE_POLICY = {
+    "review_decision": ("curator", "reviewer", "admin"),
+    "recompute_request": ("operator", "admin"),
 }
 
 
@@ -148,6 +152,75 @@ class ActionResult:
         }
 
 
+@dataclass(frozen=True)
+class IdempotencyRecord:
+    request_hash: str
+    result: ActionResult
+
+
+@dataclass
+class CommandPreconditionEvaluator:
+    idempotency_records: MutableMapping[str, IdempotencyRecord] = field(default_factory=dict)
+    allowed_roles: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: DEFAULT_ACTION_ROLE_POLICY)
+
+    def evaluate(
+        self,
+        request: ActionRequest,
+        *,
+        current_run_id: str,
+        current_input_hash: str,
+        current_target_version: str,
+    ) -> ActionResult:
+        request_hash = stable_hash(request.to_dict(include_request_id=False))
+        existing = self.idempotency_records.get(request.idempotency_key)
+        if existing is not None:
+            if existing.request_hash == request_hash:
+                return existing.result
+            return _action_result(
+                request,
+                "conflict",
+                "idempotency_key_conflict",
+                "Idempotency key was already used for a different action request.",
+            )
+
+        allowed_roles = self.allowed_roles.get(request.action_type, ())
+        if request.role not in allowed_roles:
+            result = _action_result(
+                request,
+                "rejected",
+                "unauthorized_role",
+                "Actor role is not authorized for this action type.",
+            )
+            self.idempotency_records[request.idempotency_key] = IdempotencyRecord(request_hash, result)
+            return result
+
+        conflict_reason = None
+        if request.expected_run_id != current_run_id:
+            conflict_reason = "stale_source_run"
+        elif request.expected_input_hash != current_input_hash:
+            conflict_reason = "stale_input_hash"
+        elif request.expected_target_version != current_target_version:
+            conflict_reason = "stale_target_version"
+        if conflict_reason:
+            result = _action_result(
+                request,
+                "conflict",
+                conflict_reason,
+                "Action request preconditions do not match the current target state.",
+            )
+            self.idempotency_records[request.idempotency_key] = IdempotencyRecord(request_hash, result)
+            return result
+
+        result = _action_result(
+            request,
+            "accepted",
+            "command_preconditions_passed",
+            "Action request passed authorization, idempotency, and optimistic preconditions.",
+        )
+        self.idempotency_records[request.idempotency_key] = IdempotencyRecord(request_hash, result)
+        return result
+
+
 def preflight_commandable_run(
     output_dir: str | Path,
     *,
@@ -210,6 +283,18 @@ def _legacy_reason(output_dir: str | Path, manifest_path: str | Path) -> str | N
     if legacy_keys.intersection(payload) and "artifacts" not in payload:
         return "legacy_pipeline_manifest"
     return None
+
+
+def _action_result(request: ActionRequest, status: str, reason_code: str, message: str) -> ActionResult:
+    return ActionResult(
+        request_id=request.request_id,
+        action_type=request.action_type,
+        status=status,
+        idempotency_key=request.idempotency_key,
+        actor_id=request.actor_id,
+        reason_code=reason_code,
+        message=message,
+    )
 
 
 def _blocked(reason_code: str, detail: Any = None) -> dict[str, Any]:
