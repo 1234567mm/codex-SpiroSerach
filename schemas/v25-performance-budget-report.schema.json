@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v25-performance-budget-report.schema.json",
+  "title": "V25PerformanceBudgetReport",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "performance_budget_id", "release_profile_id", "budget_status", "reason_codes", "measurements"],
+  "properties": {
+    "schema_version": { "const": "v25.performance_budget_report.v1" },
+    "performance_budget_id": { "type": "string", "minLength": 1 },
+    "release_profile_id": { "type": "string", "minLength": 1 },
+    "budget_status": { "enum": ["pass", "blocked"] },
+    "reason_codes": { "type": "array", "items": { "type": "string" } },
+    "measurements": { "type": "array" }
+  }
+}
