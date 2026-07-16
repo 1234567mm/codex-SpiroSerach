@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v25-release-profile.schema.json",
+  "title": "V25ReleaseProfile",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "profile_id", "default_runtime", "optional_extras", "entry_points", "external_services", "release_boundaries"],
+  "properties": {
+    "schema_version": { "const": "v25.release_profile.v1" },
+    "profile_id": { "type": "string", "minLength": 1 },
+    "default_runtime": { "type": "object" },
+    "optional_extras": { "type": "object" },
+    "entry_points": { "type": "array", "items": { "type": "string" } },
+    "external_services": { "type": "array" },
+    "release_boundaries": { "type": "object" }
+  }
+}

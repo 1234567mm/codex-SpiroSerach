@@ -62,6 +62,12 @@ V4_ARTIFACT_KINDS = {
     "v24_loop_controls_report",
     "v24_project_evolution",
     "v24_stop_continue_report",
+    "v25_release_profile",
+    "v25_migration_policy",
+    "v25_security_audit_report",
+    "v25_performance_budget_report",
+    "v25_recovery_runbook",
+    "v25_release_checklist",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -331,6 +337,42 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v24-stop-continue-report.schema.json",
         "join_keys": ("stop_continue_id",),
         "depends_on": ("v24_admission_report", "v24_loop_controls_report", "v24_project_evolution"),
+    },
+    "v25_release_profile": {
+        "schema_ref": "schemas/v25-release-profile.schema.json",
+        "join_keys": ("profile_id",),
+        "depends_on": (),
+    },
+    "v25_migration_policy": {
+        "schema_ref": "schemas/v25-migration-policy.schema.json",
+        "join_keys": ("policy_id", "release_profile_id"),
+        "depends_on": ("v25_release_profile",),
+    },
+    "v25_security_audit_report": {
+        "schema_ref": "schemas/v25-security-audit-report.schema.json",
+        "join_keys": ("security_audit_id", "release_profile_id"),
+        "depends_on": ("v25_release_profile", "v23_action_results", "v23_command_audit"),
+    },
+    "v25_performance_budget_report": {
+        "schema_ref": "schemas/v25-performance-budget-report.schema.json",
+        "join_keys": ("performance_budget_id", "release_profile_id"),
+        "depends_on": ("v25_release_profile",),
+    },
+    "v25_recovery_runbook": {
+        "schema_ref": "schemas/v25-recovery-runbook.schema.json",
+        "join_keys": ("recovery_runbook_id", "release_profile_id"),
+        "depends_on": ("v25_release_profile", "v25_migration_policy"),
+    },
+    "v25_release_checklist": {
+        "schema_ref": "schemas/v25-release-checklist.schema.json",
+        "join_keys": ("release_checklist_id", "reproducibility_bundle_id", "release_profile_id"),
+        "depends_on": (
+            "v25_release_profile",
+            "v25_migration_policy",
+            "v25_security_audit_report",
+            "v25_performance_budget_report",
+            "v25_recovery_runbook",
+        ),
     },
 }
 

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v25-recovery-runbook.schema.json",
+  "title": "V25RecoveryRunbook",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "recovery_runbook_id", "release_profile_id", "migration_policy_id", "recovery_status", "reason_codes", "backup_scope", "external_credentials_required"],
+  "properties": {
+    "schema_version": { "const": "v25.recovery_runbook.v1" },
+    "recovery_runbook_id": { "type": "string", "minLength": 1 },
+    "release_profile_id": { "type": "string", "minLength": 1 },
+    "migration_policy_id": { "type": "string", "minLength": 1 },
+    "recovery_status": { "enum": ["pass", "blocked"] },
+    "reason_codes": { "type": "array", "items": { "type": "string" } },
+    "backup_scope": { "type": "array", "items": { "type": "string" } },
+    "external_credentials_required": { "const": false }
+  }
+}
