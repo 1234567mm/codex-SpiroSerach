@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-recommendations.schema.json",
+  "title": "V24Recommendations",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "recommendation_set_id", "status", "loop_state_id", "project_id", "round_id", "policy_id", "items"],
+  "properties": {
+    "schema_version": { "const": "v24.recommendations.v1" },
+    "recommendation_set_id": { "type": "string" },
+    "status": { "enum": ["ready", "blocked"] },
+    "loop_state_id": { "type": "string" },
+    "project_id": { "type": "string" },
+    "round_id": { "type": "string" },
+    "policy_id": { "type": "string" },
+    "items": { "type": "array" }
+  }
+}
