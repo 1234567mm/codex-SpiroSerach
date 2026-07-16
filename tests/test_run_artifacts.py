@@ -180,6 +180,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v24_observation_projection",
                 "v24_loop_controls_report",
                 "v24_project_evolution",
+                "v24_stop_continue_report",
             },
         )
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from spirosearch.artifacts import ARTIFACT_KIND_METADATA
 from spirosearch.v24_project_evolution import build_v24_project_evolution
+from spirosearch.v24_stop_continue import build_v24_stop_continue_report
 
 
 class V24ProjectEvolutionTests(unittest.TestCase):
@@ -73,6 +74,38 @@ process.stdout.write(JSON.stringify({count: element("v24ProjectEvolutionCount").
         self.assertIn("accepted observations 1", rendered["html"])
         self.assertIn("model-v1", rendered["html"])
         self.assertNotIn("99", rendered["html"])
+
+    def test_stop_continue_report_keeps_scientific_gates_authoritative(self):
+        report = build_v24_stop_continue_report(
+            admission_report={"admission_status": "blocked", "reason_codes": ["v22_model_activation_disabled"]},
+            controls_report={"control_status": "pass", "reason_codes": []},
+            project_evolution={"round_efficiency": {"accepted_observation_count": 2}},
+        )
+
+        self.assertEqual(report["decision"], "stop")
+        self.assertIn("scientific_gate_blocked", report["reason_codes"])
+        self.assertFalse(report["claims"]["scientific_success_claimed"])
+        self.assertIn("v24_stop_continue_report", ARTIFACT_KIND_METADATA)
+
+    def test_continue_report_requires_efficiency_and_clean_controls(self):
+        report = build_v24_stop_continue_report(
+            admission_report={"admission_status": "pass", "reason_codes": []},
+            controls_report={"control_status": "pass", "reason_codes": []},
+            project_evolution={"round_efficiency": {"accepted_observation_count": 1}},
+        )
+
+        self.assertEqual(report["decision"], "continue")
+        self.assertFalse(report["claims"]["scientific_success_claimed"])
+
+    def test_low_efficiency_stops_without_overclaiming(self):
+        report = build_v24_stop_continue_report(
+            admission_report={"admission_status": "pass", "reason_codes": []},
+            controls_report={"control_status": "pass", "reason_codes": []},
+            project_evolution={"round_efficiency": {"accepted_observation_count": 0}},
+        )
+
+        self.assertEqual(report["decision"], "stop")
+        self.assertIn("insufficient_discovery_efficiency", report["reason_codes"])
 
 
 if __name__ == "__main__":
