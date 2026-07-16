@@ -60,6 +60,7 @@ V4_ARTIFACT_KINDS = {
     "v24_observation_import",
     "v24_observation_projection",
     "v24_loop_controls_report",
+    "v24_project_evolution",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -319,6 +320,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v24-loop-controls-report.schema.json",
         "join_keys": ("control_report_id", "loop_state_id", "request_set_id"),
         "depends_on": ("v24_loop_state", "v24_recommendations", "v24_experiment_requests"),
+    },
+    "v24_project_evolution": {
+        "schema_ref": "schemas/v24-project-evolution.schema.json",
+        "join_keys": ("project_evolution_id", "loop_state_id", "round_id"),
+        "depends_on": ("v24_loop_state", "v24_recommendations", "v24_experiment_requests", "v24_loop_controls_report"),
     },
 }
 

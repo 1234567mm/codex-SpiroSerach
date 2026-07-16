@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-project-evolution.schema.json",
+  "title": "V24ProjectEvolution",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "project_evolution_id", "view_status", "round_efficiency", "decisions", "model_state_change", "diagnostics"],
+  "properties": {
+    "schema_version": { "const": "v24.project_evolution.v1" },
+    "project_evolution_id": { "type": "string" },
+    "view_status": { "enum": ["available", "degraded"] },
+    "round_efficiency": { "type": "object" },
+    "decisions": { "type": "object" },
+    "model_state_change": { "type": "object" },
+    "diagnostics": { "type": "array" }
+  }
+}
