@@ -168,6 +168,9 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v22_model_activation_report",
                 "v22_scientific_closure_report",
                 "v22_literature_benchmark_report",
+                "v23_action_results",
+                "v23_command_audit",
+                "v23_recompute_job_status",
             },
         )
 
