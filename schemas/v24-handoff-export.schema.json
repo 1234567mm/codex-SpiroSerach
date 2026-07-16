@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-handoff-export.schema.json",
+  "title": "V24HandoffExport",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "handoff_id", "export_status", "request_set_id", "loop_state_id", "approval", "requests"],
+  "properties": {
+    "schema_version": { "const": "v24.handoff_export.v1" },
+    "handoff_id": { "type": "string" },
+    "export_status": { "const": "approved_for_handoff" },
+    "request_set_id": { "type": "string" },
+    "loop_state_id": { "type": "string" },
+    "approval": { "type": "object" },
+    "requests": { "type": "array" }
+  }
+}
