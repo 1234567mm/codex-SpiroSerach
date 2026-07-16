@@ -172,6 +172,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v23_command_audit",
                 "v23_recompute_job_status",
                 "v24_admission_report",
+                "v24_loop_state",
             },
         )
 
