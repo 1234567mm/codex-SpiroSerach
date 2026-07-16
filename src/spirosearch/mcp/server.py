@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from spirosearch.mcp.registry import MCPToolRegistry
+from spirosearch.mcp.command_tools import create_v23_command_tools
 from spirosearch.mcp.read_tools import create_readonly_run_tools
 from spirosearch.mcp.tools import create_core_tools
+from spirosearch.v23_command import CommandPreconditionEvaluator
 from spirosearch.v4 import ExperimentLedger
 
 
@@ -104,3 +106,43 @@ def create_readonly_run_server(
 ) -> MCPServer:
     """Create a local MCP server skeleton exposing only V11 read surfaces."""
     return MCPServer(registry=create_readonly_run_registry(output_dir=output_dir))
+
+
+def create_v23_command_registry(
+    *,
+    current_run_id: str,
+    current_input_hash: str,
+    current_target_version: str,
+    evaluator: CommandPreconditionEvaluator | None = None,
+    audit_path: str | Path | None = None,
+) -> MCPToolRegistry:
+    """Create a registry exposing only V23 command-plane write tools."""
+    registry = MCPToolRegistry(audit_path=audit_path)
+    for tool in create_v23_command_tools(
+        current_run_id=current_run_id,
+        current_input_hash=current_input_hash,
+        current_target_version=current_target_version,
+        evaluator=evaluator,
+    ):
+        registry.register(tool)
+    return registry
+
+
+def create_v23_command_server(
+    *,
+    current_run_id: str,
+    current_input_hash: str,
+    current_target_version: str,
+    evaluator: CommandPreconditionEvaluator | None = None,
+    audit_path: str | Path | None = None,
+) -> MCPServer:
+    """Create a local MCP server skeleton exposing only V23 command tools."""
+    return MCPServer(
+        registry=create_v23_command_registry(
+            current_run_id=current_run_id,
+            current_input_hash=current_input_hash,
+            current_target_version=current_target_version,
+            evaluator=evaluator,
+            audit_path=audit_path,
+        )
+    )
