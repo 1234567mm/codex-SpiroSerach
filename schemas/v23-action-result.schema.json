@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v23-action-result.schema.json",
+  "title": "V23ActionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "action_type", "status", "idempotency_key", "actor_id", "reason_code", "message", "output_artifacts"],
+  "properties": {
+    "schema_version": { "const": "v23.action_result.v1" },
+    "request_id": { "type": "string", "minLength": 1 },
+    "action_type": { "enum": ["review_decision", "recompute_request"] },
+    "status": { "enum": ["accepted", "rejected", "conflict", "timeout", "cancelled", "partial_failure", "replayed"] },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "actor_id": { "type": "string", "minLength": 1 },
+    "reason_code": { "type": "string", "minLength": 1 },
+    "message": { "type": "string", "minLength": 1 },
+    "output_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string" }
+        }
+      }
+    }
+  }
+}
