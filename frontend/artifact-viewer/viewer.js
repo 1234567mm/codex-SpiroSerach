@@ -237,6 +237,7 @@ function renderKnownArtifacts() {
   const recomputeMarkers = getKnownArtifact("recompute_markers") || [];
   const commandResults = getKnownArtifact("v23_action_results") || [];
   const recomputeJobStatus = getKnownArtifact("v23_recompute_job_status");
+  const v24ProjectEvolution = getKnownArtifact("v24_project_evolution");
   const sourceAssets = getKnownArtifact("source_assets") || [];
   const literatureClaims = getKnownArtifact("literature_claims") || [];
   const paperVaultSummary = getKnownArtifact("paper_vault_summary");
@@ -257,6 +258,7 @@ function renderKnownArtifacts() {
   renderV22ScientificClosure(v22ScientificClosure, v22ModelActivation);
   renderReviewClosure(reviewEvents, reviewSummary, recomputeMarkers);
   renderCommandStates(commandResults, recomputeJobStatus);
+  renderV24ProjectEvolution(v24ProjectEvolution);
   renderPaperDiagnostics(
     sourceAssets,
     literatureClaims,
@@ -1355,6 +1357,39 @@ function renderCommandStates(actionResults, recomputeJobStatus) {
   list.innerHTML = [capabilityHtml, resultHtml, jobHtml].filter(Boolean).join("");
 }
 
+function renderV24ProjectEvolution(evolution) {
+  const list = document.getElementById("v24ProjectEvolutionList");
+  const status = evolution?.view_status || "unavailable";
+  document.getElementById("v24ProjectEvolutionCount").textContent = status;
+  if (!evolution) {
+    list.innerHTML = `<div class="empty">No V24 project evolution loaded</div>`;
+    return;
+  }
+  const efficiency = evolution.round_efficiency || {};
+  const decisions = evolution.decisions || {};
+  const model = evolution.model_state_change || {};
+  list.innerHTML = `<section class="flow-item">
+    <div class="item-title">
+      <span>round efficiency</span>
+      <span class="status">${escapeHtml(status)}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["recommended", efficiency.recommended_count],
+        ["requested", efficiency.requested_count],
+        ["accepted observations", efficiency.accepted_observation_count],
+        ["rejected observations", efficiency.rejected_observation_count],
+        ["loop", decisions.loop_status],
+        ["controls", decisions.control_status],
+        ["model", model.model_version],
+      ])}
+    </div>
+    <div class="chip-row">
+      ${(evolution.diagnostics || []).map((item) => `<span class="chip review-chip">${escapeHtml(item)}</span>`).join("") || `<span class="chip">complete</span>`}
+    </div>
+  </section>`;
+}
+
 function renderCommandResult(result) {
   const state = commandDisplayState(result);
   return `<section class="flow-item">
@@ -1735,6 +1770,7 @@ renderModelEvaluation(null);
 renderV22ScientificClosure(null, null);
 renderReviewClosure([], null, []);
 renderCommandStates([], null);
+renderV24ProjectEvolution(null);
 renderPaperDiagnostics([], [], null, null, null);
 renderProjectEvolution();
 renderProjectSelector();
