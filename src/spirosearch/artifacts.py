@@ -56,6 +56,8 @@ V4_ARTIFACT_KINDS = {
     "v24_loop_state",
     "v24_recommendations",
     "v24_experiment_requests",
+    "v24_handoff_export",
+    "v24_observation_import",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -295,6 +297,16 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v24-experiment-requests.schema.json",
         "join_keys": ("request_set_id", "request_id", "candidate_id"),
         "depends_on": ("v24_recommendations", "v24_loop_state"),
+    },
+    "v24_handoff_export": {
+        "schema_ref": "schemas/v24-handoff-export.schema.json",
+        "join_keys": ("handoff_id", "request_set_id", "loop_state_id"),
+        "depends_on": ("v24_experiment_requests",),
+    },
+    "v24_observation_import": {
+        "schema_ref": "schemas/v24-observation-import.schema.json",
+        "join_keys": ("import_id", "request_set_id", "request_id"),
+        "depends_on": ("v24_handoff_export", "v24_experiment_requests"),
     },
 }
 

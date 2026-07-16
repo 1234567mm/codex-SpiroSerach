@@ -75,7 +75,9 @@
         "v24_admission_report",
         "v24_loop_state",
         "v24_recommendations",
-        "v24_experiment_requests"
+        "v24_experiment_requests",
+        "v24_handoff_export",
+        "v24_observation_import"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },

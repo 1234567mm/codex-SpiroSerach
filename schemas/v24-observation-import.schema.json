@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-observation-import.schema.json",
+  "title": "V24ObservationImport",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "import_id", "request_set_id", "status", "accepted_observations", "rejected_observations", "posterior_updates", "evidence_updates"],
+  "properties": {
+    "schema_version": { "const": "v24.observation_import.v1" },
+    "import_id": { "type": "string" },
+    "request_set_id": { "type": "string" },
+    "status": { "enum": ["valid", "invalid"] },
+    "accepted_observations": { "type": "array" },
+    "rejected_observations": { "type": "array" },
+    "posterior_updates": { "type": "array" },
+    "evidence_updates": { "type": "array" }
+  }
+}

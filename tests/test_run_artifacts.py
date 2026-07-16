@@ -175,6 +175,8 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v24_loop_state",
                 "v24_recommendations",
                 "v24_experiment_requests",
+                "v24_handoff_export",
+                "v24_observation_import",
             },
         )
 
