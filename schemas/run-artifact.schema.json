@@ -73,7 +73,9 @@
         "v23_command_audit",
         "v23_recompute_job_status",
         "v24_admission_report",
-        "v24_loop_state"
+        "v24_loop_state",
+        "v24_recommendations",
+        "v24_experiment_requests"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },

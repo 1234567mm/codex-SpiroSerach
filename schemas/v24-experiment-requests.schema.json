@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-experiment-requests.schema.json",
+  "title": "V24ExperimentRequests",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "request_set_id", "status", "loop_state_id", "project_id", "round_id", "requests"],
+  "properties": {
+    "schema_version": { "const": "v24.experiment_requests.v1" },
+    "request_set_id": { "type": "string" },
+    "status": { "enum": ["ready", "blocked"] },
+    "loop_state_id": { "type": "string" },
+    "project_id": { "type": "string" },
+    "round_id": { "type": "string" },
+    "requests": { "type": "array" }
+  }
+}

@@ -54,6 +54,8 @@ V4_ARTIFACT_KINDS = {
     "v23_recompute_job_status",
     "v24_admission_report",
     "v24_loop_state",
+    "v24_recommendations",
+    "v24_experiment_requests",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -283,6 +285,16 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v24-loop-state.schema.json",
         "join_keys": ("loop_state_id", "project_id", "round_id"),
         "depends_on": ("v24_admission_report", "training_snapshot", "model_evaluation", "ledger"),
+    },
+    "v24_recommendations": {
+        "schema_ref": "schemas/v24-recommendations.schema.json",
+        "join_keys": ("recommendation_set_id", "loop_state_id", "candidate_id"),
+        "depends_on": ("v24_loop_state",),
+    },
+    "v24_experiment_requests": {
+        "schema_ref": "schemas/v24-experiment-requests.schema.json",
+        "join_keys": ("request_set_id", "request_id", "candidate_id"),
+        "depends_on": ("v24_recommendations", "v24_loop_state"),
     },
 }
 
