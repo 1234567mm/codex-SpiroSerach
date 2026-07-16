@@ -181,6 +181,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v24_loop_controls_report",
                 "v24_project_evolution",
                 "v24_stop_continue_report",
+                "v25_migration_policy",
                 "v25_release_profile",
             },
         )
