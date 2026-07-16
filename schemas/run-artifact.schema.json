@@ -71,7 +71,8 @@
         "v22_zero_leakage_report",
         "v23_action_results",
         "v23_command_audit",
-        "v23_recompute_job_status"
+        "v23_recompute_job_status",
+        "v24_admission_report"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },
