@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-loop-state.schema.json",
+  "title": "V24LoopState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "loop_state_id", "project_id", "round_id", "loop_status", "predecessor_run", "candidate_pool", "training_snapshot", "model_evaluation", "acquisition_policy", "budget", "ledger", "admission"],
+  "properties": {
+    "schema_version": { "const": "v24.loop_state.v1" },
+    "loop_state_id": { "type": "string", "minLength": 1 },
+    "project_id": { "type": "string", "minLength": 1 },
+    "round_id": { "type": "string", "minLength": 1 },
+    "loop_status": { "enum": ["admitted", "blocked"] },
+    "predecessor_run": {
+      "type": "object",
+      "required": ["run_id", "input_hash"],
+      "additionalProperties": true,
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "input_hash": { "type": "string", "minLength": 1 },
+        "manifest_hash": { "type": "string" }
+      }
+    },
+    "candidate_pool": { "type": "object", "required": ["artifact_kind", "snapshot_id"], "additionalProperties": true },
+    "training_snapshot": { "type": "object", "required": ["artifact_kind", "snapshot_id"], "additionalProperties": true },
+    "model_evaluation": { "type": "object", "required": ["artifact_kind", "model_version"], "additionalProperties": true },
+    "acquisition_policy": { "type": "object", "required": ["policy_id", "strategy"], "additionalProperties": true },
+    "budget": { "type": "object", "required": ["max_experiments"], "additionalProperties": true },
+    "ledger": { "type": "object", "required": ["artifact_kind", "ledger_id"], "additionalProperties": true },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["admission_id", "admission_status", "reason_codes"],
+      "properties": {
+        "admission_id": { "type": "string", "minLength": 1 },
+        "admission_status": { "enum": ["pass", "blocked"] },
+        "reason_codes": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
