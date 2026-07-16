@@ -182,6 +182,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v24_project_evolution",
                 "v24_stop_continue_report",
                 "v25_migration_policy",
+                "v25_performance_budget_report",
                 "v25_release_profile",
                 "v25_security_audit_report",
             },
