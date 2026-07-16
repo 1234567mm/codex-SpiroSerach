@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-observation-projection.schema.json",
+  "title": "V24ObservationProjection",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "projection_id", "import_id", "request_set_id", "projection_status", "evidence_candidates", "review_items", "scoring_updates"],
+  "properties": {
+    "schema_version": { "const": "v24.observation_projection.v1" },
+    "projection_id": { "type": "string" },
+    "import_id": { "type": "string" },
+    "request_set_id": { "type": "string" },
+    "projection_status": { "enum": ["needs_review", "empty"] },
+    "evidence_candidates": { "type": "array" },
+    "review_items": { "type": "array" },
+    "scoring_updates": { "type": "array", "maxItems": 0 }
+  }
+}

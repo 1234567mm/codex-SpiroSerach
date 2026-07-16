@@ -77,7 +77,8 @@
         "v24_recommendations",
         "v24_experiment_requests",
         "v24_handoff_export",
-        "v24_observation_import"
+        "v24_observation_import",
+        "v24_observation_projection"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },
