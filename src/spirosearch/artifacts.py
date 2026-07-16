@@ -66,6 +66,7 @@ V4_ARTIFACT_KINDS = {
     "v25_migration_policy",
     "v25_security_audit_report",
     "v25_performance_budget_report",
+    "v25_recovery_runbook",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -355,6 +356,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v25-performance-budget-report.schema.json",
         "join_keys": ("performance_budget_id", "release_profile_id"),
         "depends_on": ("v25_release_profile",),
+    },
+    "v25_recovery_runbook": {
+        "schema_ref": "schemas/v25-recovery-runbook.schema.json",
+        "join_keys": ("recovery_runbook_id", "release_profile_id"),
+        "depends_on": ("v25_release_profile", "v25_migration_policy"),
     },
 }
 
