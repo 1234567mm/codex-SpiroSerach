@@ -6,7 +6,9 @@ from tempfile import TemporaryDirectory
 
 from spirosearch.artifact_repository import JsonArtifactRepository
 from spirosearch.artifacts import build_run_manifest, write_json_artifact
-from spirosearch.v23_command import ActionResult
+from spirosearch.mcp.registry import ToolNotFoundError
+from spirosearch.mcp.server import create_readonly_run_registry, create_v23_command_registry
+from spirosearch.v23_command import ActionRequest, ActionResult
 from spirosearch.v23_command_outputs import write_command_output_artifacts
 
 
@@ -19,6 +21,35 @@ def action_result(action_type="review_decision", status="accepted"):
         actor_id="curator-a" if action_type == "review_decision" else "operator-a",
         reason_code="command_preconditions_passed" if status == "accepted" else status,
         message=f"{status} command result",
+    )
+
+
+def review_request_payload(**overrides):
+    values = {
+        "action_type": "review_decision",
+        "actor_id": "curator-a",
+        "role": "curator",
+        "reason": "resolve review item",
+        "idempotency_key": "idem-review-e2e",
+        "expected_run_id": "run-1",
+        "expected_input_hash": "input-hash",
+        "expected_target_version": "target-v1",
+        "payload": {"review_item_id": "review-1", "decision": "resolve"},
+    }
+    values.update(overrides)
+    return ActionRequest(**values).to_dict()
+
+
+def action_result_from_payload(payload):
+    return ActionResult(
+        request_id=payload["request_id"],
+        action_type=payload["action_type"],
+        status=payload["status"],
+        idempotency_key=payload["idempotency_key"],
+        actor_id=payload["actor_id"],
+        reason_code=payload["reason_code"],
+        message=payload["message"],
+        output_artifacts=tuple(payload.get("output_artifacts", ())),
     )
 
 
@@ -140,6 +171,66 @@ class V23CommandOutputTests(unittest.TestCase):
 
                 self.assertEqual(payload["job_status"], job_status)
                 self.assertIn(status, json.dumps(payload, sort_keys=True))
+
+    def test_e2e_security_replay_and_outputs_do_not_silently_change_state(self):
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            registry = create_v23_command_registry(
+                current_run_id="run-1",
+                current_input_hash="input-hash",
+                current_target_version="target-v1",
+            )
+            readonly_registry = create_readonly_run_registry(output_dir)
+
+            accepted = registry.call_tool("submit_review_decision", review_request_payload(), actor="MCPClient")
+            replay = registry.call_tool("submit_review_decision", review_request_payload(), actor="MCPClient")
+            conflict = registry.call_tool(
+                "submit_review_decision",
+                review_request_payload(payload={"review_item_id": "review-2", "decision": "resolve"}),
+                actor="MCPClient",
+            )
+            unauthorized = registry.call_tool(
+                "submit_review_decision",
+                review_request_payload(idempotency_key="idem-unauthorized", role="operator"),
+                actor="MCPClient",
+            )
+            stale = registry.call_tool(
+                "submit_review_decision",
+                review_request_payload(idempotency_key="idem-stale", expected_target_version="target-v0"),
+                actor="MCPClient",
+            )
+
+            self.assertEqual(replay, accepted)
+            self.assertEqual(conflict["status"], "conflict")
+            self.assertEqual(unauthorized["status"], "rejected")
+            self.assertEqual(stale["status"], "conflict")
+            self.assertEqual(conflict["output_artifacts"], [])
+            self.assertEqual(unauthorized["output_artifacts"], [])
+            self.assertEqual(stale["output_artifacts"], [])
+            self.assertEqual(list(output_dir.rglob("*")), [])
+            with self.assertRaises(ToolNotFoundError):
+                readonly_registry.call_tool("submit_review_decision", review_request_payload(), actor="MCPClient")
+
+            artifacts = write_command_output_artifacts(
+                output_dir,
+                action_result_from_payload(accepted),
+                run_id="run-1",
+                input_hash="input-hash",
+                generated_at="2026-07-16T00:00:00+00:00",
+                producer_version="v23-test",
+            )
+            build_run_manifest(
+                artifacts,
+                run_id="run-1",
+                input_hash="input-hash",
+                generated_at="2026-07-16T00:00:00+00:00",
+                producer_version="v23-test",
+            ).write_json(output_dir)
+            audit = JsonArtifactRepository(output_dir).read_jsonl("v23_command_audit")
+
+        self.assertTrue(audit.available)
+        self.assertEqual(audit.records[0]["request_id"], accepted["request_id"])
+        self.assertEqual(audit.records[0]["attribution"]["actor_id"], "curator-a")
 
 
 if __name__ == "__main__":
