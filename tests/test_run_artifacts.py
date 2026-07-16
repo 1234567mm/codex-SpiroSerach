@@ -178,6 +178,7 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v24_handoff_export",
                 "v24_observation_import",
                 "v24_observation_projection",
+                "v24_loop_controls_report",
             },
         )
 
