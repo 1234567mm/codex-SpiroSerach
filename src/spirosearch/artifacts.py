@@ -63,6 +63,7 @@ V4_ARTIFACT_KINDS = {
     "v24_project_evolution",
     "v24_stop_continue_report",
     "v25_release_profile",
+    "v25_migration_policy",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -337,6 +338,11 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/v25-release-profile.schema.json",
         "join_keys": ("profile_id",),
         "depends_on": (),
+    },
+    "v25_migration_policy": {
+        "schema_ref": "schemas/v25-migration-policy.schema.json",
+        "join_keys": ("policy_id", "release_profile_id"),
+        "depends_on": ("v25_release_profile",),
     },
 }
 
