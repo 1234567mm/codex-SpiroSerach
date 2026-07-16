@@ -83,7 +83,8 @@
         "v24_project_evolution",
         "v24_stop_continue_report",
         "v25_migration_policy",
-        "v25_release_profile"
+        "v25_release_profile",
+        "v25_security_audit_report"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },
