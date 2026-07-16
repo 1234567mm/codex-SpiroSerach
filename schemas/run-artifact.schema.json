@@ -85,6 +85,7 @@
         "v25_migration_policy",
         "v25_performance_budget_report",
         "v25_recovery_runbook",
+        "v25_release_checklist",
         "v25_release_profile",
         "v25_security_audit_report"
       ]
