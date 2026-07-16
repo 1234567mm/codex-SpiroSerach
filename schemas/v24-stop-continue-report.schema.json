@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v24-stop-continue-report.schema.json",
+  "title": "V24StopContinueReport",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "stop_continue_id", "decision", "reason_codes", "decision_basis", "claims"],
+  "properties": {
+    "schema_version": { "const": "v24.stop_continue_report.v1" },
+    "stop_continue_id": { "type": "string" },
+    "decision": { "enum": ["stop", "continue"] },
+    "reason_codes": { "type": "array" },
+    "decision_basis": { "type": "object" },
+    "claims": { "type": "object" }
+  }
+}

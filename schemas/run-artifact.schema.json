@@ -80,7 +80,8 @@
         "v24_observation_import",
         "v24_observation_projection",
         "v24_loop_controls_report",
-        "v24_project_evolution"
+        "v24_project_evolution",
+        "v24_stop_continue_report"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },
