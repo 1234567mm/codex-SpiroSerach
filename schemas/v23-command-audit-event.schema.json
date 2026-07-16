@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/v23-command-audit-event.schema.json",
+  "title": "V23CommandAuditEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "audit_event_id", "run_id", "generated_at", "request_id", "action_type", "status", "idempotency_key", "actor_id", "reason_code", "message", "attribution"],
+  "properties": {
+    "schema_version": { "const": "v23.command_audit_event.v1" },
+    "audit_event_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "request_id": { "type": "string", "minLength": 1 },
+    "action_type": { "enum": ["review_decision", "recompute_request"] },
+    "status": { "enum": ["accepted"] },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "actor_id": { "type": "string", "minLength": 1 },
+    "reason_code": { "type": "string", "minLength": 1 },
+    "message": { "type": "string", "minLength": 1 },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "reason_code"],
+      "properties": {
+        "actor_id": { "type": "string", "minLength": 1 },
+        "reason_code": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

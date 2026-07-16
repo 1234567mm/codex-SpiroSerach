@@ -49,6 +49,9 @@ V4_ARTIFACT_KINDS = {
     "v22_model_activation_report",
     "v22_literature_benchmark_report",
     "v22_scientific_closure_report",
+    "v23_action_results",
+    "v23_command_audit",
+    "v23_recompute_job_status",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -253,6 +256,21 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
             "v22_independent_snapshot_report",
             "v22_model_activation_report",
         ),
+    },
+    "v23_action_results": {
+        "schema_ref": "schemas/v23-action-result.schema.json",
+        "join_keys": ("request_id", "idempotency_key", "actor_id"),
+        "depends_on": (),
+    },
+    "v23_command_audit": {
+        "schema_ref": "schemas/v23-command-audit-event.schema.json",
+        "join_keys": ("audit_event_id", "request_id", "actor_id"),
+        "depends_on": ("v23_action_results",),
+    },
+    "v23_recompute_job_status": {
+        "schema_ref": "schemas/v23-recompute-job-status.schema.json",
+        "join_keys": ("job_id", "request_id"),
+        "depends_on": ("v23_action_results",),
     },
 }
 
