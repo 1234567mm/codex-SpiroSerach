@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v28-acquisition-strategy-comparison.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "batch_size",
+    "seeds",
+    "seed_reports",
+    "qnehvi_win_count",
+    "pool_size"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v28.acquisition_strategy_comparison.v1"
+    },
+    "batch_size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "seeds": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "seed_reports": {
+      "type": "array"
+    },
+    "qnehvi_win_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pool_size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "content_fingerprint": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

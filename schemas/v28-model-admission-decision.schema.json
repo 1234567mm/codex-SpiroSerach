@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v28-model-admission-decision.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "model_family",
+    "decision",
+    "criteria_version",
+    "passed_gates",
+    "failed_gates",
+    "metrics",
+    "residual_risks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v28.model_admission_decision.v1"
+    },
+    "model_family": {
+      "type": "string"
+    },
+    "decision": {
+      "enum": [
+        "admit_offline_only",
+        "no_admit"
+      ]
+    },
+    "criteria_version": {
+      "type": "string"
+    },
+    "passed_gates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failed_gates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metrics": {
+      "type": "object"
+    },
+    "residual_risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
