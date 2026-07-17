@@ -5,6 +5,7 @@
 > Worktree: `D:\tmp\spiro-v28-evidence`
 > Baseline / P0 SHA: `6037c37aff9819ed2acd9f159975635f1c978b5f`
 > Status: DONE_WITH_CONCERNS
+> Full-gate evidence: ALL_OK over 112 modules (19 batches)
 
 ## 1. Scope Closed
 
@@ -62,7 +63,15 @@ python -m unittest tests.test_model_admission tests.test_opv_db_provider tests.t
 
 Result: 55 tests OK.
 
-Additional partial full-suite batches also OK where executed; harness timeout prevented a single-process `discover` summary in this environment.
+Full suite batch gate (pass):
+
+- Modules: 112 `tests/test_*.py`
+- Batch size: 6 modules
+- Result: `ALL_OK batches_ok=19`
+- Log: `D:\tmp\v28-full-gate.txt`
+- Window: 2026-07-17T09:35:55+08:00 to 2026-07-17T09:36:28+08:00
+
+Single-process `unittest discover` remains awkward under the interactive tool timeout, but the detached full-module batch gate covered every test module with exit code 0.
 
 ## 6. Residual Risks / V29-V30
 
