@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v28-incident-checklist.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "incident_checklist_id",
+    "status",
+    "hosted_deployment",
+    "external_credentials_required"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v28.incident_checklist.v1"
+    },
+    "incident_checklist_id": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "blocked"
+      ]
+    },
+    "hosted_deployment": {
+      "const": false
+    },
+    "external_credentials_required": {
+      "const": false
+    }
+  },
+  "additionalProperties": true
+}

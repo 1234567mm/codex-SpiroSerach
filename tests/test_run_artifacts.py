@@ -187,6 +187,12 @@ class RunArtifactContractTests(unittest.TestCase):
                 "v25_release_checklist",
                 "v25_release_profile",
                 "v25_security_audit_report",
+                "v28_model_admission_decision",
+                "v28_acquisition_strategy_comparison",
+                "audit_graph_snapshot",
+                "v28_scale_readiness_report",
+                "v28_incident_checklist",
+                "v28_local_rehearsal_report",
             },
         )
 

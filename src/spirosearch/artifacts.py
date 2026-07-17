@@ -68,6 +68,12 @@ V4_ARTIFACT_KINDS = {
     "v25_performance_budget_report",
     "v25_recovery_runbook",
     "v25_release_checklist",
+    "v28_model_admission_decision",
+    "v28_acquisition_strategy_comparison",
+    "audit_graph_snapshot",
+    "v28_scale_readiness_report",
+    "v28_incident_checklist",
+    "v28_local_rehearsal_report",
 }
 
 ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
@@ -373,6 +379,36 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
             "v25_performance_budget_report",
             "v25_recovery_runbook",
         ),
+    },
+    "v28_model_admission_decision": {
+        "schema_ref": "schemas/v28-model-admission-decision.schema.json",
+        "join_keys": ("model_family", "criteria_version"),
+        "depends_on": (),
+    },
+    "v28_acquisition_strategy_comparison": {
+        "schema_ref": "schemas/v28-acquisition-strategy-comparison.schema.json",
+        "join_keys": ("seed",),
+        "depends_on": (),
+    },
+    "audit_graph_snapshot": {
+        "schema_ref": "schemas/v28-audit-graph-snapshot.schema.json",
+        "join_keys": ("graph_id", "node_id", "edge_id"),
+        "depends_on": (),
+    },
+    "v28_scale_readiness_report": {
+        "schema_ref": "schemas/v28-scale-readiness-report.schema.json",
+        "join_keys": ("cohort",),
+        "depends_on": (),
+    },
+    "v28_incident_checklist": {
+        "schema_ref": "schemas/v28-incident-checklist.schema.json",
+        "join_keys": ("incident_checklist_id", "release_profile_id"),
+        "depends_on": (),
+    },
+    "v28_local_rehearsal_report": {
+        "schema_ref": "schemas/v28-local-rehearsal-report.schema.json",
+        "join_keys": ("start_sha",),
+        "depends_on": (),
     },
 }
 

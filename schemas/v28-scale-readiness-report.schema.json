@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v28-scale-readiness-report.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cohort",
+    "status",
+    "blockers",
+    "eligible_for_scoring_default"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v28.scale_readiness_report.v1"
+    },
+    "cohort": {
+      "enum": [
+        "C100",
+        "B500"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked"
+      ]
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "eligible_for_scoring_default": {
+      "const": false
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v28-local-rehearsal-report.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "start_sha",
+    "status",
+    "hosted_deployment"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v28.local_rehearsal_report.v1"
+    },
+    "start_sha": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "blocked"
+      ]
+    },
+    "hosted_deployment": {
+      "const": false
+    }
+  },
+  "additionalProperties": true
+}
