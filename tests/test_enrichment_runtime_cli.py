@@ -158,10 +158,12 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 [
                     "crossref",
                     "custom_htl_dft",
+                    "hopv15",
                     "llm_literature",
                     "materials_project",
                     "nomad",
                     "openalex",
+                    "opv_db",
                     "pubchem",
                     "pubchemqc",
                 ],

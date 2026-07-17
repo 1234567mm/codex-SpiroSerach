@@ -1,0 +1,14 @@
+[
+  {
+    "molecule_id": "hopv-1",
+    "smiles": "COc1ccc(N(c2ccc(OC)cc2)c2ccc(OC)cc2)cc1",
+    "inchi_key": "VSPQGJQLVZRCQA-UHFFFAOYSA-N",
+    "homo_ev": -5.1,
+    "lumo_ev": -1.9,
+    "band_gap_ev": 3.2,
+    "pce_percent": 4.1,
+    "source_doi": "10.1038/sdata.2016.86",
+    "license": "CC-BY-4.0",
+    "computed": true
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "record_id": "opv-1",
+    "donor_identity": "P3HT",
+    "acceptor_identity": "PCBM",
+    "pce_percent": 3.2,
+    "voc_v": 0.58,
+    "jsc_ma_cm2": 9.1,
+    "fill_factor": 0.61,
+    "source_doi": "10.1000/opv.fixture",
+    "validation_flag": "strict_benchmark",
+    "license": "CC-BY-4.0"
+  }
+]

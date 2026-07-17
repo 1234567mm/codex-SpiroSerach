@@ -27,8 +27,13 @@
     ],
     "disambiguation_required": true,
     "operational_status": "active",
-    "capabilities": ["identity"],
-    "execution_modes": ["direct", "enrichment"],
+    "capabilities": [
+      "identity"
+    ],
+    "execution_modes": [
+      "direct",
+      "enrichment"
+    ],
     "last_verified_at": "2026-07-10"
   },
   {
@@ -53,8 +58,13 @@
     ],
     "disambiguation_required": false,
     "operational_status": "quarantined",
-    "capabilities": ["electronic_structure", "computed_material_summary"],
-    "execution_modes": ["direct"],
+    "capabilities": [
+      "electronic_structure",
+      "computed_material_summary"
+    ],
+    "execution_modes": [
+      "direct"
+    ],
     "last_verified_at": null
   },
   {
@@ -79,8 +89,12 @@
     ],
     "disambiguation_required": false,
     "operational_status": "quarantined",
-    "capabilities": ["electronic_structure"],
-    "execution_modes": ["direct"],
+    "capabilities": [
+      "electronic_structure"
+    ],
+    "execution_modes": [
+      "direct"
+    ],
     "last_verified_at": null
   },
   {
@@ -105,8 +119,12 @@
     ],
     "disambiguation_required": false,
     "operational_status": "active",
-    "capabilities": ["literature_metadata"],
-    "execution_modes": ["direct"],
+    "capabilities": [
+      "literature_metadata"
+    ],
+    "execution_modes": [
+      "direct"
+    ],
     "last_verified_at": "2026-07-10"
   },
   {
@@ -131,8 +149,12 @@
     ],
     "disambiguation_required": false,
     "operational_status": "experimental",
-    "capabilities": ["literature_metadata"],
-    "execution_modes": ["direct"],
+    "capabilities": [
+      "literature_metadata"
+    ],
+    "execution_modes": [
+      "direct"
+    ],
     "last_verified_at": null
   },
   {
@@ -161,8 +183,12 @@
     ],
     "disambiguation_required": true,
     "operational_status": "experimental",
-    "capabilities": ["literature_claim_extraction"],
-    "execution_modes": ["local_dataset"],
+    "capabilities": [
+      "literature_claim_extraction"
+    ],
+    "execution_modes": [
+      "local_dataset"
+    ],
     "last_verified_at": null
   },
   {
@@ -183,8 +209,12 @@
     ],
     "disambiguation_required": false,
     "operational_status": "experimental",
-    "capabilities": ["electronic_structure"],
-    "execution_modes": ["local_dataset"],
+    "capabilities": [
+      "electronic_structure"
+    ],
+    "execution_modes": [
+      "local_dataset"
+    ],
     "last_verified_at": null
   },
   {
@@ -211,8 +241,83 @@
     ],
     "disambiguation_required": false,
     "operational_status": "active",
-    "capabilities": ["electronic_structure", "computed_material_summary"],
-    "execution_modes": ["direct", "enrichment"],
+    "capabilities": [
+      "electronic_structure",
+      "computed_material_summary"
+    ],
+    "execution_modes": [
+      "direct",
+      "enrichment"
+    ],
     "last_verified_at": "2026-07-10"
+  },
+  {
+    "provider": "opv_db",
+    "base_url": "file://data/public_baselines/opv_db/",
+    "license_hint": "CC BY 4.0; preserve third-party attribution tables",
+    "trust_level": "T3_literature_machine",
+    "rate_limit": {
+      "requests_per_second": 1,
+      "backoff_strategy": "none"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 720,
+    "allowed_output_fields": [
+      "record_id",
+      "donor_identity",
+      "acceptor_identity",
+      "pce_percent",
+      "voc_v",
+      "jsc_ma_cm2",
+      "fill_factor",
+      "source_doi",
+      "validation_flag",
+      "license",
+      "computed"
+    ],
+    "disambiguation_required": false,
+    "operational_status": "experimental",
+    "capabilities": [
+      "device_performance",
+      "molecular_benchmark"
+    ],
+    "execution_modes": [
+      "local_dataset"
+    ],
+    "last_verified_at": "2026-07-17"
+  },
+  {
+    "provider": "hopv15",
+    "base_url": "file://data/public_baselines/hopv15/",
+    "license_hint": "CC BY 4.0 Scientific Data / Figshare HOPV15",
+    "trust_level": "T2_computed_db",
+    "rate_limit": {
+      "requests_per_second": 1,
+      "backoff_strategy": "none"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 720,
+    "allowed_output_fields": [
+      "molecule_id",
+      "smiles",
+      "inchi_key",
+      "homo_ev",
+      "lumo_ev",
+      "band_gap_ev",
+      "pce_percent",
+      "source_doi",
+      "license",
+      "computed"
+    ],
+    "disambiguation_required": false,
+    "operational_status": "experimental",
+    "capabilities": [
+      "electronic_structure",
+      "molecular_benchmark"
+    ],
+    "execution_modes": [
+      "local_dataset"
+    ],
+    "last_verified_at": "2026-07-17"
   }
 ]
