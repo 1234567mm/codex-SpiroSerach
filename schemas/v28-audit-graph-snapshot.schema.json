@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v28-audit-graph-snapshot.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "graph_id",
+    "generated_at",
+    "source_run_ids",
+    "nodes",
+    "edges",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v28.audit_graph_snapshot.v1"
+    },
+    "graph_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "source_run_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_manifest_hashes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nodes": {
+      "type": "array"
+    },
+    "edges": {
+      "type": "array"
+    },
+    "query_index": {
+      "type": "object"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "content_sha256": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}
