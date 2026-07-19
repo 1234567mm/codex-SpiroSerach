@@ -1,0 +1,36 @@
+{
+  "schema_version": "v29.paper_vault_summary.v1",
+  "paper_count": 3,
+  "papers": [
+    {
+      "doi": "10.1234/example.a",
+      "paper_folder": "papers/example.a",
+      "has_si": true,
+      "main_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "si_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "license": "CC BY 4.0",
+      "source_rights": "open_access",
+      "attachment_count": 2
+    },
+    {
+      "doi": "10.1234/example.b",
+      "paper_folder": "papers/example.b",
+      "has_si": false,
+      "main_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "si_sha256": null,
+      "license": "CC BY 4.0",
+      "source_rights": "open_access",
+      "attachment_count": 1
+    },
+    {
+      "doi": "10.1234/example.c",
+      "paper_folder": "papers/example.c",
+      "has_si": true,
+      "main_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "si_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "license": "CC BY 4.0",
+      "source_rights": "open_access",
+      "attachment_count": 2
+    }
+  ]
+}

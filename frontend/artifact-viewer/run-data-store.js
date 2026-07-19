@@ -6,6 +6,9 @@
   const READONLY_ENVELOPE_STATUSES = Object.freeze(["available", "degraded", "invalid", "unavailable"]);
   const READONLY_ENVELOPE_SEVERITIES = Object.freeze(["info", "warning", "error", "critical"]);
 
+  const SESSION_STORAGE_KEY = "spirosearch:committedSnapshot";
+  const SESSION_STORAGE_MAX_BYTES = 4 * 1024 * 1024;
+
   function diagnostic(code, message, details = {}, severity = "error") {
     return {
       code,
@@ -1270,6 +1273,7 @@
         )]);
       }
       this.committedSnapshot = snapshot;
+      RunDataStore.commit(snapshot);
       return deepFreeze({
         ok: true,
         retainedRunId: null,
@@ -1285,6 +1289,50 @@
         snapshot: this.committedSnapshot,
         diagnostics: cloneJson(diagnostics),
       });
+    }
+
+    static commit(snapshot) {
+      if (typeof sessionStorage === "undefined" || !snapshot) {
+        return {stored: false, reason: "sessionStorage unavailable or snapshot missing"};
+      }
+      try {
+        const serialized = JSON.stringify(snapshot);
+        if (serialized.length > SESSION_STORAGE_MAX_BYTES) {
+          const metadata = {
+            manifest: snapshot.manifest,
+            manifestMetadata: snapshot.manifestMetadata,
+            diagnostics: snapshot.diagnostics,
+            availability: snapshot.availability,
+            truncated: true,
+            reason: "Run data too large to restore automatically; please reload the bundle.",
+          };
+          sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(metadata));
+          return {stored: true, truncated: true, reason: metadata.reason};
+        }
+        sessionStorage.setItem(SESSION_STORAGE_KEY, serialized);
+        return {stored: true, truncated: false};
+      } catch (error) {
+        return {stored: false, reason: error.message};
+      }
+    }
+
+    static restoreFromSession() {
+      if (typeof sessionStorage === "undefined") {
+        return {restored: false, reason: "sessionStorage unavailable", snapshot: null};
+      }
+      try {
+        const serialized = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (!serialized) {
+          return {restored: false, reason: "no committed snapshot in session", snapshot: null};
+        }
+        const parsed = JSON.parse(serialized);
+        if (parsed.truncated) {
+          return {restored: false, reason: parsed.reason, snapshot: null, truncated: true};
+        }
+        return {restored: true, snapshot: deepFreeze(parsed)};
+      } catch (error) {
+        return {restored: false, reason: error.message, snapshot: null};
+      }
     }
   }
 

@@ -57,7 +57,7 @@
       "computed"
     ],
     "disambiguation_required": false,
-    "operational_status": "quarantined",
+    "operational_status": "experimental",
     "capabilities": [
       "electronic_structure",
       "computed_material_summary"
@@ -65,7 +65,7 @@
     "execution_modes": [
       "direct"
     ],
-    "last_verified_at": null
+    "last_verified_at": "2026-07-19"
   },
   {
     "provider": "pubchemqc",
@@ -319,5 +319,31 @@
       "local_dataset"
     ],
     "last_verified_at": "2026-07-17"
+  },
+  {
+    "provider": "nomad_perla_psc",
+    "base_url": "https://nomad-lab.eu/prod/v1/api/v1",
+    "license_hint": "NOMAD PERLA PSC CC-BY-4.0; preserve original dataset attribution",
+    "trust_level": "T3_literature_machine",
+    "rate_limit": {
+      "requests_per_second": 2,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "entry_id", "upload_id", "htl_name", "device_stack",
+      "pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor",
+      "perovskite_composition", "chemical_formula",
+      "source_doi", "license", "query_hash", "archive_status",
+      "review_required", "review_reasons",
+      "match_type", "device_count", "devices"
+    ],
+    "disambiguation_required": true,
+    "operational_status": "experimental",
+    "capabilities": ["device_performance", "htl_lookup", "perovskite_device_summary"],
+    "execution_modes": ["direct", "enrichment"],
+    "last_verified_at": "2026-07-19",
+    "probe_notes": "Metadata queries verified (40 entries, 4 HTLs). Archive endpoint has rate-limiting issues. hole_transport_layer is list type; efficiency in percent; device_stack is list."
   }
 ]

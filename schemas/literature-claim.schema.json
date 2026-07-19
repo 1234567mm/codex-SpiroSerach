@@ -3,10 +3,15 @@
   "$id": "https://spirosearch.local/schemas/literature-claim.schema.json",
   "title": "LiteratureClaim",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": ["schema_version", "claim_id", "asset_id", "chunk_id", "doi", "property", "value", "unit", "text_sha256", "method", "conditions", "extractor_version", "review_status"],
   "properties": {
-    "schema_version": { "const": "v13.literature_claim.v1" },
+    "schema_version": {
+      "anyOf": [
+        { "const": "v13.literature_claim.v1" },
+        { "const": "v29.literature_claim.v1" }
+      ]
+    },
     "claim_id": { "type": "string", "minLength": 1 },
     "asset_id": { "type": "string", "minLength": 1 },
     "chunk_id": { "type": "string", "minLength": 1 },

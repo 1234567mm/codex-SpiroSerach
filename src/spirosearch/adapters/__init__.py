@@ -13,12 +13,18 @@ from spirosearch.adapters.beard_cole_pce import (
     BeardColeRejection,
     parse_beard_cole_records,
 )
+from spirosearch.adapters.csv_adapter import (
+    CsvAdapter,
+    CsvFieldMap,
+)
 
 __all__ = [
     "DomainCandidateProjection",
     "BeardColeQualityReport",
     "BeardColeRecord",
     "BeardColeRejection",
+    "CsvAdapter",
+    "CsvFieldMap",
     "LiteratureEvidenceProjection",
     "candidate_material_to_domain",
     "literature_claims_to_evidence",

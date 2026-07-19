@@ -1,0 +1,14 @@
+{
+  "schema_version": "v29.unit_audit_report.v1",
+  "efficiency_unit_guess": "percent",
+  "efficiency_count": 39,
+  "efficiency_range": {
+    "min": 5.15,
+    "max": 25.59
+  },
+  "voc_unit_guess": "V",
+  "voc_count": 33,
+  "jsc_unit_guess": "A/m2_or_mA/cm2_needs_verification",
+  "jsc_count": 33,
+  "note": "NOMAD internally normalizes to SI units; values may need conversion before comparison with literature claims"
+}

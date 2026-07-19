@@ -41,7 +41,7 @@ class ProviderCapabilitiesTests(unittest.TestCase):
         nomad = next(
             p for p in capabilities["providers"] if p["provider"] == "nomad"
         )
-        self.assertEqual(nomad["operational_status"], "quarantined")
+        self.assertEqual(nomad["operational_status"], "experimental")
         self.assertFalse(nomad["live_enabled"])
 
     def test_pubchemqc_is_quarantined_and_not_live_enabled(self):

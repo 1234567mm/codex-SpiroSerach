@@ -468,11 +468,16 @@ def _main_acquisition_replay(argv: list[str]) -> int:
 
 
 def _main_paper_ingest(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Run the local V18 paper intelligence ingest.")
+    parser = argparse.ArgumentParser(description="Run the local V29 paper intelligence ingest.")
     parser.add_argument("--paper-dir", required=True, help="Directory containing DOI-hashed paper folders.")
     parser.add_argument("--output-dir", required=True, help="Directory for manifest-backed ingest artifacts.")
     parser.add_argument("--extractor", default="regex", choices=("regex",), help="Offline extractor to use.")
     parser.add_argument("--obsidian-dir", help="Optional Obsidian vault directory for derived notes.")
+    parser.add_argument("--resume", action="store_true", help="Resume from previous interrupted/failed runs.")
+    parser.add_argument("--failed-only", action="store_true", help="Only retry failed/interrupted DOIs.")
+    parser.add_argument("--force-doi", action="append", default=[], metavar="DOI", help="Force re-extraction for specific DOI(s). May be repeated.")
+    parser.add_argument("--journal-dir", help="Extraction journal directory. Defaults to output-dir/extraction-journal.")
+    parser.add_argument("--use-legacy-parser", action="store_true", help="Use legacy byte-decode parser instead of PdfChunker.")
     args = parser.parse_args(argv)
 
     try:
@@ -481,6 +486,11 @@ def _main_paper_ingest(argv: list[str]) -> int:
             args.output_dir,
             extractor=args.extractor,
             obsidian_dir=args.obsidian_dir,
+            resume=args.resume,
+            failed_only=args.failed_only,
+            force_dois=tuple(args.force_doi),
+            journal_dir=args.journal_dir,
+            use_legacy_parser=args.use_legacy_parser,
         )
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         print("paper-ingest failed validation", file=sys.stderr)

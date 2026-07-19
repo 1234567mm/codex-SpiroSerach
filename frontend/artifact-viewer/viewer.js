@@ -9,6 +9,15 @@ const state = {
   projectEvolution: {documents: [], diagnostics: []},
   projectSnapshot: null,
   projectSelection: null,
+  paperDiagnostics: {doi: "all", status: "all", source: "all", search: "", expandedDois: new Set()},
+};
+
+let lastPaperDiagnostics = {
+  sourceAssets: [],
+  literatureClaims: [],
+  paperVaultSummary: null,
+  paperCrossRefReport: null,
+  obsidianNotes: null,
 };
 
 const CANDIDATE_DETAIL_TABS = Object.freeze([
@@ -30,7 +39,10 @@ document.getElementById("bundleFiles").addEventListener("change", async (event) 
     showError("Load failed: run data store is unavailable");
     return;
   }
+  setLoading(true);
   const result = await runDataStore.replace(event.target.files);
+  setLoading(false);
+  renderErrorPanel(result.diagnostics);
   if (!result.ok) {
     showLoadFailure(result);
     return;
@@ -155,6 +167,55 @@ document.getElementById("candidateSort").addEventListener("change", (event) => {
   renderCandidateWorkspace();
 });
 
+document.getElementById("paperDoiFilter")?.addEventListener("change", (event) => {
+  state.paperDiagnostics.doi = event.target.value || "all";
+  renderPaperDiagnostics(lastPaperDiagnostics.sourceAssets, lastPaperDiagnostics.literatureClaims, lastPaperDiagnostics.paperVaultSummary, lastPaperDiagnostics.paperCrossRefReport, lastPaperDiagnostics.obsidianNotes);
+});
+
+document.getElementById("paperStatusFilter")?.addEventListener("change", (event) => {
+  state.paperDiagnostics.status = event.target.value || "all";
+  renderPaperDiagnostics(lastPaperDiagnostics.sourceAssets, lastPaperDiagnostics.literatureClaims, lastPaperDiagnostics.paperVaultSummary, lastPaperDiagnostics.paperCrossRefReport, lastPaperDiagnostics.obsidianNotes);
+});
+
+document.getElementById("paperSourceFilter")?.addEventListener("change", (event) => {
+  state.paperDiagnostics.source = event.target.value || "all";
+  renderPaperDiagnostics(lastPaperDiagnostics.sourceAssets, lastPaperDiagnostics.literatureClaims, lastPaperDiagnostics.paperVaultSummary, lastPaperDiagnostics.paperCrossRefReport, lastPaperDiagnostics.obsidianNotes);
+});
+
+document.getElementById("paperSearchInput")?.addEventListener("input", (event) => {
+  state.paperDiagnostics.search = event.target.value || "";
+  renderPaperDiagnostics(lastPaperDiagnostics.sourceAssets, lastPaperDiagnostics.literatureClaims, lastPaperDiagnostics.paperVaultSummary, lastPaperDiagnostics.paperCrossRefReport, lastPaperDiagnostics.obsidianNotes);
+});
+
+document.getElementById("paperDiagnosticsList")?.addEventListener("toggle", (event) => {
+  const doi = event.target.dataset?.doi;
+  if (!doi) return;
+  if (event.target.open) {
+    state.paperDiagnostics.expandedDois.add(doi);
+  } else {
+    state.paperDiagnostics.expandedDois.delete(doi);
+  }
+}, true);
+
+document.getElementById("paperDiagnosticsList")?.addEventListener("click", (event) => {
+  const link = event.target?.closest?.("[data-paper-candidate-id]");
+  if (!link) return;
+  event.preventDefault?.();
+  state.selectedCandidateId = link.dataset.paperCandidateId;
+  if (typeof location !== "undefined") location.hash = "#candidateWorkspace";
+  if (state.candidateProjection && globalThis.SpiroCandidateProjection) {
+    renderCandidateWorkspace();
+  } else {
+    renderCandidateTracer(getKnownArtifact("screening_input_view"), getKnownArtifact("canonical_evidence"));
+  }
+});
+
+document.getElementById("printView")?.addEventListener("click", () => {
+  if (typeof window !== "undefined" && window.print) window.print();
+});
+
+document.getElementById("exportSnapshot")?.addEventListener("click", exportSnapshot);
+
 function applyCommittedSnapshot(snapshot) {
   state.snapshot = snapshot;
   state.manifest = snapshot.manifest;
@@ -165,6 +226,30 @@ function applyCommittedSnapshot(snapshot) {
   state.selectedCandidateTab = "overview";
   state.candidateProjection = null;
 }
+
+let _selectedCandidateId = state.selectedCandidateId;
+Object.defineProperty(state, "selectedCandidateId", {
+  enumerable: true,
+  get() {
+    return _selectedCandidateId;
+  },
+  set(value) {
+    _selectedCandidateId = value;
+    if (typeof history !== "undefined" && typeof location !== "undefined" && typeof URL !== "undefined") {
+      try {
+        const url = new URL(location.href);
+        if (value) {
+          url.searchParams.set("candidate", value);
+        } else {
+          url.searchParams.delete("candidate");
+        }
+        history.replaceState(null, "", url);
+      } catch (error) {
+        // URL history is optional; failures must not block rendering.
+      }
+    }
+  },
+});
 
 function showLoadFailure(result) {
   const retained = result.retainedRunId
@@ -245,6 +330,8 @@ function renderKnownArtifacts() {
   const obsidianNotes = getKnownArtifact("obsidian_notes");
   const cacheIndex = getKnownArtifact("provider_cache_index");
   const reviewQueue = getKnownArtifact("review_queue") || [];
+  const deviceEvidence = getKnownArtifact("device_evidence") || [];
+  const externalDatasetRecords = getKnownArtifact("external_dataset_records");
   if (state.manifest) {
     renderManifest(state.manifest);
   }
@@ -266,6 +353,8 @@ function renderKnownArtifacts() {
     paperCrossRefReport,
     obsidianNotes
   );
+  renderDeviceEvidence(deviceEvidence);
+  renderExternalDatasetRecords(externalDatasetRecords);
   renderReviewQueue(reviewQueue);
   if (globalThis.SpiroCandidateProjection) {
     state.candidateProjection = globalThis.SpiroCandidateProjection.project(
@@ -1444,11 +1533,90 @@ function renderPaperDiagnostics(
   paperCrossRefReport,
   obsidianNotes
 ) {
+  lastPaperDiagnostics = {
+    sourceAssets,
+    literatureClaims,
+    paperVaultSummary,
+    paperCrossRefReport,
+    obsidianNotes,
+  };
   const list = document.getElementById("paperDiagnosticsList");
   const assets = Array.isArray(sourceAssets) ? sourceAssets : [];
   const claims = Array.isArray(literatureClaims) ? literatureClaims : [];
-  document.getElementById("paperDiagnosticsCount").textContent =
-    `${assets.length} source assets / ${claims.length} claims`;
+  const count = document.getElementById("paperDiagnosticsCount");
+  if (count) count.textContent = `${assets.length} source assets / ${claims.length} claims`;
+
+  populatePaperFilters(assets, claims);
+
+  const extractionJournal = getKnownArtifact("extraction_journal") || {};
+  const journalEntries = Array.isArray(extractionJournal.entries) ? extractionJournal.entries : [];
+  const candidateLinks = getKnownArtifact("candidate_evidence_links") || [];
+  const modelEval = getKnownArtifact("model_evaluation");
+
+  const controls = state.paperDiagnostics;
+  const searchTerm = (controls.search || "").toLowerCase().trim();
+
+  const claimsByDoi = new Map();
+  const allDois = new Set();
+  for (const claim of claims) {
+    const doi = claim.doi || "unknown";
+    allDois.add(doi);
+    if (!claimsByDoi.has(doi)) claimsByDoi.set(doi, []);
+    claimsByDoi.get(doi).push(claim);
+  }
+  for (const asset of assets) {
+    if (asset.doi) allDois.add(asset.doi);
+  }
+  for (const paper of paperVaultSummary?.papers || []) {
+    if (paper.doi) allDois.add(paper.doi);
+  }
+
+  function claimMatchesFilters(claim, doi) {
+    if (controls.doi !== "all" && doi !== controls.doi) return false;
+    if (controls.status !== "all" && !claimStatuses(claim, journalEntries).includes(controls.status)) return false;
+    if (controls.source !== "all" && inferClaimSource(claim) !== controls.source) return false;
+    if (searchTerm) {
+      const hay = [
+        doi,
+        claim.claim_id,
+        claim.property_name || claim.property,
+        String(claim.value || ""),
+        claim.unit || "",
+        claim.method || "",
+      ].join(" ").toLowerCase();
+      if (!hay.includes(searchTerm)) return false;
+    }
+    return true;
+  }
+
+  function doiHasMatches(doi) {
+    if (controls.doi !== "all" && doi !== controls.doi) return false;
+    const doiClaims = claimsByDoi.get(doi) || [];
+    if (doiClaims.some((claim) => claimMatchesFilters(claim, doi))) return true;
+    if (searchTerm || controls.source !== "all" || controls.status !== "all") return false;
+    return true;
+  }
+
+  const sections = [];
+  if (modelEval) sections.push(renderModelQualitySnippet(modelEval));
+
+  const sortedDois = [...allDois].sort();
+  for (const doi of sortedDois) {
+    if (!doiHasMatches(doi)) continue;
+    const doiAssets = assets.filter((asset) => asset.doi === doi);
+    const doiClaims = (claimsByDoi.get(doi) || []).filter((claim) => claimMatchesFilters(claim, doi));
+    if (controls.status !== "all" || controls.source !== "all" || searchTerm) {
+      if (!doiAssets.length && !doiClaims.length) continue;
+    }
+    const isOpen = controls.expandedDois.has(doi);
+    const doiHtml = escapeHtml(doi);
+    const summary = `<summary class="paper-doi-summary"><strong>${doiHtml}</strong> <span class="paper-doi-count">${doiAssets.length} assets / ${doiClaims.length} claims</span></summary>`;
+    const body = [
+      ...doiAssets.map(renderPaperSourceAsset),
+      ...doiClaims.map((claim) => renderLiteratureClaim(claim, candidateLinks, journalEntries)),
+    ].join("") || `<div class="empty">No claims or assets match the current filters</div>`;
+    sections.push(`<details class="paper-doi-group" data-doi="${doiHtml}"${isOpen ? " open" : ""}>${summary}<div class="paper-doi-body">${body}</div></details>`);
+  }
 
   const contextSections = [
     renderPaperContext("paper vault summary", paperVaultSummary),
@@ -1456,18 +1624,85 @@ function renderPaperDiagnostics(
     renderPaperContext("obsidian notes", obsidianNotes),
   ].filter(Boolean);
 
-  const sections = [
-    ...assets.map(renderPaperSourceAsset),
-    ...claims.map(renderLiteratureClaim),
-    ...contextSections,
-    renderCandidatePaperUnavailableNotice(),
-  ];
-
-  if (!assets.length && !claims.length && !contextSections.length) {
+  if (!sections.length && !contextSections.length) {
     list.innerHTML = `<div class="empty">No paper diagnostics loaded</div>${renderCandidatePaperUnavailableNotice()}`;
     return;
   }
-  list.innerHTML = sections.join("");
+  list.innerHTML = [...sections, ...contextSections, renderCandidatePaperUnavailableNotice()].join("");
+}
+
+function populatePaperFilters(assets, claims) {
+  const doiSelect = document.getElementById("paperDoiFilter");
+  if (!doiSelect) return;
+  const current = doiSelect.value;
+  const allDois = new Set();
+  for (const asset of assets || []) if (asset?.doi) allDois.add(asset.doi);
+  for (const claim of claims || []) if (claim?.doi) allDois.add(claim.doi);
+  const options = [`<option value="all">All DOIs</option>`];
+  for (const doi of [...allDois].sort()) {
+    const selected = current === doi ? " selected" : "";
+    options.push(`<option value="${escapeHtml(doi)}"${selected}>${escapeHtml(doi)}</option>`);
+  }
+  doiSelect.innerHTML = options.join("");
+  if (current !== doiSelect.value && state.paperDiagnostics.doi !== "all") {
+    doiSelect.value = "all";
+    state.paperDiagnostics.doi = "all";
+  }
+}
+
+function inferClaimSource(claim) {
+  const method = String(claim.method || "").toLowerCase();
+  const extractor = String(claim.extractor_version || "").toLowerCase();
+  if (method.includes("regex") || extractor.includes("regex")) return "regex";
+  if (method.includes("llm") || method.includes("gpt") || extractor.includes("llm") || extractor.includes("gpt")) return "llm";
+  if (method.includes("nomad") || extractor.includes("nomad")) return "nomad";
+  if (method.includes("csv") || extractor.includes("csv")) return "csv";
+  return "unknown";
+}
+
+function claimStatuses(claim, journalEntries) {
+  const statuses = new Set();
+  if (claim.review_status) statuses.add(claim.review_status);
+  if (claim.review_required || claim.requires_review) statuses.add("needs_review");
+  for (const entry of journalEntries || []) {
+    if (entry.claim_id === claim.claim_id || entry.doi === claim.doi) {
+      if (entry.status) statuses.add(entry.status);
+    }
+  }
+  return [...statuses];
+}
+
+function renderModelQualitySnippet(modelEval) {
+  const metrics = modelEval.metrics || {};
+  const calibration = modelEval.calibration || {};
+  return `<section class="flow-item paper-model-quality">
+    <div class="item-title">
+      <span>Model quality</span>
+      <span class="status">${escapeHtml(modelEval.model_version || "-")}</span>
+    </div>
+    <div class="item-meta">
+      ${compactMeta([
+        ["rmse", formatNumber(metrics.rmse)],
+        ["dummy_rmse", formatNumber(modelEval.baselines?.dummy?.rmse)],
+        ["heuristic_rmse", formatNumber(modelEval.baselines?.heuristic?.rmse)],
+        ["coverage_95", formatNumber(calibration.coverage_95)],
+        ["activation", modelEval.activation_status],
+      ])}
+    </div>
+  </section>`;
+}
+
+function getClaimCandidateIds(claim, candidateLinks) {
+  const ids = new Set();
+  for (const link of candidateLinks || []) {
+    const matches = link.claim_id === claim.claim_id || link.evidence_id === claim.claim_id || link.asset_id === claim.asset_id || link.doi === claim.doi;
+    if (!matches) continue;
+    if (link.candidate_id) ids.add(link.candidate_id);
+    if (Array.isArray(link.candidate_ids)) {
+      for (const id of link.candidate_ids) if (id) ids.add(id);
+    }
+  }
+  return [...ids];
 }
 
 function renderPaperSourceAsset(asset) {
@@ -1496,13 +1731,21 @@ function renderPaperSourceAsset(asset) {
   </section>`;
 }
 
-function renderLiteratureClaim(claim) {
+function renderLiteratureClaim(claim, candidateLinks, journalEntries) {
+  const reviewStatus = claim.review_status || (claim.review_required || claim.requires_review ? "needs_review" : "");
   const reviewLabel = claim.review_required || claim.requires_review ? "review required" : "";
-  const lineage = claim.lineage ? stableJson(claim.lineage) : "";
+  const rawSpan = claim.text_span || claim.extracted_span || claim.excerpt || claim.text;
+  const candidateIds = getClaimCandidateIds(claim, candidateLinks);
+  const candidateLinksHtml = candidateIds.length
+    ? `<div class="paper-candidate-links">associated candidates: ${candidateIds.map((id) =>
+        `<a href="#candidateWorkspace" class="chip" data-paper-candidate-id="${escapeHtml(id)}">${escapeHtml(id)}</a>`
+      ).join("")}</div>`
+    : "";
+  const journalStatuses = claimStatuses(claim, journalEntries).filter((status) => status !== reviewStatus);
   return `<section class="flow-item">
     <div class="item-title">
       <span>${escapeHtml(claim.claim_id || "literature claim")}</span>
-      <span class="status">claim</span>
+      <span class="status">${escapeHtml(reviewStatus || "claim")}</span>
     </div>
     <div class="item-meta">
       ${compactMeta([
@@ -1512,19 +1755,23 @@ function renderLiteratureClaim(claim) {
         ["property", claim.property_name || claim.property],
         ["value", claim.value],
         ["unit", claim.unit],
+        ["method", claim.method],
+        ["review_status", reviewStatus],
+        ["review", reviewLabel || null],
+        ["extractor_version", claim.extractor_version],
         ["confidence", claim.confidence],
-        ["review", reviewLabel],
-        ["lineage", lineage],
+        ["journal_status", journalStatuses.join(", ") || null],
       ])}
     </div>
+    ${candidateLinksHtml}
     ${renderClaimSpan(claim)}
   </section>`;
 }
 
 function renderClaimSpan(claim) {
-  const span = claim.text_span || claim.extracted_span || claim.excerpt || claim.text;
+  const span = claim.raw_span || claim.text_span || claim.extracted_span || claim.excerpt || claim.text;
   if (!span) return "";
-  return `<p>${escapeHtml(span)}</p>`;
+  return `<details class="raw-span-preview"><summary>raw span</summary><pre>${escapeHtml(span)}</pre></details>`;
 }
 
 function renderPaperContext(title, payload) {
@@ -1546,6 +1793,104 @@ function renderCandidatePaperUnavailableNotice() {
     </div>
     <p>No backend candidate-to-paper join artifact is loaded for this run.</p>
   </section>`;
+}
+
+function renderDeviceEvidence(payload) {
+  const list = document.getElementById("deviceEvidenceList");
+  if (!list) return;
+  const records = Array.isArray(payload) ? payload : [];
+  if (!records.length) {
+    list.innerHTML = `<div class="empty">No device evidence loaded</div>`;
+    return;
+  }
+  const grouped = new Map();
+  for (const record of records) {
+    const key = record.use_instance_id || record.architecture || "unknown";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(record);
+  }
+  const sections = [];
+  for (const [key, groupRecords] of grouped) {
+    const rows = groupRecords.map((record) => {
+      const metrics = record.metrics || {};
+      const pce = metrics.pce_percent;
+      const voc = metrics.voc_v;
+      const jsc = metrics.jsc_ma_cm2;
+      const ff = metrics.fill_factor_pct;
+      const stack = Array.isArray(record.device_stack) ? record.device_stack.join(" / ") : "";
+      const provenance = record.provenance || {};
+      const curation = record.curation_status || provenance.curation_status || "unknown";
+      const jscDisplay = renderJscDisplay(jsc, null);
+      return `<div class="flow-item device-evidence-item">
+        <div class="item-title">
+          <span>${escapeHtml(record.device_evidence_id || "device evidence")}</span>
+          <span class="curation-status curation-${escapeHtml(curation)}">${escapeHtml(curation)}</span>
+        </div>
+        <div class="item-meta">
+          ${compactMeta([
+            ["PCE", formatNumber(pce)],
+            ["Voc", formatNumber(voc)],
+            ["Jsc", jscDisplay],
+            ["FF", formatNumber(ff)],
+            ["stack", stack],
+            ["provider", provenance.provider_name],
+            ["DOI", provenance.doi || record.doi],
+          ])}
+        </div>
+      </div>`;
+    }).join("");
+    sections.push(`<section class="device-evidence-group"><h3>${escapeHtml(key)}</h3>${rows}</section>`);
+  }
+  list.innerHTML = sections.join("");
+}
+
+function renderJscDisplay(value, unit) {
+  if (value === undefined || value === null) return "-";
+  const unitNorm = String(unit || "").toLowerCase().replace(/\s+/g, "");
+  if (unitNorm === "a/m²" || unitNorm === "am-2" || unitNorm === "a/m2" || unitNorm === "am-2") {
+    return `${escapeHtml(formatNumber(Number(value) * 10))} mA/cm²`;
+  }
+  if (unitNorm) return `${escapeHtml(formatNumber(value))} ${escapeHtml(unit)}`;
+  return escapeHtml(formatNumber(value));
+}
+
+function renderExternalDatasetRecords(payload) {
+  const list = document.getElementById("externalDatasetRecordsList");
+  if (!list) return;
+  if (!Array.isArray(payload) || !payload.length) {
+    list.innerHTML = `<div class="empty">No external dataset records loaded</div>`;
+    return;
+  }
+  const first = payload[0];
+  if (!first || typeof first !== "object") {
+    list.innerHTML = `<div class="empty">Invalid external dataset records</div>`;
+    return;
+  }
+  const keys = Object.keys(first);
+  const header = `<thead><tr>${keys.map((key) => `<th>${escapeHtml(key)}</th>`).join("")}</tr></thead>`;
+  const rows = payload.map((record) => `<tr>${keys.map((key) => `<td>${escapeHtml(record[key] ?? "")}</td>`).join("")}</tr>`).join("");
+  list.innerHTML = `<div class="table-wrap"><table class="external-dataset-table">${header}<tbody>${rows}</tbody></table></div>`;
+}
+
+function exportSnapshot() {
+  if (!state.snapshot) {
+    showError("No snapshot loaded to export");
+    return;
+  }
+  if (typeof Blob === "undefined" || typeof URL === "undefined" || typeof document === "undefined" || typeof document.createElement !== "function") {
+    showError("Export is not available in this environment");
+    return;
+  }
+  const runId = state.snapshot.manifest?.run_id || "unknown";
+  const blob = new Blob([JSON.stringify(state.snapshot, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `spirosearch-snapshot-${runId}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function renderReviewSummary(summary) {
@@ -1758,22 +2103,112 @@ function clearError() {
   errorState.style.display = "none";
 }
 
-document.getElementById("runSummary").textContent = "No run loaded";
-document.getElementById("loadState").textContent = "Waiting for bundle";
-renderRecommendations(null);
-renderTimeline([]);
-renderEnrichmentFlow(null, null, [], []);
-renderCanonicalEvidence(null);
-renderScoringView(null);
-renderScreeningEligibility(null);
-renderModelEvaluation(null);
-renderV22ScientificClosure(null, null);
-renderReviewClosure([], null, []);
-renderCommandStates([], null);
-renderV24ProjectEvolution(null);
-renderPaperDiagnostics([], [], null, null, null);
-renderProjectEvolution();
-renderProjectSelector();
-renderCandidateHistory();
-renderReviewQueue([]);
-renderCandidateTracer(null, null);
+function setLoading(isLoading) {
+  const loadingState = document.getElementById("loadingState");
+  if (!loadingState) return;
+  loadingState.style.display = isLoading ? "block" : "none";
+}
+
+function renderErrorPanel(diagnostics) {
+  const panel = document.getElementById("errorPanel");
+  if (!panel) return;
+  const items = diagnostics || [];
+  const grouped = {critical: [], error: [], warning: [], info: []};
+  for (const item of items) {
+    const severity = item.severity || "error";
+    if (!grouped[severity]) grouped[severity] = [];
+    grouped[severity].push(item);
+  }
+  let html = "";
+  for (const severity of ["critical", "error", "warning", "info"]) {
+    const groupItems = grouped[severity];
+    if (!groupItems.length) continue;
+    const listItems = groupItems.map((item) => {
+      const source = item.kind || item.source || "bundle";
+      return `<li>${escapeHtml(source)}: ${escapeHtml(item.code || item.severity || "diagnostic")} — ${escapeHtml(item.message || "")}</li>`;
+    }).join("");
+    html += `<section class="error-group error-group-${severity}"><h3>${escapeHtml(severity)} (${groupItems.length})</h3><ul>${listItems}</ul></section>`;
+  }
+  panel.innerHTML = html;
+
+  // Clear badge elements expected by the html-css agent.
+  for (const badge of document.querySelectorAll?.("[data-error-badge]") || []) {
+    badge.textContent = "0";
+    badge.className = "error-badge";
+  }
+  for (const item of items) {
+    const badgeId = item.kind ? `${item.kind}Error` : null;
+    const badge = badgeId ? document.getElementById(badgeId) : null;
+    if (badge) {
+      badge.textContent = String(Number(badge.textContent || 0) + 1);
+      if (badge.classList) {
+        badge.classList.add(`error-badge-${item.severity || "error"}`);
+      }
+    }
+  }
+}
+
+function getUrlCandidateId() {
+  if (typeof location === "undefined" || typeof URLSearchParams === "undefined") return null;
+  try {
+    return new URLSearchParams(location.search).get("candidate");
+  } catch (error) {
+    return null;
+  }
+}
+
+function restoreSessionAndUrl() {
+  const candidateId = getUrlCandidateId();
+  if (candidateId) {
+    state.selectedCandidateId = candidateId;
+  }
+
+  const RunDataStore = globalThis.SpiroRunData?.RunDataStore;
+  if (!RunDataStore) return;
+  const restored = RunDataStore.restoreFromSession();
+  if (restored.truncated) {
+    showError(restored.reason);
+    const loadState = document.getElementById("loadState");
+    if (loadState) loadState.textContent = restored.reason;
+    return;
+  }
+  if (!restored.restored || !restored.snapshot || state.snapshot) return;
+  applyCommittedSnapshot(restored.snapshot);
+  clearError();
+  renderErrorPanel(restored.snapshot.diagnostics);
+  renderKnownArtifacts();
+  if (state.selectedCandidateId) {
+    if (state.candidateProjection && globalThis.SpiroCandidateProjection) {
+      renderCandidateWorkspace();
+    } else {
+      renderCandidateTracer(getKnownArtifact("screening_input_view"), getKnownArtifact("canonical_evidence"));
+    }
+  }
+}
+
+function initializeViewer() {
+  document.getElementById("runSummary").textContent = "No run loaded";
+  document.getElementById("loadState").textContent = "Waiting for bundle";
+  renderRecommendations(null);
+  renderTimeline([]);
+  renderEnrichmentFlow(null, null, [], []);
+  renderCanonicalEvidence(null);
+  renderScoringView(null);
+  renderScreeningEligibility(null);
+  renderModelEvaluation(null);
+  renderV22ScientificClosure(null, null);
+  renderReviewClosure([], null, []);
+  renderCommandStates([], null);
+  renderV24ProjectEvolution(null);
+  renderPaperDiagnostics([], [], null, null, null);
+  renderDeviceEvidence([]);
+  renderExternalDatasetRecords(null);
+  renderProjectEvolution();
+  renderProjectSelector();
+  renderCandidateHistory();
+  renderReviewQueue([]);
+  renderCandidateTracer(null, null);
+  restoreSessionAndUrl();
+}
+
+initializeViewer();

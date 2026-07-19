@@ -162,6 +162,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                     "llm_literature",
                     "materials_project",
                     "nomad",
+                    "nomad_perla_psc",
                     "openalex",
                     "opv_db",
                     "pubchem",

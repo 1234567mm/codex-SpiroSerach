@@ -60,6 +60,47 @@ class ProviderSchemaTests(unittest.TestCase):
         self.assertIn("cache_key", schema["required"])
         self.assertIn("response", schema["required"])
 
+    def test_external_dataset_records_schema_accepts_hopv15_and_opv_db_records(self):
+        schema = self._schema("external-dataset-records.schema.json")
+        validate(
+            [
+                {
+                    "molecule_id": "hopv-1",
+                    "inchi_key": "VSPQGJQLVZRCQA-UHFFFAOYSA-N",
+                    "source_doi": "10.1038/sdata.2016.86",
+                    "license": "CC-BY-4.0",
+                    "computed": True,
+                    "source_id": "hopv15",
+                    "trust_level": "T2_computed_db",
+                    "curation_status": "machine_extracted",
+                    "lineage": {
+                        "source_id": "hopv15",
+                        "source_file": "mini_hopv15.csv",
+                        "row_number": 2,
+                        "adapter": "csv_adapter",
+                    },
+                },
+                {
+                    "record_id": "opv-1",
+                    "donor_identity": "P3HT",
+                    "acceptor_identity": "PCBM",
+                    "source_doi": "10.1000/opv.fixture",
+                    "license": "CC-BY-4.0",
+                    "computed": False,
+                    "source_id": "opv_db",
+                    "trust_level": "T3_literature_machine",
+                    "curation_status": "machine_extracted",
+                    "lineage": {
+                        "source_id": "opv_db",
+                        "source_file": "mini_opv_db.csv",
+                        "row_number": 2,
+                        "adapter": "csv_adapter",
+                    },
+                },
+            ],
+            schema,
+        )
+
     def test_enrichment_artifact_schemas_define_traceable_join_contracts(self):
         enrichment = self._schema("enrichment-results.schema.json")
         cache_index = self._schema("provider-cache-index.schema.json")

@@ -3,16 +3,21 @@
   "$id": "https://spirosearch.local/schemas/paper-vault-summary.schema.json",
   "title": "PaperVaultSummary",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": ["schema_version", "paper_count", "papers"],
   "properties": {
-    "schema_version": { "const": "v18.paper_vault_summary.v1" },
+    "schema_version": {
+      "anyOf": [
+        { "const": "v18.paper_vault_summary.v1" },
+        { "const": "v29.paper_vault_summary.v1" }
+      ]
+    },
     "paper_count": { "type": "integer", "minimum": 0 },
     "papers": {
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
         "required": [
           "doi",
           "paper_folder",
@@ -34,7 +39,23 @@
             ]
           },
           "license": { "type": "string", "minLength": 1 },
-          "source_rights": { "type": "string", "minLength": 1 }
+          "source_rights": { "type": "string", "minLength": 1 },
+          "attachment_count": { "type": "integer", "minimum": 0 },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["filename", "source_label"],
+              "properties": {
+                "filename": { "type": "string" },
+                "source_label": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "ocr_status": { "type": "string" }
+              }
+            }
+          },
+          "manifest_schema_version": { "type": "string" }
         }
       }
     }

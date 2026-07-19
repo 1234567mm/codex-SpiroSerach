@@ -40,6 +40,7 @@
         "device_evidence",
         "enrichment_results",
         "extraction_evaluation",
+        "external_dataset_records",
         "ledger",
         "literature_claims",
         "literature_search_results",
@@ -47,6 +48,8 @@
         "model_updates",
         "obsidian_notes",
         "paper_cross_ref_report",
+        "extraction_journal",
+        "extraction_journal_status",
         "paper_vault_summary",
         "posterior",
         "production_beard_cole_snapshot",
@@ -87,7 +90,13 @@
         "v25_recovery_runbook",
         "v25_release_checklist",
         "v25_release_profile",
-        "v25_security_audit_report"
+        "v25_security_audit_report",
+        "v28_acquisition_strategy_comparison",
+        "v28_incident_checklist",
+        "v28_local_rehearsal_report",
+        "v28_model_admission_decision",
+        "v28_scale_readiness_report",
+        "audit_graph_snapshot"
       ]
     },
     "format": { "enum": ["json", "jsonl"] },

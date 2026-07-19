@@ -1,0 +1,20 @@
+{
+  "schema_version": "v29.source_manifest.v1",
+  "dataset_id": "nomad-perla-psc-probe-33759f0aaea8",
+  "source_url": "https://nomad-lab.eu/prod/v1/api/v1",
+  "license": "NOMAD public data terms (PERLA PSC CC-BY-4.0)",
+  "trust_level": "T2_computed_db",
+  "retrieved_at": "2026-07-19T15:51:25.822274+00:00",
+  "retrieval_method": "api_v1_entries_query_plus_archive_query",
+  "query_hash": "sha256:33759f0aaea80a726f9d0757a0ca7ddc51521aab62162e9787bd6d48e24542b8",
+  "record_count": 40,
+  "field_coverage_verified": true,
+  "target_htls": [
+    "Spiro-OMeTAD",
+    "PTAA",
+    "MeO-2PACz",
+    "NiOx"
+  ],
+  "max_per_htl": 10,
+  "note": "Small-sample probe for field path coverage audit; not a full dataset pull"
+}

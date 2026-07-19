@@ -1,0 +1,6 @@
+{
+  "schema_version": "v29.doi_audit_report.v1",
+  "entries_with_original_doi": 2,
+  "entries_without_original_doi": 38,
+  "doi_coverage_pct": 5.0
+}

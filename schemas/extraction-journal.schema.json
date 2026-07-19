@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/extraction-journal.schema.json",
+  "title": "ExtractionJournal",
+  "description": "Summary of extraction journal state after a paper ingest run.",
+  "anyOf": [
+    {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema_version", "total_dois", "status_counts"],
+      "properties": {
+        "schema_version": { "const": "v29.extraction_journal_summary.v1" },
+        "total_dois": { "type": "integer", "minimum": 0 },
+        "status_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" },
+          "required": ["pending", "completed"]
+        },
+        "journal_path": { "type": "string" },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/checkpoint" }
+        }
+      }
+    },
+    { "$ref": "#/$defs/checkpoint" }
+  ],
+  "$defs": {
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema_version", "doi", "status"],
+      "properties": {
+        "schema_version": { "const": "v29.extraction_journal.v1" },
+        "doi": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "running", "completed", "skipped", "partial_failure", "failed", "interrupted"]
+        },
+        "extractor_version": { "type": ["string", "null"] },
+        "claim_count": { "type": "integer" },
+        "review_count": { "type": "integer" },
+        "error_message": { "type": ["string", "null"] },
+        "error": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

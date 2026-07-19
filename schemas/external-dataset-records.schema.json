@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/external-dataset-records.schema.json",
+  "title": "ExternalDatasetRecords",
+  "description": "Normalized records from an external CSV dataset (e.g. HOPV15, OPV-DB).",
+  "type": "array",
+  "minItems": 0,
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "source_doi",
+      "license",
+      "computed",
+      "source_id",
+      "trust_level",
+      "curation_status",
+      "lineage"
+    ],
+    "anyOf": [
+      { "required": ["molecule_id", "inchi_key"] },
+      { "required": ["record_id", "donor_identity", "acceptor_identity"] }
+    ],
+    "properties": {
+      "molecule_id": { "type": "string", "minLength": 1 },
+      "record_id": { "type": "string", "minLength": 1 },
+      "donor_identity": { "type": "string", "minLength": 1 },
+      "acceptor_identity": { "type": "string", "minLength": 1 },
+      "smiles": { "type": ["string", "null"] },
+      "inchi_key": { "type": "string", "minLength": 1 },
+      "homo_ev": { "type": ["number", "null"] },
+      "lumo_ev": { "type": ["number", "null"] },
+      "band_gap_ev": { "type": ["number", "null"] },
+      "pce_percent": { "type": ["number", "null"] },
+      "voc_v": { "type": ["number", "null"] },
+      "jsc_ma_cm2": { "type": ["number", "null"] },
+      "fill_factor": { "type": ["number", "null"] },
+      "source_doi": { "type": "string", "minLength": 1 },
+      "validation_flag": { "type": ["string", "null"] },
+      "license": { "type": "string" },
+      "computed": { "type": "boolean" },
+      "source_id": { "type": "string", "minLength": 1 },
+      "trust_level": {
+        "enum": [
+          "T0_missing",
+          "T1_calculated",
+          "T2_computed_db",
+          "T3_literature_machine",
+          "T4_literature_curated",
+          "T5_experimental_device"
+        ]
+      },
+      "curation_status": {
+        "enum": ["raw", "machine_extracted", "needs_review", "curated", "rejected"]
+      },
+      "lineage": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["source_id", "source_file", "row_number", "adapter"],
+        "properties": {
+          "source_id": { "type": "string", "minLength": 1 },
+          "source_file": { "type": "string", "minLength": 1 },
+          "row_number": { "type": "integer", "minimum": 1 },
+          "adapter": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

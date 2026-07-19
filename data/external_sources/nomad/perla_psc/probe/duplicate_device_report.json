@@ -1,0 +1,24 @@
+{
+  "schema_version": "v29.duplicate_device_report.v1",
+  "total_signatures": 38,
+  "duplicate_signatures": 2,
+  "duplicate_details": [
+    {
+      "signature": "|NiOx, MeO-2PACz|['ITO', 'NiOx', 'MeO-2PACz', 'Perovskite']|21.7|1.08",
+      "entry_indices": [
+        20,
+        30
+      ],
+      "count": 2
+    },
+    {
+      "signature": "|NiOx, MeO-2PACz|['FTO', 'NiOx', 'MeO-2PACz', 'Perovskite', 'PCBM-60', 'BCP', 'Ag']|19.45|1.152",
+      "entry_indices": [
+        22,
+        38
+      ],
+      "count": 2
+    }
+  ],
+  "note": "Semantic duplicates: same DOI + HTL + stack + metrics; may represent multiple measurements of the same device"
+}

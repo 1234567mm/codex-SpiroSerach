@@ -1,0 +1,44 @@
+[
+  {
+    "molecule_id": "HOPV-001",
+    "smiles": "C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3",
+    "inchi_key": "YJRWCTPDZUPACP-UHFFFAOYSA-N",
+    "homo_ev": -5.1,
+    "lumo_ev": -3.2,
+    "band_gap_ev": 1.9,
+    "pce_percent": 8.5,
+    "source_doi": "10.1234/example.b",
+    "license": "CC BY 4.0",
+    "computed": false,
+    "source_id": "hopv15",
+    "trust_level": "T2_computed_db",
+    "curation_status": "machine_extracted",
+    "lineage": {
+      "source_id": "hopv15",
+      "source_file": "external-dataset-records.json",
+      "row_number": 1,
+      "adapter": "fixture"
+    }
+  },
+  {
+    "molecule_id": "HOPV-002",
+    "smiles": "C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3",
+    "inchi_key": "YJRWCTPDZUPACP-UHFFFAOYSA-N",
+    "homo_ev": -5.3,
+    "lumo_ev": -3.4,
+    "band_gap_ev": 1.9,
+    "pce_percent": 9.2,
+    "source_doi": "10.1234/example.c",
+    "license": "CC BY 4.0",
+    "computed": true,
+    "source_id": "hopv15",
+    "trust_level": "T2_computed_db",
+    "curation_status": "machine_extracted",
+    "lineage": {
+      "source_id": "hopv15",
+      "source_file": "external-dataset-records.json",
+      "row_number": 2,
+      "adapter": "fixture"
+    }
+  }
+]

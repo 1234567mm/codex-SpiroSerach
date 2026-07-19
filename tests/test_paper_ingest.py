@@ -42,7 +42,7 @@ class PaperIngestTests(unittest.TestCase):
             folder = _write_text_pdf_group(root, "10.1234/parser", has_si=False)
             group = next(iter(__import__("spirosearch.paper_vault").paper_vault.PaperVault(root).scan()))
 
-            document = PdfTextParser().parse(group, folder / "main.pdf", source="main")
+            document = PdfTextParser().parse(group.paper_folder, group.doi, folder / "main.pdf", source="main")
 
             self.assertEqual(document.doi, "10.1234/parser")
             self.assertEqual(document.artifact_type, "pdf")
@@ -57,7 +57,7 @@ class PaperIngestTests(unittest.TestCase):
             root.mkdir()
             _write_text_pdf_group(root, "10.1234/ingest", has_si=True)
 
-            result = run_paper_ingest(root, output_dir, extractor="regex")
+            result = run_paper_ingest(root, output_dir, extractor="regex", use_legacy_parser=True)
 
             self.assertEqual(result["paper_count"], 1)
             manifest = json.loads((output_dir / "run-manifest.json").read_text(encoding="utf-8"))
@@ -67,6 +67,8 @@ class PaperIngestTests(unittest.TestCase):
                 {
                     "literature_claims",
                     "paper_cross_ref_report",
+                    "extraction_journal",
+                    "extraction_journal_status",
                     "paper_vault_summary",
                     "review_queue",
                     "source_assets",
@@ -77,14 +79,23 @@ class PaperIngestTests(unittest.TestCase):
             repository = JsonArtifactRepository.from_output_dir(output_dir)
             claims = repository.read_jsonl("literature_claims")
             reviews = repository.read_jsonl("review_queue")
+            journal_status = repository.read_jsonl("extraction_journal_status")
             vault_summary = repository.read_json("paper_vault_summary")
 
             self.assertTrue(claims.available)
             self.assertGreaterEqual(len(claims.records), 2)
-            self.assertTrue(all(record["review_status"] == "needs_review" for record in claims.records))
+            # V30: regex confidence now includes context bonus; some claims may be accepted
+            review_statuses = {record["review_status"] for record in claims.records}
+            self.assertTrue(
+                review_statuses.issubset({"needs_review", "accepted"}),
+                f"unexpected review statuses: {review_statuses}"
+            )
             self.assertTrue(all(record["method"] == "regex_text_pattern" for record in claims.records))
             self.assertTrue(reviews.available)
-            self.assertEqual(len(reviews.records), len(claims.records))
+            # V30: only claims below confidence_threshold enter review queue
+            self.assertGreaterEqual(len(reviews.records), 1)
+            self.assertTrue(journal_status.available)
+            self.assertGreaterEqual(len(journal_status.records), 2)
             self.assertTrue(vault_summary.available)
             self.assertEqual(vault_summary.payload["papers"][0]["paper_folder"], doi_folder_name("10.1234/ingest"))
 

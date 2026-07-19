@@ -40,6 +40,9 @@ V4_ARTIFACT_KINDS = {
     "recompute_markers",
     "paper_vault_summary",
     "paper_cross_ref_report",
+    "extraction_journal",
+    "extraction_journal_status",
+    "external_dataset_records",
     "obsidian_notes",
     "production_beard_cole_snapshot",
     "scientific_source_ledger",
@@ -227,6 +230,21 @@ ARTIFACT_KIND_METADATA: dict[str, dict[str, Any]] = {
         "schema_ref": "schemas/paper-cross-ref-report.schema.json",
         "join_keys": ("doi", "source_id", "source_type"),
         "depends_on": ("source_assets", "literature_claims"),
+    },
+    "extraction_journal": {
+        "schema_ref": "schemas/extraction-journal.schema.json",
+        "join_keys": ("doi",),
+        "depends_on": ("paper_vault_summary",),
+    },
+    "extraction_journal_status": {
+        "schema_ref": "schemas/extraction-journal.schema.json",
+        "join_keys": ("doi",),
+        "depends_on": ("paper_vault_summary",),
+    },
+    "external_dataset_records": {
+        "schema_ref": "schemas/external-dataset-records.schema.json",
+        "join_keys": ("molecule_id", "record_id", "inchi_key", "source_doi"),
+        "depends_on": (),
     },
     "obsidian_notes": {
         "schema_ref": "schemas/obsidian-notes.schema.json",

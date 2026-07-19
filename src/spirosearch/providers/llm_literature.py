@@ -52,6 +52,7 @@ class LlmSchemaClaimExtractor:
                     "method": claim.get("method"),
                     "conditions": claim.get("conditions"),
                     "confidence": claim.get("confidence"),
+                    "raw_span": raw_span,
                 }
             )
         return tuple(payloads)

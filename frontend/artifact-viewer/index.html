@@ -7,12 +7,21 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
+    <div id="loadingState" class="loading-overlay" hidden>
+      <span>Loading run bundle...</span>
+    </div>
+    <div id="errorPanel" class="error-panel"></div>
     <header class="topbar">
       <div>
         <h1>SpiroSearch Run Viewer</h1>
         <p id="runSummary">No run loaded</p>
       </div>
-      <div class="filebar">
+      <div class="topbar-right">
+        <div class="topbar-actions">
+          <button id="exportSnapshot" type="button">Export snapshot</button>
+          <button id="printView" type="button">Print</button>
+        </div>
+        <div class="filebar">
         <label class="file-control">
           <span>Run bundle directory</span>
           <input id="bundleFiles" type="file" webkitdirectory directory multiple accept=".json,.jsonl,application/json">
@@ -25,6 +34,7 @@
           <span>Project evolution Markdown</span>
           <input id="projectEvolutionFiles" type="file" multiple accept=".md,.markdown,text/markdown,text/plain" aria-describedby="projectEvolutionHelp">
         </label>
+      </div>
       </div>
     </header>
 
@@ -212,10 +222,55 @@
           <div id="v24ProjectEvolutionList" class="flow-list"></div>
         </div>
 
+        <div id="externalDatasetPanel" class="panel wide">
+          <div class="panel-head">
+            <h2>External Dataset Records</h2>
+            <span id="externalDatasetCount">0 records</span>
+            <span id="externalDatasetError" class="panel-error-badge"></span>
+          </div>
+          <div class="table-wrap">
+            <table id="externalDatasetRecordsList">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="deviceEvidencePanel" class="panel wide">
+          <div class="panel-head">
+            <h2>Device Evidence</h2>
+            <span id="deviceEvidenceCount">0 records</span>
+            <span id="deviceEvidenceError" class="panel-error-badge"></span>
+          </div>
+          <div id="deviceEvidenceList" class="flow-list"></div>
+        </div>
+
         <div id="paperDiagnosticsPanel" class="panel wide">
           <div class="panel-head">
             <h2>Paper Diagnostics</h2>
             <span id="paperDiagnosticsCount">0 source assets / 0 claims</span>
+            <span id="paperDiagnosticsError" class="panel-error-badge"></span>
+          </div>
+          <div class="paper-controls">
+            <select id="paperDoiFilter">
+              <option value="all">All DOIs</option>
+            </select>
+            <select id="paperStatusFilter">
+              <option value="all">All statuses</option>
+              <option value="needs_review">Needs review</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="failed">Failed</option>
+              <option value="interrupted">Interrupted</option>
+            </select>
+            <select id="paperSourceFilter">
+              <option value="all">All sources</option>
+              <option value="regex">Regex</option>
+              <option value="llm">LLM</option>
+              <option value="nomad">NOMAD</option>
+              <option value="csv">CSV</option>
+            </select>
+            <input id="paperSearchInput" type="search" placeholder="Property, DOI, claim ID" />
           </div>
           <div id="paperDiagnosticsList" class="flow-list"></div>
         </div>

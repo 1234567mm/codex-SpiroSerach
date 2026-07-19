@@ -1,0 +1,162 @@
+{
+  "schema_version": "v6.run_manifest.v1",
+  "run_id": "v32-paper-enhanced-001",
+  "input_hash": "sha256:v32-paper-enhanced-input",
+  "generated_at": "2026-07-20T00:00:00+00:00",
+  "producer_version": "spirosearch-v32-fixture",
+  "artifacts": [
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v32-paper-enhanced-001",
+      "input_hash": "sha256:v32-paper-enhanced-input",
+      "generated_at": "2026-07-20T00:00:00+00:00",
+      "producer_version": "spirosearch-v32-fixture",
+      "path": "literature-claims.jsonl",
+      "kind": "literature_claims",
+      "format": "jsonl",
+      "schema_ref": "schemas/literature-claim.schema.json",
+      "sha256": "ab1000d7b17212c7afe3502474c2ad69e6dbed1322f278f0e10a27c4761a9a14",
+      "bytes": 2809,
+      "record_count": 6,
+      "join_keys": [
+        "claim_id",
+        "asset_id",
+        "chunk_id",
+        "doi"
+      ],
+      "depends_on": [
+        "source_assets"
+      ]
+    },
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v32-paper-enhanced-001",
+      "input_hash": "sha256:v32-paper-enhanced-input",
+      "generated_at": "2026-07-20T00:00:00+00:00",
+      "producer_version": "spirosearch-v32-fixture",
+      "path": "source-assets.jsonl",
+      "kind": "source_assets",
+      "format": "jsonl",
+      "schema_ref": "schemas/source-asset.schema.json",
+      "sha256": "ba0c3f860784adcd61728d1c366667720d88d5e300ac983b422e49fbd4b86b0e",
+      "bytes": 933,
+      "record_count": 3,
+      "join_keys": [
+        "asset_id",
+        "doi",
+        "document_id"
+      ],
+      "depends_on": [
+        "literature_search_results"
+      ]
+    },
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v32-paper-enhanced-001",
+      "input_hash": "sha256:v32-paper-enhanced-input",
+      "generated_at": "2026-07-20T00:00:00+00:00",
+      "producer_version": "spirosearch-v32-fixture",
+      "path": "paper-vault-summary.json",
+      "kind": "paper_vault_summary",
+      "format": "json",
+      "schema_ref": "schemas/paper-vault-summary.schema.json",
+      "sha256": "67bc49eb24cc1850787f4861bc4660b67d80bffb0c9b931f4e0fe16b2090ba0f",
+      "bytes": 1215,
+      "record_count": null,
+      "join_keys": [
+        "doi",
+        "paper_folder"
+      ],
+      "depends_on": [
+        "source_assets"
+      ]
+    },
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v32-paper-enhanced-001",
+      "input_hash": "sha256:v32-paper-enhanced-input",
+      "generated_at": "2026-07-20T00:00:00+00:00",
+      "producer_version": "spirosearch-v32-fixture",
+      "path": "extraction-journal.json",
+      "kind": "extraction_journal",
+      "format": "json",
+      "schema_ref": "schemas/extraction-journal.schema.json",
+      "sha256": "6093bab6aa6f00ede07d39880294b811ba14ec26afcc60d3ac3396cb44972946",
+      "bytes": 1088,
+      "record_count": null,
+      "join_keys": [
+        "doi"
+      ],
+      "depends_on": [
+        "paper_vault_summary"
+      ]
+    },
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v32-paper-enhanced-001",
+      "input_hash": "sha256:v32-paper-enhanced-input",
+      "generated_at": "2026-07-20T00:00:00+00:00",
+      "producer_version": "spirosearch-v32-fixture",
+      "path": "candidate-evidence-links.jsonl",
+      "kind": "candidate_evidence_links",
+      "format": "jsonl",
+      "schema_ref": "schemas/candidate-evidence-link.schema.json",
+      "sha256": "48df2a3b2f199dce12ecc05c8147f6d26671afaff308febc871ef855cd2c4a8b",
+      "bytes": 2064,
+      "record_count": 3,
+      "join_keys": [
+        "link_id",
+        "candidate_id",
+        "evidence_id",
+        "doi",
+        "review_item_id"
+      ],
+      "depends_on": [
+        "candidate_identity_registry",
+        "canonical_evidence",
+        "literature_claims"
+      ]
+    },
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v32-paper-enhanced-001",
+      "input_hash": "sha256:v32-paper-enhanced-input",
+      "generated_at": "2026-07-20T00:00:00+00:00",
+      "producer_version": "spirosearch-v32-fixture",
+      "path": "device-evidence.jsonl",
+      "kind": "device_evidence",
+      "format": "jsonl",
+      "schema_ref": "schemas/device-evidence.schema.json",
+      "sha256": "567a541d25af9d2265b3302a4899a33b5b210490ce07727c34be002500f479a4",
+      "bytes": 1279,
+      "record_count": 2,
+      "join_keys": [
+        "device_evidence_id",
+        "use_instance_id",
+        "doi"
+      ],
+      "depends_on": []
+    },
+    {
+      "schema_version": "v6.run_artifact.v1",
+      "run_id": "v32-paper-enhanced-001",
+      "input_hash": "sha256:v32-paper-enhanced-input",
+      "generated_at": "2026-07-20T00:00:00+00:00",
+      "producer_version": "spirosearch-v32-fixture",
+      "path": "external-dataset-records.json",
+      "kind": "external_dataset_records",
+      "format": "json",
+      "schema_ref": "schemas/external-dataset-records.schema.json",
+      "sha256": "5c5632531c204c3f2ecff4be771f0998c3097800d19f604c8bd4f0dd099ddcef",
+      "bytes": 1192,
+      "record_count": null,
+      "join_keys": [
+        "molecule_id",
+        "record_id",
+        "inchi_key",
+        "source_doi"
+      ],
+      "depends_on": []
+    }
+  ]
+}

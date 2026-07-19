@@ -1,0 +1,171 @@
+{
+  "owner": "visible",
+  "query": {
+    "name": "sections",
+    "value": {
+      "all": ["nomad.datamodel.results.SolarCell"]
+    }
+  },
+  "pagination": {
+    "page_size": 10,
+    "total": 51541,
+    "next_page_after_value": "mock_next_page_value"
+  },
+  "data": [
+    {
+      "entry_id": "mock_entry_spiro_001",
+      "upload_id": "mock_upload_spiro",
+      "entry_name": "Spiro-OMeTAD PSC Device #1",
+      "datasets": [
+        {
+          "dataset_id": "mock_ds_perla",
+          "dataset_name": "Perovskite Solar Cell Database",
+          "doi": "https://doi.org/10.1038/s41560-021-00941-3",
+          "license": "CC-BY-4.0"
+        }
+      ],
+      "results": {
+        "material": {
+          "chemical_formula_reduced": "CH3NH3PbI3",
+          "structural_type": "perovskite"
+        },
+        "properties": {
+          "optoelectronic": {
+            "solar_cell": {
+              "efficiency": 21.3,
+              "open_circuit_voltage": 1.12,
+              "short_circuit_current_density": 235.0,
+              "fill_factor": 0.81,
+              "hole_transport_layer": ["Spiro-OMeTAD"],
+              "device_stack": ["SLG", "ITO", "SnO2", "Perovskite", "Spiro-OMeTAD", "Au"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry_id": "mock_entry_spiro_002",
+      "upload_id": "mock_upload_spiro",
+      "entry_name": "Spiro-OMeTAD PSC Device #2",
+      "datasets": [
+        {
+          "dataset_id": "mock_ds_perla",
+          "dataset_name": "Perovskite Solar Cell Database",
+          "doi": "https://doi.org/10.1038/s41560-021-00941-3",
+          "license": "CC-BY-4.0"
+        }
+      ],
+      "results": {
+        "material": {
+          "chemical_formula_reduced": "CH3NH3PbI3",
+          "structural_type": "perovskite"
+        },
+        "properties": {
+          "optoelectronic": {
+            "solar_cell": {
+              "efficiency": 19.8,
+              "open_circuit_voltage": 1.08,
+              "short_circuit_current_density": 228.0,
+              "fill_factor": 0.78,
+              "hole_transport_layer": ["Spiro-OMeTAD"],
+              "device_stack": ["SLG", "FTO", "TiO2-c", "TiO2-mp", "Perovskite", "Spiro-OMeTAD", "Au"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry_id": "mock_entry_ptaa_001",
+      "upload_id": "mock_upload_ptaa",
+      "entry_name": "PTAA PSC Device #1",
+      "datasets": [
+        {
+          "dataset_id": "mock_ds_perla",
+          "dataset_name": "Perovskite Solar Cell Database",
+          "doi": "https://doi.org/10.1038/s41560-021-00941-3",
+          "license": "CC-BY-4.0"
+        }
+      ],
+      "results": {
+        "material": {
+          "chemical_formula_reduced": "CH3NH3PbI3",
+          "structural_type": "perovskite"
+        },
+        "properties": {
+          "optoelectronic": {
+            "solar_cell": {
+              "efficiency": 20.1,
+              "open_circuit_voltage": 1.09,
+              "short_circuit_current_density": 232.0,
+              "fill_factor": 0.79,
+              "hole_transport_layer": ["PTAA"],
+              "device_stack": ["SLG", "ITO", "SnO2", "Perovskite", "PTAA", "Au"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry_id": "mock_entry_meo2pacz_001",
+      "upload_id": "mock_upload_meo2pacz",
+      "entry_name": "MeO-2PACz PSC Device #1",
+      "datasets": [
+        {
+          "dataset_id": "mock_ds_perla",
+          "dataset_name": "Perovskite Solar Cell Database",
+          "doi": "https://doi.org/10.1038/s41560-021-00941-3",
+          "license": "CC-BY-4.0"
+        }
+      ],
+      "results": {
+        "material": {
+          "chemical_formula_reduced": "CsFAPbI3",
+          "structural_type": "perovskite"
+        },
+        "properties": {
+          "optoelectronic": {
+            "solar_cell": {
+              "efficiency": 22.4,
+              "open_circuit_voltage": 1.15,
+              "short_circuit_current_density": 240.0,
+              "fill_factor": 0.82,
+              "hole_transport_layer": ["MeO-2PACz"],
+              "device_stack": ["SLG", "ITO", "SnO2", "Perovskite", "MeO-2PACz", "Au"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "entry_id": "mock_entry_niox_001",
+      "upload_id": "mock_upload_niox",
+      "entry_name": "NiOx PSC Device #1",
+      "datasets": [
+        {
+          "dataset_id": "mock_ds_perla",
+          "dataset_name": "Perovskite Solar Cell Database",
+          "doi": "https://doi.org/10.1038/s41560-021-00941-3",
+          "license": "CC-BY-4.0"
+        }
+      ],
+      "results": {
+        "material": {
+          "chemical_formula_reduced": "CH3NH3PbI3",
+          "structural_type": "perovskite"
+        },
+        "properties": {
+          "optoelectronic": {
+            "solar_cell": {
+              "efficiency": 18.5,
+              "open_circuit_voltage": 1.05,
+              "short_circuit_current_density": 220.0,
+              "fill_factor": 0.76,
+              "hole_transport_layer": ["NiOx"],
+              "device_stack": ["SLG", "FTO", "NiOx", "Perovskite", "PCBM-60", "Ag"]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

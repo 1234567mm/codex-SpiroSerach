@@ -3,5 +3,6 @@
   "source_url": "https://zenodo.org/records/20841543",
   "license": "CC-BY-4.0",
   "retrieved_at": "2026-07-17T00:00:00+00:00",
+  "record_count": 1,
   "note": "Minimal local fixture for offline provider tests; not the full OPV-DB dump."
 }

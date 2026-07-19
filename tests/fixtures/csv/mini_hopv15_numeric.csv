@@ -1,0 +1,2 @@
+Molecule-ID,SMILES,InChI-Key,HOMO (eV),LUMO (eV),Band-Gap (eV),PCE (%),Source DOI,License
+hopv-mix,COc1ccc(cc1)C2=CC=CC=C2,YSBKFSRUUQQZSE-UHFFFAOYSA-N,-5.4,-2.1,3.3,4.1,10.1038/sdata.2016.86,CC-BY-4.0

@@ -1,0 +1,68 @@
+{
+  "schema_version": "v29.field_coverage_report.v1",
+  "total_entries": 40,
+  "total_archives": 0,
+  "entry_field_coverage": {
+    "entry_id": {
+      "count": 40,
+      "percentage": 100.0,
+      "present": true
+    },
+    "upload_id": {
+      "count": 40,
+      "percentage": 100.0,
+      "present": true
+    },
+    "entry_name": {
+      "count": 40,
+      "percentage": 100.0,
+      "present": true
+    },
+    "datasets": {
+      "count": 40,
+      "percentage": 100.0,
+      "present": true
+    },
+    "results.material.chemical_formula_reduced": {
+      "count": 36,
+      "percentage": 90.0,
+      "present": true
+    },
+    "results.material.structural_type": {
+      "count": 40,
+      "percentage": 100.0,
+      "present": true
+    },
+    "results.properties.optoelectronic.solar_cell.efficiency": {
+      "count": 39,
+      "percentage": 97.5,
+      "present": true
+    },
+    "results.properties.optoelectronic.solar_cell.open_circuit_voltage": {
+      "count": 33,
+      "percentage": 82.5,
+      "present": true
+    },
+    "results.properties.optoelectronic.solar_cell.short_circuit_current_density": {
+      "count": 33,
+      "percentage": 82.5,
+      "present": true
+    },
+    "results.properties.optoelectronic.solar_cell.fill_factor": {
+      "count": 33,
+      "percentage": 82.5,
+      "present": true
+    },
+    "results.properties.optoelectronic.solar_cell.hole_transport_layer": {
+      "count": 40,
+      "percentage": 100.0,
+      "present": true
+    },
+    "results.properties.optoelectronic.solar_cell.device_stack": {
+      "count": 38,
+      "percentage": 95.0,
+      "present": true
+    }
+  },
+  "archive_field_coverage": {}
+}

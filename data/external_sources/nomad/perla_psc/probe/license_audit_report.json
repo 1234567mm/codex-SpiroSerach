@@ -1,0 +1,8 @@
+{
+  "schema_version": "v29.license_audit_report.v1",
+  "license_distribution": {
+    "unknown": 40
+  },
+  "total_entries": 40,
+  "note": "NOMAD PERLA PSC data is generally CC-BY-4.0; verify per-dataset before mixing into scoring view"
+}

@@ -1,0 +1,69 @@
+{
+  "owner": "visible",
+  "query": {
+    "entry_id": "mock_entry_spiro_001"
+  },
+  "pagination": {
+    "page_size": 1,
+    "total": 1
+  },
+  "data": [
+    {
+      "archive": {
+        "data": {
+          "perovskite_solar_cell_database": {
+            "device": {
+              "SolarCell": {
+                "hole_transport_layer_name": "Spiro-OMeTAD",
+                "hole_transport_layer_thickness": 30.0,
+                "electron_transport_layer_name": "SnO2",
+                "electron_transport_layer_thickness": 40.0,
+                "perovskite_composition": "MAPbI3",
+                "perovskite_thickness": 500.0,
+                "back_contact": "Au",
+                "substrate": "ITO",
+                "device_stack": "ITO/SnO2/MAPbI3/Spiro-OMeTAD/Au",
+                "power_conversion_efficiency": 21.3,
+                "open_circuit_voltage": 1.12,
+                "short_circuit_current_density": 23.5,
+                "fill_factor": 0.81,
+                "stability_PCE_after_1000h": 18.5
+              }
+            }
+          }
+        },
+        "results": {
+          "material": {
+            "chemical_formula_reduced": "CH3NH3PbI3",
+            "structural_type": "perovskite"
+          },
+          "properties": {
+            "optoelectronic": {
+              "solar_cell": {
+                "efficiency": 21.3,
+                "open_circuit_voltage": 1.12,
+                "short_circuit_current_density": 235.0,
+                "fill_factor": 0.81,
+                "hole_transport_layer": ["Spiro-OMeTAD"],
+                "device_stack": ["SLG", "ITO", "SnO2", "Perovskite", "Spiro-OMeTAD", "Au"]
+              }
+            }
+          }
+        },
+        "metadata": {
+          "entry_id": "mock_entry_spiro_001",
+          "upload_id": "mock_upload_spiro",
+          "datasets": [
+            {
+              "dataset_id": "mock_ds_perla",
+              "dataset_name": "Perovskite Solar Cell Database",
+              "doi": "https://doi.org/10.1038/s41560-021-00941-3",
+              "license": "CC-BY-4.0"
+            }
+          ],
+          "entry_name": "Spiro-OMeTAD PSC Device #1"
+        }
+      }
+    }
+  ]
+}

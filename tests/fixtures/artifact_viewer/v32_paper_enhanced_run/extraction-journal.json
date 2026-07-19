@@ -1,0 +1,41 @@
+{
+  "schema_version": "v29.extraction_journal_summary.v1",
+  "total_dois": 3,
+  "status_counts": {
+    "pending": 0,
+    "completed": 1,
+    "failed": 1,
+    "interrupted": 1
+  },
+  "journal_path": "journals/extraction-journal.json",
+  "entries": [
+    {
+      "schema_version": "v29.extraction_journal.v1",
+      "doi": "10.1234/example.a",
+      "status": "completed",
+      "extractor_version": "regex-v1",
+      "claim_count": 2,
+      "review_count": 2
+    },
+    {
+      "schema_version": "v29.extraction_journal.v1",
+      "doi": "10.1234/example.b",
+      "status": "failed",
+      "extractor_version": "llm-v2",
+      "claim_count": 0,
+      "review_count": 0,
+      "error": "LLM extraction timeout",
+      "reason": "provider_timeout"
+    },
+    {
+      "schema_version": "v29.extraction_journal.v1",
+      "doi": "10.1234/example.c",
+      "status": "interrupted",
+      "extractor_version": "regex-v1",
+      "claim_count": 0,
+      "review_count": 0,
+      "error": "Process interrupted by user",
+      "reason": "user_interrupt"
+    }
+  ]
+}

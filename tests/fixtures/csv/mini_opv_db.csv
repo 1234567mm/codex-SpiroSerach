@@ -1,0 +1,4 @@
+Record ID,Donor,Acceptor,PCE (%),Voc (V),Jsc (mA/cm2),FF,Source DOI,Validation Flag,License
+opv-1,P3HT,PCBM,3.2,0.58,9.1,0.61,10.1000/opv.fixture,strict_benchmark,CC-BY-4.0
+opv-2,PTB7,PC71BM,7.4,0.74,14.2,0.69,10.1038/ncomms.2015,peer_reviewed,CC-BY-4.0
+opv-3,DPP-DTT,PCBM,5.5,0.62,11.8,0.65,10.1021/ma.2014,strict_benchmark,CC-BY-4.0

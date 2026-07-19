@@ -94,11 +94,12 @@ def _payload_to_literature_claim(
     confidence = _confidence(payload["confidence"])
     source_id = f"doi:{document.doi}" if document.doi else document.document_id
     claim_id = _claim_id(source_id, chunk.chunk_id, property_name, value, unit)
+    raw_span = payload.get("raw_span") or chunk.span
     return LiteratureClaim(
         claim_id=claim_id,
         source_id=source_id,
         chunk_id=chunk.chunk_id,
-        raw_span=chunk.span,
+        raw_span=raw_span,
         property_name=property_name,
         value=float(value) if isinstance(value, int) else value,
         unit=unit,

@@ -55,6 +55,7 @@ class PaperIngestCliTests(unittest.TestCase):
                     "regex",
                     "--obsidian-dir",
                     str(obsidian_dir),
+                    "--use-legacy-parser",
                 ]
             )
 

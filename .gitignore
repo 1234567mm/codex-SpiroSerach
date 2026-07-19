@@ -10,10 +10,13 @@ pdf/
 manual_inbox/
 literature_assets/
 object_store/
+data/public_baselines/opv_db/*.zip
 fulltext_chunks/
+uv.lock
 
 # Local agent/session state
 .claude/settings.local.json
+.workbuddy/
 .reasonix/desktop-topic-*.json
 .reasonix/autoresearch/
 .qoder/

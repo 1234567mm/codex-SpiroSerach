@@ -99,11 +99,20 @@ class RegexEnergyClaimExtractor:
             raw_span_end = min(len(text), match.end() + 30)
             raw_span = text[raw_span_start:raw_span_end].strip()
 
+            # V30: confidence reflects deterministic regex nature.
+            # Base: 0.55 for any match; +0.10 for standard unit;
+            # +0.12 for energy-level properties (HOMO/LUMO/gap are highly deterministic);
+            # +0.08 for contextual cues (text mentions HTL/material).
             confidence = 0.55
             if unit in ("eV", "%", "V", "mA/cm2"):
-                confidence = 0.62
+                confidence += 0.10
             if prop_name in ("homo_ev", "lumo_ev", "band_gap_ev"):
-                confidence = 0.68
+                confidence += 0.12
+            # Contextual cue: HTL or material keyword near the match
+            context_text = text[max(0, match.start() - 80):min(len(text), match.end() + 80)].lower()
+            if any(kw in context_text for kw in ("htl", "hole transport", "spiro", "perovskite", "solar cell", "device")):
+                confidence += 0.08
+            confidence = min(confidence, 0.95)
 
             span_hash = hashlib.sha256(raw_span.encode("utf-8")).hexdigest()[:16]
 
