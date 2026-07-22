@@ -36,6 +36,11 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertIn("homo_ev", pubchemqc.allowed_output_fields)
         self.assertIn("lumo_ev", pubchemqc.allowed_output_fields)
         self.assertIn("band_gap_ev", pubchemqc.allowed_output_fields)
+        self.assertNotIn("llm_literature", registry.providers())
+
+        from spirosearch import providers as provider_exports
+
+        self.assertNotIn("LlmLiteratureProvider", provider_exports.__all__)
 
     def test_registry_rejects_unknown_trust_levels(self):
         with self.assertRaisesRegex(ValueError, "unknown trust_level"):

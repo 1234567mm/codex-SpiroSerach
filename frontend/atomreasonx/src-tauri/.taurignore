@@ -1,0 +1,7 @@
+# Files excluded from the Tauri bundle
+node_modules
+src
+__tests__
+*.test.tsx
+*.test.ts
+.git

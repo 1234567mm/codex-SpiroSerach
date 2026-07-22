@@ -5,14 +5,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping
 
-from spirosearch.artifact_repository import JsonArtifactRepository
 from spirosearch.orchestrator_contracts import stable_hash
 
 
 COMMAND_PREFLIGHT_SCHEMA_VERSION = "v23.command_preflight.v1"
 ACTION_REQUEST_SCHEMA_VERSION = "v23.action_request.v1"
 ACTION_RESULT_SCHEMA_VERSION = "v23.action_result.v1"
-ACTION_TYPES = ("review_decision", "recompute_request")
+ACTION_TYPES = (
+    "review_decision",
+    "recompute_request",
+    "config_write",
+    "key_rotate",
+    "test_connection",
+    "model_list_refresh",
+)
 ACTION_ROLES = ("curator", "reviewer", "operator", "admin")
 ACTION_RESULT_STATUSES = (
     "accepted",
@@ -32,6 +38,10 @@ _FORBIDDEN_COMMAND_PAYLOAD_KEYS = {
 DEFAULT_ACTION_ROLE_POLICY = {
     "review_decision": ("curator", "reviewer", "admin"),
     "recompute_request": ("operator", "admin"),
+    "config_write": ("operator", "admin"),
+    "key_rotate": ("operator", "admin"),
+    "test_connection": ("operator", "admin"),
+    "model_list_refresh": ("operator", "admin"),
 }
 
 
@@ -233,6 +243,8 @@ def preflight_commandable_run(
     This is read-only. It does not dispatch recompute, write review events, or
     mutate run artifacts.
     """
+
+    from spirosearch.artifact_repository import JsonArtifactRepository
 
     repository = JsonArtifactRepository(output_dir, manifest_path)
     manifest_result = repository.manifest_status()

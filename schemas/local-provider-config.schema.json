@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch/schemas/local-provider-config.schema.json",
+  "title": "Local Provider Config",
+  "description": "Local-only mutable config for user provider settings. Stored in .spirosearch/local-config.json, Git-ignored. Never contains raw API keys.",
+  "type": "object",
+  "required": ["schema_version", "config_version", "providers"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "v33.local_config.v1"
+    },
+    "config_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonically increasing integer; incremented on every config write."
+    },
+    "providers": {
+      "type": "object",
+      "description": "Per-provider config keyed by provider id. Values are provider-specific settings (enabled, base_url, default_model, workspace_id).",
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "not": {
+            "pattern": "(api_key|apiKey|API_KEY|secret|Secret|token|Token|password|Password|credential|Credential)"
+          }
+        },
+        "properties": {
+          "enabled": {"type": "boolean"},
+          "base_url": {"type": ["string", "null"]},
+          "default_model": {"type": ["string", "null"]},
+          "workspace_id": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

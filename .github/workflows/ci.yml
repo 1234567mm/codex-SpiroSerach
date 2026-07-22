@@ -1,0 +1,50 @@
+# AtomReasonX — Continuous Integration
+#
+# Runs on every push to main and every PR.
+# Validates Python tests + frontend structure.
+# Does NOT build desktop installers (use release.yml for that).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python -m unittest discover tests -v
+        env:
+          PYTHONPATH: src
+
+  frontend-check:
+    name: Frontend Structure Check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check frontend files exist
+        run: |
+          test -f frontend/atomreasonx/package.json
+          test -f frontend/atomreasonx/vite.config.ts
+          test -f frontend/atomreasonx/tsconfig.json
+          test -f frontend/atomreasonx/src/AppShell.tsx
+          test -f frontend/atomreasonx/src/contracts/types.ts
+          test -f frontend/atomreasonx/src/fixtures/atomreasonx-ui-fixture.json
+          test -f frontend/atomreasonx/src-tauri/tauri.conf.json
+          test -f frontend/atomreasonx/src-tauri/Cargo.toml
+      - name: Verify fixture is valid JSON
+        run: |
+          python -c "import json; json.load(open('frontend/atomreasonx/src/fixtures/atomreasonx-ui-fixture.json'))"
+      - name: Verify fixture is provisional
+        run: |
+          python -c "import json; assert json.load(open('frontend/atomreasonx/src/fixtures/atomreasonx-ui-fixture.json'))['_provisional']"

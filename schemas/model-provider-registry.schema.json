@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch/schemas/model-provider-registry.schema.json",
+  "title": "Model Provider Registry",
+  "description": "Static metadata for model providers (execution infrastructure, not scientific evidence sources). User-specific base URLs, workspace IDs, model choices, and keys are excluded from static registry files.",
+  "type": "object",
+  "required": ["schema_version", "providers"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "v33.model_provider_registry.v1"
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/provider"}
+    }
+  },
+  "$defs": {
+    "provider": {
+      "type": "object",
+      "required": ["provider", "priority", "provider_kind", "api_format", "requires_api_key"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable provider identifier (e.g. private_new_api, deepseek)"
+        },
+        "brand": {
+          "type": "string",
+          "description": "External brand name (e.g. RelayX for private_new_api)"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sort priority; lower = first. private_new_api is 0."
+        },
+        "provider_kind": {
+          "type": "string",
+          "enum": ["private_relay", "model_provider"]
+        },
+        "api_format": {
+          "type": "string",
+          "enum": ["openai_compatible"]
+        },
+        "base_url": {
+          "type": ["string", "null"],
+          "description": "Pinned endpoint for official providers"
+        },
+        "base_url_config_key": {
+          "type": ["string", "null"],
+          "description": "Env var name for user-supplied base URL (private relay)"
+        },
+        "base_url_template": {
+          "type": ["string", "null"],
+          "description": "URL template with placeholders (e.g. {WorkspaceId})"
+        },
+        "api_key_env": {
+          "type": ["string", "null"],
+          "description": "Env var name for the API key (never the key value)"
+        },
+        "default_model": {
+          "type": ["string", "null"],
+          "description": "Single default model id"
+        },
+        "default_models": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "List of available models"
+        },
+        "default_model_config_key": {
+          "type": ["string", "null"],
+          "description": "Env var name for user-supplied default model"
+        },
+        "supports": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Supported API surfaces (chat_completions, responses, etc.)"
+        },
+        "docs_url": {
+          "type": ["string", "null"]
+        },
+        "requires_workspace_id": {
+          "type": "boolean",
+          "default": false
+        },
+        "requires_api_key": {
+          "type": "boolean",
+          "default": true
+        },
+        "supports_cache": {
+          "type": "boolean",
+          "default": false
+        },
+        "context_window_tokens": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "usage_field_mapping": {
+          "type": "object",
+          "description": "Maps provider-specific usage field names to canonical names"
+        },
+        "price_input_per_1m_tokens": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "price_output_per_1m_tokens": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "price_cache_read_per_1m_tokens": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

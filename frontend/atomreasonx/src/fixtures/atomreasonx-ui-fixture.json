@@ -1,0 +1,397 @@
+{
+  "brand": "AtomReasonX",
+  "app": "AtomX",
+  "tagline": "AtomReasonX — Reason at Atomic Scale, Build Beyond Materials.",
+  "active_workspace": "perovskite_htl_screening",
+  "sidebar_entries": [
+    "New Chat",
+    "Database",
+    "Projects",
+    "Plugins",
+    "Recent",
+    "Automation"
+  ],
+  "right_inspector_tabs": [
+    "Overview",
+    "Files"
+  ],
+  "telemetry_fields": [
+    "model_provider",
+    "retrieval_hit_count",
+    "average_hit_rate",
+    "current_turn_tokens",
+    "session_tokens",
+    "context_window",
+    "context_usage_percent",
+    "context_remaining",
+    "compression_threshold",
+    "current_turn_cost",
+    "session_cost",
+    "total_cost",
+    "balance",
+    "active_session_state",
+    "request_count",
+    "provider_usage"
+  ],
+  "settings_categories": [
+    "General",
+    "Models",
+    "Agents",
+    "MCP And Tools",
+    "Remote SSH",
+    "Skills",
+    "Subagents",
+    "Plugins",
+    "Memory",
+    "Hooks",
+    "Diagnostics",
+    "Shortcuts",
+    "Permissions",
+    "Sandbox",
+    "Network",
+    "Retrieval",
+    "File Parsing",
+    "Knowledge Library",
+    "Citation",
+    "Cost Guardrails",
+    "Telemetry source policy"
+  ],
+  "knowledge_library": {
+    "file_count": 0,
+    "parsed_papers": 0,
+    "si_attachments": 0,
+    "material_records": 0,
+    "extracted_claims": 0,
+    "candidate_entities": 0,
+    "provider_snapshots": 0,
+    "parse_failures": 0,
+    "index_freshness": null,
+    "blocked_review_items": 0
+  },
+  "telemetry": {
+    "schema_version": "v33.session_telemetry.v1",
+    "fields": [
+      {
+        "name": "model_provider",
+        "value": "fake-private-new-api",
+        "source": "provider_reported"
+      },
+      {
+        "name": "retrieval_hit_count",
+        "value": 3,
+        "source": "runtime_computed"
+      },
+      {
+        "name": "average_hit_rate",
+        "value": 0.42,
+        "source": "runtime_computed"
+      },
+      {
+        "name": "current_turn_tokens",
+        "value": 150,
+        "source": "provider_reported"
+      },
+      {
+        "name": "session_tokens",
+        "value": 1250,
+        "source": "runtime_computed"
+      },
+      {
+        "name": "context_window",
+        "value": 128000,
+        "source": "provider_reported"
+      },
+      {
+        "name": "context_usage_percent",
+        "value": 1.0,
+        "source": "runtime_computed"
+      },
+      {
+        "name": "context_remaining",
+        "value": 126750,
+        "source": "runtime_computed"
+      },
+      {
+        "name": "compression_threshold",
+        "value": 100000,
+        "source": "runtime_computed"
+      },
+      {
+        "name": "current_turn_cost",
+        "value": 0.001,
+        "source": "estimated"
+      },
+      {
+        "name": "session_cost",
+        "value": 0.012,
+        "source": "estimated"
+      },
+      {
+        "name": "total_cost",
+        "value": 0.012,
+        "source": "estimated"
+      },
+      {
+        "name": "balance",
+        "value": 50.0,
+        "source": "estimated"
+      },
+      {
+        "name": "active_session_state",
+        "value": "active",
+        "source": "runtime_computed"
+      },
+      {
+        "name": "request_count",
+        "value": 5,
+        "source": "runtime_computed"
+      },
+      {
+        "name": "provider_usage",
+        "value": {
+          "cache_read_input_tokens": 80,
+          "prompt_tokens": 150,
+          "completion_tokens": 50
+        },
+        "source": "provider_reported"
+      }
+    ]
+  },
+  "provider_status": {
+    "schema_version": "v33.sanitized_provider_status.v1",
+    "producer_version": "v33",
+    "providers": [
+      {
+        "provider": "private_new_api",
+        "brand": "RelayX",
+        "priority": 0,
+        "provider_kind": "private_relay",
+        "api_format": "openai_compatible",
+        "requires_api_key": true,
+        "api_key_env": "SPIROSEARCH_PRIVATE_NEW_API_KEY",
+        "base_url": null,
+        "base_url_config_key": "SPIROSEARCH_PRIVATE_NEW_API_BASE_URL",
+        "base_url_template": null,
+        "default_model": null,
+        "default_models": [],
+        "default_model_config_key": "SPIROSEARCH_PRIVATE_NEW_API_MODEL",
+        "supports": [
+          "chat_completions",
+          "responses",
+          "models",
+          "streaming",
+          "tools",
+          "json_mode"
+        ],
+        "docs_url": "https://github.com/QuantumNous/new-api",
+        "requires_workspace_id": false,
+        "supports_cache": true,
+        "context_window_tokens": null,
+        "usage_field_mapping": {
+          "cache_read_input_tokens": "cache_read_input_tokens"
+        },
+        "price_input_per_1m_tokens": null,
+        "price_output_per_1m_tokens": null,
+        "price_cache_read_per_1m_tokens": null
+      },
+      {
+        "provider": "deepseek",
+        "brand": null,
+        "priority": 10,
+        "provider_kind": "model_provider",
+        "api_format": "openai_compatible",
+        "requires_api_key": true,
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "base_url": "https://api.deepseek.com",
+        "base_url_config_key": null,
+        "base_url_template": null,
+        "default_model": null,
+        "default_models": [
+          "deepseek-v4-pro",
+          "deepseek-v4-flash"
+        ],
+        "default_model_config_key": null,
+        "supports": [
+          "chat_completions",
+          "streaming",
+          "json_mode"
+        ],
+        "docs_url": null,
+        "requires_workspace_id": false,
+        "supports_cache": true,
+        "context_window_tokens": 128000,
+        "usage_field_mapping": {
+          "prompt_cache_hit_tokens": "cache_read_input_tokens"
+        },
+        "price_input_per_1m_tokens": 0.27,
+        "price_output_per_1m_tokens": 1.1,
+        "price_cache_read_per_1m_tokens": 0.07
+      },
+      {
+        "provider": "tencent_hunyuan",
+        "brand": null,
+        "priority": 20,
+        "provider_kind": "model_provider",
+        "api_format": "openai_compatible",
+        "requires_api_key": true,
+        "api_key_env": "HUNYUAN_API_KEY",
+        "base_url": "https://api.hunyuan.cloud.tencent.com/v1",
+        "base_url_config_key": null,
+        "base_url_template": null,
+        "default_model": null,
+        "default_models": [
+          "hunyuan-turbos-latest"
+        ],
+        "default_model_config_key": null,
+        "supports": [
+          "chat_completions",
+          "streaming"
+        ],
+        "docs_url": null,
+        "requires_workspace_id": false,
+        "supports_cache": false,
+        "context_window_tokens": 256000,
+        "usage_field_mapping": {},
+        "price_input_per_1m_tokens": null,
+        "price_output_per_1m_tokens": null,
+        "price_cache_read_per_1m_tokens": null
+      },
+      {
+        "provider": "aliyun_dashscope",
+        "brand": null,
+        "priority": 30,
+        "provider_kind": "model_provider",
+        "api_format": "openai_compatible",
+        "requires_api_key": true,
+        "api_key_env": "DASHSCOPE_API_KEY",
+        "base_url": null,
+        "base_url_config_key": null,
+        "base_url_template": "https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        "default_model": null,
+        "default_models": [
+          "qwen-plus"
+        ],
+        "default_model_config_key": null,
+        "supports": [
+          "chat_completions",
+          "streaming"
+        ],
+        "docs_url": null,
+        "requires_workspace_id": true,
+        "supports_cache": false,
+        "context_window_tokens": 131072,
+        "usage_field_mapping": {},
+        "price_input_per_1m_tokens": null,
+        "price_output_per_1m_tokens": null,
+        "price_cache_read_per_1m_tokens": null
+      },
+      {
+        "provider": "volcengine_ark",
+        "brand": null,
+        "priority": 40,
+        "provider_kind": "model_provider",
+        "api_format": "openai_compatible",
+        "requires_api_key": true,
+        "api_key_env": "ARK_API_KEY",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "base_url_config_key": null,
+        "base_url_template": null,
+        "default_model": null,
+        "default_models": [
+          "doubao-seed-2-0-lite-260215"
+        ],
+        "default_model_config_key": null,
+        "supports": [
+          "chat_completions",
+          "streaming"
+        ],
+        "docs_url": null,
+        "requires_workspace_id": false,
+        "supports_cache": false,
+        "context_window_tokens": 256000,
+        "usage_field_mapping": {},
+        "price_input_per_1m_tokens": null,
+        "price_output_per_1m_tokens": null,
+        "price_cache_read_per_1m_tokens": null
+      }
+    ]
+  },
+  "settings": {
+    "schema_version": "v33.sanitized_config_status.v1",
+    "producer_version": "v33",
+    "config_version": 0,
+    "providers": [
+      {
+        "provider": "private_new_api",
+        "brand": "RelayX",
+        "priority": 0,
+        "provider_kind": "private_relay",
+        "requires_api_key": true,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "missing",
+        "enabled": false,
+        "base_url": null,
+        "default_model": null,
+        "workspace_id": null
+      },
+      {
+        "provider": "deepseek",
+        "brand": null,
+        "priority": 10,
+        "provider_kind": "model_provider",
+        "requires_api_key": true,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "missing",
+        "enabled": false,
+        "base_url": null,
+        "default_model": null,
+        "workspace_id": null
+      },
+      {
+        "provider": "tencent_hunyuan",
+        "brand": null,
+        "priority": 20,
+        "provider_kind": "model_provider",
+        "requires_api_key": true,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "missing",
+        "enabled": false,
+        "base_url": null,
+        "default_model": null,
+        "workspace_id": null
+      },
+      {
+        "provider": "aliyun_dashscope",
+        "brand": null,
+        "priority": 30,
+        "provider_kind": "model_provider",
+        "requires_api_key": true,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "missing",
+        "enabled": false,
+        "base_url": null,
+        "default_model": null,
+        "workspace_id": null
+      },
+      {
+        "provider": "volcengine_ark",
+        "brand": null,
+        "priority": 40,
+        "provider_kind": "model_provider",
+        "requires_api_key": true,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "missing",
+        "enabled": false,
+        "base_url": null,
+        "default_model": null,
+        "workspace_id": null
+      }
+    ]
+  },
+  "_provisional": true
+}

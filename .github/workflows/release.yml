@@ -1,0 +1,166 @@
+# AtomReasonX — Multi-platform Desktop Release
+#
+# Triggers:
+#   - Push a tag matching v* (e.g. v0.1.0, v0.2.0-beta) → build + release
+#   - Manual dispatch via GitHub Actions tab
+#
+# Build matrix:
+#   windows-latest  → .msi + .exe (NSIS installer)
+#   macos-latest    → .dmg
+#   ubuntu-22.04    → .deb + .AppImage
+#
+# Prerequisites:
+#   - Rust toolchain (auto-installed by tauri-action)
+#   - Node.js 20
+#   - Linux: system webkit/gtk deps (pre-installed on ubuntu-22.04 with libwebkit2gtk)
+#
+# The workflow also runs the Python test gate to ensure backend contracts pass
+# before packaging the desktop installer.
+
+name: Release Desktop Installers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Python backend test gate ──────────────────────────────────────────
+  python-tests:
+    name: Python Test Gate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python -m unittest discover tests -v
+        env:
+          PYTHONPATH: src
+
+  # ── Build matrix ─────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.target }})
+    needs: python-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: Windows x64
+            args: "--target x86_64-pc-windows-msvc"
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            label: macOS ARM64
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            label: macOS x64
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            label: Linux x64
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── System dependencies (Linux) ──────────────────────────────────
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            patchelf \
+            libayatana-appindicator3-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      # ── Rust toolchain ───────────────────────────────────────────────
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/atomreasonx/src-tauri -> target
+
+      # ── Node.js ──────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/atomreasonx/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend/atomreasonx
+        run: npm ci
+
+      # ── Tauri build ───────────────────────────────────────────────────
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: frontend/atomreasonx
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "AtomReasonX ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseBody: |
+            ## AtomReasonX — Reason at Atomic Scale, Build Beyond Materials.
+
+            ### Installers
+
+            | Platform | File |
+            |---|---|
+            | Windows x64 | `.msi` / `.exe` (NSIS) |
+            | macOS ARM64 (Apple Silicon) | `.dmg` |
+            | macOS x64 (Intel) | `.dmg` |
+            | Linux x64 | `.deb` / `.AppImage` |
+
+            ### What's included
+
+            - AtomReasonX desktop shell (Vite + React + TypeScript + Tauri)
+            - AtomX materials discovery agent workspace
+            - Left sidebar: New Chat, Database, Projects, Plugins, Recent, Automation
+            - Reasonix-style settings modal (21 categories including Telemetry source policy)
+            - Bottom telemetry bar with source-first labels
+            - Read-only artifact viewer integration
+            - V33A backend contracts (provider registry, local config, model adapter, command plane, workflow templates, session telemetry)
+
+            ### Prerequisites
+
+            - **Windows**: Windows 10 1803+ (WebView2 is pre-installed on Win11)
+            - **macOS**: macOS 10.15+
+            - **Linux**: WebKit2GTK 4.1 (Ubuntu 22.04+, Fedora 36+, or equivalent)
+          releaseDraft: false
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, 'beta') || contains(github.event.inputs.tag || github.ref_name, 'alpha') }}
+          args: ${{ matrix.args }}
+
+  # ── Summary ─────────────────────────────────────────────────────────
+  release-summary:
+    name: Release Summary
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Print release info
+        run: |
+          echo "✅ Release completed successfully."
+          echo "Tag: ${{ github.event.inputs.tag || github.ref_name }}"
+          echo "Builds: Windows x64, macOS ARM64, macOS x64, Linux x64"
+          echo "Check the GitHub Releases page for downloadable installers."

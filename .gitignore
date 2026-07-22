@@ -21,3 +21,14 @@ uv.lock
 .reasonix/autoresearch/
 .qoder/
 .superpowers/
+.mcp.json
+
+# V33 local config and secret store
+.spirosearch/local-config.json
+.spirosearch/secrets.env
+
+# AtomReasonX frontend build artifacts
+frontend/atomreasonx/node_modules/
+frontend/atomreasonx/dist/
+frontend/atomreasonx/src-tauri/target/
+frontend/atomreasonx/.vitest/
