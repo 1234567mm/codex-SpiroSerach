@@ -7,7 +7,7 @@ import type {
 
 describe("AtomReasonX contract fixtures", () => {
   it("keeps provider status and settings provider sets aligned", () => {
-    const workspace = fixture as AtomReasonXWorkspaceState;
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
     const providerStatus = workspace.provider_status.providers.map(provider => provider.provider);
     const settings = workspace.settings.providers.map(provider => provider.provider);
 
@@ -55,5 +55,18 @@ describe("AtomReasonX contract fixtures", () => {
 
     expect(commandResult.audit.declared_effects).toEqual(["provider", "config"]);
     expect(commandResult.audit.output_artifacts).toEqual(commandResult.output_artifacts);
+  });
+
+  it("exposes V33C HTL workbench source coverage and command actions", () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const providers = workspace.source_coverage.sources.map(source => source.provider_id);
+    const commands = workspace.command_actions.map(action => action.action_type);
+
+    expect(workspace.source_coverage.lane).toBe("htl_only");
+    expect(providers).toContain("nomad_perla_psc");
+    expect(providers).toContain("local_paper_vault");
+    expect(commands).toContain("start_nomad_sync");
+    expect(commands).toContain("import_doi_list");
+    expect(workspace.workflow.gates).toContain("EvidenceQualityPolicy");
   });
 });

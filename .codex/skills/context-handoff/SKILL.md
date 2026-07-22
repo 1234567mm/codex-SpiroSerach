@@ -28,6 +28,7 @@ git diff --cached --stat
 git log --oneline -8 --decorate
 git worktree list
 git rev-list --left-right --count main...origin/main
+Test-Path uv.lock
 ```
 
 Summarize:
@@ -48,6 +49,11 @@ If gstack `/context-save` is available, use its checkpoint convention:
 ```
 
 Saved context files are append-only. Never overwrite or delete existing checkpoints. Include branch name, timestamp, modified files, decisions, tests, remaining work, and pitfalls.
+
+When the handoff captures durable project lessons rather than only transient
+resume state, write a repository archive under `docs/` or a next-wave plan
+under `plans/`. Keep raw chat logs out of version control; summarize decisions,
+commands, results, pitfalls, and remaining work.
 
 ## Restore Context
 

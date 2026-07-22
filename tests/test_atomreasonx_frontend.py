@@ -34,8 +34,20 @@ class TestFrontendDirectoryStructure(unittest.TestCase):
         self.assertTrue((FRONTEND_DIR / "src" / "contracts" / "types.ts").exists())
 
     def test_components_exist(self) -> None:
-        for component in ["LeftSidebar.tsx", "BottomTelemetryBar.tsx", "SettingsModal.tsx"]:
+        for component in [
+            "LeftSidebar.tsx",
+            "BottomTelemetryBar.tsx",
+            "SettingsModal.tsx",
+            "DatabaseView.tsx",
+            "KnowledgeLibraryView.tsx",
+            "WorkflowView.tsx",
+            "InspectorPanel.tsx",
+        ]:
             self.assertTrue((FRONTEND_DIR / "src" / "components" / component).exists())
+
+    def test_local_adapters_exist(self) -> None:
+        for adapter in ["command-adapter.ts", "read-only-artifact-adapter.ts"]:
+            self.assertTrue((FRONTEND_DIR / "src" / "adapters" / adapter).exists())
 
     def test_fixture_exists(self) -> None:
         self.assertTrue(FIXTURE_PATH.exists())
@@ -58,6 +70,15 @@ class TestFrontendFixtureValid(unittest.TestCase):
     def test_fixture_telemetry_has_source_labels(self) -> None:
         for field in self.fixture["telemetry"]["fields"]:
             self.assertIn("source", field)
+
+    def test_fixture_contains_v33c_workbench_modules(self) -> None:
+        self.assertIn("source_coverage", self.fixture)
+        self.assertIn("sync_jobs", self.fixture)
+        self.assertIn("workflow", self.fixture)
+        self.assertIn("command_actions", self.fixture)
+        providers = {row["provider_id"] for row in self.fixture["source_coverage"]["sources"]}
+        self.assertIn("nomad_perla_psc", providers)
+        self.assertIn("local_paper_vault", providers)
 
 
 if __name__ == "__main__":

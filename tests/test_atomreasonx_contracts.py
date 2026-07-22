@@ -30,7 +30,7 @@ class TestFixtureStructure(unittest.TestCase):
 
     def test_sidebar_has_required_entries(self) -> None:
         entries = self.fixture["sidebar_entries"]
-        for required in ["New Chat", "Database", "Projects", "Plugins", "Recent", "Automation"]:
+        for required in ["Session", "Database", "Knowledge Library", "Workflow", "Projects", "Settings"]:
             self.assertIn(required, entries)
 
     def test_right_inspector_tabs(self) -> None:
@@ -49,6 +49,20 @@ class TestFixtureStructure(unittest.TestCase):
                       "extracted_claims", "candidate_entities", "provider_snapshots",
                       "parse_failures", "index_freshness", "blocked_review_items"]:
             self.assertIn(field, kl)
+
+    def test_v33c_workbench_contracts_are_present(self) -> None:
+        self.assertEqual(self.fixture["source_coverage"]["lane"], "htl_only")
+        self.assertEqual(self.fixture["workflow"]["lane"], "htl_only")
+        actions = {action["action_type"]: action for action in self.fixture["command_actions"]}
+        for action in ["start_nomad_sync", "import_doi_list", "import_paper_group", "run_parsing_job", "run_extraction_job"]:
+            self.assertIn(action, actions)
+        self.assertIn("EvidenceQualityPolicy", self.fixture["workflow"]["gates"])
+
+    def test_command_adapter_does_not_import_readonly_run_api(self) -> None:
+        adapter = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "command-adapter.ts").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("ReadOnlyRunAPI", adapter)
 
 
 class TestFixtureTelemetrySources(unittest.TestCase):

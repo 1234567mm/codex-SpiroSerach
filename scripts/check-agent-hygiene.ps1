@@ -52,6 +52,39 @@ if ([IO.File]::Exists((Join-Path $Root 'uv.lock'))) {
     Add-Violation 'uv.lock must not exist at the repository root.'
 }
 
+$atomReasonXLock = Join-Path $Root 'frontend\atomreasonx\package-lock.json'
+if ([IO.File]::Exists($atomReasonXLock)) {
+    try {
+        $lockText = Read-StrictUtf8 $atomReasonXLock
+        $packageEntryMatches = [regex]::Matches(
+            $lockText,
+            '(?ms)^\s{4}"(?<path>node_modules/[^"]+)":\s*\{(?<body>.*?)(?=^\s{4}"[^"]+":\s*\{|\s{2}\}\s*,?\s*"dependencies"|\s{2}\}\s*\}\s*$)'
+        )
+        foreach ($match in $packageEntryMatches) {
+            $body = $match.Groups['body'].Value
+            if (-not [regex]::IsMatch($body, '(?m)^\s{6}"version":\s*"[^"]+"\s*,?\s*$')) {
+                Add-Violation "frontend/atomreasonx/package-lock.json package '$($match.Groups['path'].Value)' is missing version."
+            }
+        }
+    }
+    catch {
+        Add-Violation 'frontend/atomreasonx/package-lock.json could not be inspected.'
+    }
+}
+
+$commandAdapterPath = Join-Path $Root 'frontend\atomreasonx\src\adapters\command-adapter.ts'
+if ([IO.File]::Exists($commandAdapterPath)) {
+    try {
+        $commandAdapterText = Read-StrictUtf8 $commandAdapterPath
+        if ($commandAdapterText -match 'ReadOnlyRunAPI|read-only-artifact-adapter') {
+            Add-Violation 'AtomReasonX command adapter must not import read-only artifact APIs.'
+        }
+    }
+    catch {
+        Add-Violation 'frontend/atomreasonx/src/adapters/command-adapter.ts could not be read as strict UTF-8.'
+    }
+}
+
 $gitignorePath = Join-Path $Root '.gitignore'
 if (-not [IO.File]::Exists($gitignorePath)) {
     Add-Violation '.gitignore is missing the exact .qoder/ ignore rule.'

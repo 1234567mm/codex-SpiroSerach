@@ -87,6 +87,18 @@ Remove `uv.lock` unless the task explicitly changes repository dependency policy
 Remove-Item -LiteralPath uv.lock
 ```
 
+For AtomReasonX frontend work, prefer Windows-safe npm commands:
+
+```powershell
+Set-Location frontend/atomreasonx
+npm.cmd test
+npm.cmd run build
+```
+
+If npm reports `Invalid Version`, inspect `package-lock.json` for package
+entries without `version`; regenerate the lockfile with `npm.cmd install` only
+when dependency verification is in scope.
+
 ## Completion Evidence
 
 Report branch, worktree path, test commands/results, commit SHA if committed, `git status --short --branch`, and `git rev-list --left-right --count main...origin/main`.

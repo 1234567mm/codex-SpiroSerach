@@ -20,6 +20,7 @@ git status --short --branch
 git diff --stat
 git diff --cached --stat
 Test-Path uv.lock
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-agent-hygiene.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
 ```
 
 If `uv.lock` exists and is not intentional:
@@ -47,6 +48,8 @@ Check the diff for:
 - Cache/index readers that no longer match writers.
 - Missing review or error path for incomplete data.
 - Frontend assumptions about hard-coded output names.
+- Frontend command adapters importing read-only artifact APIs.
+- AtomReasonX package-lock entries without package versions.
 - Scoring paths that read raw provider payloads or provider confidence.
 - Unrelated docs, cache, output, or dependency churn.
 

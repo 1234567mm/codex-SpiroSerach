@@ -122,6 +122,56 @@ export interface KnowledgeLibrarySummary {
   blocked_review_items: number;
 }
 
+export interface HtlSourceCoverageRow {
+  provider_id: string;
+  provider_kind: string;
+  status: "active" | "experimental" | "quarantined" | "disabled";
+  phase_status: "critical" | "useful" | "optional" | "optional_for_htl" | "blocked_until_validated" | "out_of_current_slice";
+  key_requirement: "none" | "optional" | "required";
+  htl_capability: string;
+  automatic_acquisition: string;
+  local_dataset: boolean;
+  expected_fields: string[];
+  provenance_fields: string[];
+  cache_ttl_hours: number | null;
+  review_blockers: string[];
+}
+
+export interface HtlSourceCoverageMatrix {
+  schema_version: string;
+  lane: "htl_only";
+  sources: HtlSourceCoverageRow[];
+}
+
+export interface HtlSyncJobSummary {
+  job_id: string;
+  provider: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  config: Record<string, unknown>;
+}
+
+export interface HtlWorkflowStep {
+  index: number;
+  label: string;
+}
+
+export interface HtlWorkflowPreview {
+  schema_version: string;
+  lane: "htl_only";
+  steps: HtlWorkflowStep[];
+  target_fields: string[];
+  gates: string[];
+}
+
+export interface HtlWorkbenchCommandAction {
+  action_type: string;
+  label: string;
+  declared_effects: string[];
+  enabled: boolean;
+}
+
 export interface AtomReasonXWorkspaceState {
   brand: string;
   app: string;
@@ -135,5 +185,9 @@ export interface AtomReasonXWorkspaceState {
   telemetry: AtomReasonXTelemetryState;
   provider_status: AtomReasonXProviderStatus;
   settings: AtomReasonXSettingsState;
+  source_coverage: HtlSourceCoverageMatrix;
+  sync_jobs: HtlSyncJobSummary[];
+  workflow: HtlWorkflowPreview;
+  command_actions: HtlWorkbenchCommandAction[];
   _provisional: boolean;
 }

@@ -2,11 +2,11 @@ import React from "react";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { BottomTelemetryBar } from "./components/BottomTelemetryBar";
 import { SettingsModal } from "./components/SettingsModal";
+import { DatabaseView } from "./components/DatabaseView";
+import { KnowledgeLibraryView } from "./components/KnowledgeLibraryView";
+import { WorkflowView } from "./components/WorkflowView";
+import { InspectorPanel } from "./components/InspectorPanel";
 import type { AtomReasonXWorkspaceState } from "./contracts/types";
-
-const SIDEBAR_ENTRIES = [
-  "New Chat", "Database", "Projects", "Plugins", "Recent", "Automation",
-];
 
 const RIGHT_INSPECTOR_TABS = ["Overview", "Files"];
 
@@ -27,18 +27,18 @@ export const AppShell: React.FC<{
     <div className="app-shell" style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
       <LeftSidebar
         brand={workspace.brand}
-        entries={SIDEBAR_ENTRIES}
+        entries={workspace.sidebar_entries}
         onOpenSettings={onOpenSettings}
       />
       <div className="main-column" style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-        <main className="main-chat-workspace" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <main className="main-chat-workspace" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <header className="session-header">
             <span className="app-title">{workspace.app}</span>
           </header>
-          <div className="message-timeline" style={{ flex: 1, overflowY: "auto" }}>
-            <div className="empty-state">
-              <p>Start a new materials discovery session.</p>
-            </div>
+          <div className="workbench-grid" style={{ flex: 1, overflowY: "auto" }}>
+            <DatabaseView sourceCoverage={workspace.source_coverage} syncJobs={workspace.sync_jobs} />
+            <KnowledgeLibraryView summary={workspace.knowledge_library} />
+            <WorkflowView workflow={workspace.workflow} commandActions={workspace.command_actions} />
           </div>
           <div className="composer" style={{ padding: "8px" }}>
             <input type="text" placeholder="Ask AtomX..." style={{ width: "100%" }} />
@@ -46,11 +46,11 @@ export const AppShell: React.FC<{
         </main>
         <BottomTelemetryBar telemetry={workspace.telemetry} />
       </div>
-      <aside className="right-inspector" style={{ width: "280px" }}>
-        {RIGHT_INSPECTOR_TABS.map(tab => (
-          <div key={tab} className="inspector-tab">{tab}</div>
-        ))}
-      </aside>
+      <InspectorPanel
+        tabs={RIGHT_INSPECTOR_TABS}
+        sourceCoverage={workspace.source_coverage}
+        workflow={workspace.workflow}
+      />
       {showSettings && (
         <SettingsModal categories={SETTINGS_CATEGORIES} onClose={onCloseSettings} />
       )}

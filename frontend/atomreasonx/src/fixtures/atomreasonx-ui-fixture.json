@@ -4,12 +4,12 @@
   "tagline": "AtomReasonX — Reason at Atomic Scale, Build Beyond Materials.",
   "active_workspace": "perovskite_htl_screening",
   "sidebar_entries": [
-    "New Chat",
+    "Session",
     "Database",
+    "Knowledge Library",
+    "Workflow",
     "Projects",
-    "Plugins",
-    "Recent",
-    "Automation"
+    "Settings"
   ],
   "right_inspector_tabs": [
     "Overview",
@@ -68,6 +68,388 @@
     "index_freshness": null,
     "blocked_review_items": 0
   },
+  "source_coverage": {
+    "schema_version": "v33c.htl_source_coverage.v1",
+    "lane": "htl_only",
+    "sources": [
+      {
+        "provider_id": "nomad_perla_psc",
+        "provider_kind": "provider_api",
+        "status": "experimental",
+        "phase_status": "critical",
+        "key_requirement": "none",
+        "htl_capability": "device metrics and HTL device context",
+        "automatic_acquisition": "api_sync",
+        "local_dataset": false,
+        "expected_fields": [
+          "entry_id",
+          "htl_name",
+          "device_stack",
+          "pce_percent",
+          "voc_v",
+          "jsc_ma_cm2",
+          "fill_factor",
+          "perovskite_composition",
+          "source_doi",
+          "license",
+          "archive_status"
+        ],
+        "provenance_fields": [
+          "entry_id",
+          "source_url",
+          "source_doi",
+          "query_hash",
+          "raw_sha256"
+        ],
+        "cache_ttl_hours": 168,
+        "review_blockers": [
+          "missing_doi",
+          "missing_license",
+          "missing_stack",
+          "incomplete_metrics",
+          "archive_unavailable",
+          "ambiguous_htl_match"
+        ]
+      },
+      {
+        "provider_id": "pubchem",
+        "provider_kind": "provider_api",
+        "status": "active",
+        "phase_status": "critical",
+        "key_requirement": "none",
+        "htl_capability": "molecule identity and synonyms",
+        "automatic_acquisition": "api_lookup",
+        "local_dataset": false,
+        "expected_fields": [
+          "cid",
+          "canonical_smiles",
+          "inchi_key",
+          "synonyms",
+          "ambiguity_flag"
+        ],
+        "provenance_fields": [
+          "cid",
+          "source_url",
+          "raw_sha256"
+        ],
+        "cache_ttl_hours": 720,
+        "review_blockers": [
+          "ambiguous_identity"
+        ]
+      },
+      {
+        "provider_id": "crossref",
+        "provider_kind": "provider_api",
+        "status": "active",
+        "phase_status": "critical",
+        "key_requirement": "none",
+        "htl_capability": "DOI and paper metadata",
+        "automatic_acquisition": "api_lookup",
+        "local_dataset": false,
+        "expected_fields": [
+          "doi",
+          "title",
+          "journal",
+          "published_at",
+          "authors",
+          "license"
+        ],
+        "provenance_fields": [
+          "doi",
+          "source_url",
+          "raw_sha256"
+        ],
+        "cache_ttl_hours": 168,
+        "review_blockers": [
+          "retraction_flag",
+          "source_url_missing"
+        ]
+      },
+      {
+        "provider_id": "local_paper_vault",
+        "provider_kind": "local_vault",
+        "status": "active",
+        "phase_status": "critical",
+        "key_requirement": "none",
+        "htl_capability": "manual main PDF, SI, DOI lists, and reading notes",
+        "automatic_acquisition": "manual_import",
+        "local_dataset": true,
+        "expected_fields": [
+          "paper_group",
+          "main_pdf",
+          "si_assets",
+          "notes",
+          "doi",
+          "source_url"
+        ],
+        "provenance_fields": [
+          "deposit_path",
+          "sha256",
+          "doi",
+          "source_url"
+        ],
+        "cache_ttl_hours": null,
+        "review_blockers": [
+          "missing_main_pdf",
+          "missing_si",
+          "source_url_missing"
+        ]
+      },
+      {
+        "provider_id": "openalex",
+        "provider_kind": "provider_api",
+        "status": "experimental",
+        "phase_status": "useful",
+        "key_requirement": "optional",
+        "htl_capability": "literature graph and open-access metadata",
+        "automatic_acquisition": "api_lookup",
+        "local_dataset": false,
+        "expected_fields": [
+          "openalex_id",
+          "doi",
+          "title",
+          "concepts",
+          "oa_status",
+          "cited_by_count"
+        ],
+        "provenance_fields": [
+          "openalex_id",
+          "source_url",
+          "raw_sha256"
+        ],
+        "cache_ttl_hours": 168,
+        "review_blockers": []
+      },
+      {
+        "provider_id": "materials_project",
+        "provider_kind": "provider_api",
+        "status": "active",
+        "phase_status": "optional_for_htl",
+        "key_requirement": "required",
+        "htl_capability": "inorganic and computed material context",
+        "automatic_acquisition": "api_lookup",
+        "local_dataset": false,
+        "expected_fields": [
+          "material_id",
+          "formula",
+          "band_gap_ev"
+        ],
+        "provenance_fields": [
+          "material_id",
+          "source_url",
+          "raw_sha256"
+        ],
+        "cache_ttl_hours": 168,
+        "review_blockers": []
+      },
+      {
+        "provider_id": "pubchemqc",
+        "provider_kind": "provider_api",
+        "status": "quarantined",
+        "phase_status": "blocked_until_validated",
+        "key_requirement": "none",
+        "htl_capability": "computed molecular properties",
+        "automatic_acquisition": "disabled",
+        "local_dataset": false,
+        "expected_fields": [
+          "pubchem_cid",
+          "homo_ev",
+          "lumo_ev",
+          "band_gap_ev"
+        ],
+        "provenance_fields": [
+          "source_url",
+          "raw_sha256"
+        ],
+        "cache_ttl_hours": 168,
+        "review_blockers": [
+          "provider_quarantined"
+        ]
+      },
+      {
+        "provider_id": "future_model_assisted_claim_extraction",
+        "provider_kind": "deferred_extractor",
+        "status": "disabled",
+        "phase_status": "out_of_current_slice",
+        "key_requirement": "none",
+        "htl_capability": "future claim extraction",
+        "automatic_acquisition": "deferred",
+        "local_dataset": false,
+        "expected_fields": [
+          "claim_text",
+          "field_name",
+          "field_value",
+          "provenance"
+        ],
+        "provenance_fields": [
+          "knowledge_chunk_id",
+          "citation_link_id"
+        ],
+        "cache_ttl_hours": null,
+        "review_blockers": [
+          "extractor_not_enabled"
+        ]
+      }
+    ]
+  },
+  "sync_jobs": [
+    {
+      "job_id": "fixture-sync-1",
+      "provider": "nomad_perla_psc",
+      "status": "queued",
+      "started_at": null,
+      "finished_at": null,
+      "config": {
+        "htl_names": [
+          "Spiro-OMeTAD"
+        ],
+        "max_pages": 1,
+        "fetch_archive": true
+      }
+    }
+  ],
+  "workflow": {
+    "schema_version": "v33c.htl_workflow.v1",
+    "lane": "htl_only",
+    "steps": [
+      {
+        "index": 1,
+        "label": "Configure sources and extractor"
+      },
+      {
+        "index": 2,
+        "label": "Sync NOMAD HTL records by configured HTL list"
+      },
+      {
+        "index": 3,
+        "label": "Resolve molecule identity through PubChem"
+      },
+      {
+        "index": 4,
+        "label": "Discover literature metadata through Crossref and optional OpenAlex"
+      },
+      {
+        "index": 5,
+        "label": "Import user paper and SI groups"
+      },
+      {
+        "index": 6,
+        "label": "Parse and index knowledge assets"
+      },
+      {
+        "index": 7,
+        "label": "Extract HTL-relevant claims"
+      },
+      {
+        "index": 8,
+        "label": "Normalize evidence"
+      },
+      {
+        "index": 9,
+        "label": "Audit conflicts and missing provenance"
+      },
+      {
+        "index": 10,
+        "label": "Build scoring view after EvidenceQualityPolicy"
+      },
+      {
+        "index": 11,
+        "label": "Render report with citation-backed claims"
+      }
+    ],
+    "target_fields": [
+      "htl_name",
+      "synonyms",
+      "device_architecture",
+      "device_stack",
+      "perovskite_composition",
+      "pce_percent",
+      "voc_v",
+      "jsc_ma_cm2",
+      "fill_factor",
+      "stability_condition",
+      "doi",
+      "source_url",
+      "license",
+      "processing_conditions",
+      "evidence_provenance",
+      "review_blockers"
+    ],
+    "gates": [
+      "EvidenceQualityPolicy",
+      "review_blockers_resolved",
+      "citation_provenance_present"
+    ]
+  },
+  "command_actions": [
+    {
+      "action_type": "start_nomad_sync",
+      "label": "Sync NOMAD",
+      "declared_effects": [
+        "provider_sync_jobs"
+      ],
+      "enabled": true
+    },
+    {
+      "action_type": "pause_nomad_sync",
+      "label": "Pause Sync",
+      "declared_effects": [
+        "provider_sync_jobs"
+      ],
+      "enabled": true
+    },
+    {
+      "action_type": "resume_nomad_sync",
+      "label": "Resume Sync",
+      "declared_effects": [
+        "provider_sync_jobs"
+      ],
+      "enabled": true
+    },
+    {
+      "action_type": "cancel_nomad_sync",
+      "label": "Cancel Sync",
+      "declared_effects": [
+        "provider_sync_jobs"
+      ],
+      "enabled": true
+    },
+    {
+      "action_type": "import_doi_list",
+      "label": "Import DOI List",
+      "declared_effects": [
+        "paper_sources",
+        "manual_acquisition_tasks"
+      ],
+      "enabled": true
+    },
+    {
+      "action_type": "import_paper_group",
+      "label": "Import Paper Group",
+      "declared_effects": [
+        "paper_groups",
+        "paper_assets"
+      ],
+      "enabled": true
+    },
+    {
+      "action_type": "run_parsing_job",
+      "label": "Parse Library",
+      "declared_effects": [
+        "knowledge_chunks"
+      ],
+      "enabled": true
+    },
+    {
+      "action_type": "run_extraction_job",
+      "label": "Extract Claims",
+      "declared_effects": [
+        "extracted_claims",
+        "citation_links"
+      ],
+      "enabled": false
+    }
+  ],
   "telemetry": {
     "schema_version": "v33.session_telemetry.v1",
     "fields": [

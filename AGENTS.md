@@ -11,6 +11,7 @@ Before substantial work, read:
 2. `docs/agent-collaboration-governance.md`
 3. `docs/ai-collaboration-instruction-templates.md` when a reusable prompt
    shape is useful
+4. `docs/project-hooks.md` before installing, editing, or relying on hooks
 
 These documents are authoritative for runtime discovery, local-state handling,
 verification gates, multi-agent ownership, and completion reporting.
@@ -26,6 +27,8 @@ Spiro-OMeTAD replacement candidates. The main shared surfaces are:
 - `frontend/artifact-viewer`: static artifact viewer driven by manifests
 - `docs` and `plans`: durable decisions and planning artifacts, not executable
   source of truth
+- `.githooks` and `scripts/check-agent-hygiene.ps1`: versioned advisory hook
+  templates and fast local hygiene checks, not permission to mutate local hooks
 
 Do not cross these project boundaries casually:
 
@@ -67,9 +70,23 @@ Use repository skills when their trigger applies:
   `grill-with-docs`, `to-spec`, `to-tickets`, and `upstream-skill-sync` for
   their named workflows
 
+Use `context-handoff` to archive long implementation runs into `docs/` or
+`plans/` when the run produced durable decisions, pitfalls, or next-wave
+scope. Current V33C archive: `docs/v33c-htl-workbench-run-archive.md`.
+
+For V33C/V34 HTL workbench changes, treat
+`plans/v33c-htl-data-knowledge-workbench-spec.md` as the completed source and
+`plans/v34-htl-workbench-follow-up.md` as the next-wave backlog.
+
 Prefer the smallest verifiable change. Do not pre-read unrelated files, invent
 extra process, or run broad checks unless the current task or observed risk
 requires it.
+
+Before committing, run or account for the project hygiene hook:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-agent-hygiene.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
+```
 
 ## Completion Contract
 
