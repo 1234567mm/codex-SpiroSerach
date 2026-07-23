@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"spirosearch/internal/localbackend"
 	"spirosearch/internal/providercache"
+	"spirosearch/internal/readonlyapi"
 	"spirosearch/internal/runartifact"
 	"spirosearch/internal/sourceregistry"
 	"spirosearch/internal/sourcesnapshot"
@@ -22,7 +24,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) != 3 || args[1] != "validate" {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir>")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir>")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -89,9 +91,40 @@ func run(args []string) error {
 		}
 		fmt.Printf("ok run-artifacts artifacts=%d\n", len(artifacts))
 		return nil
+	case "readonly-run":
+		api, err := readonlyapi.Open(args[2])
+		if err != nil {
+			return err
+		}
+		if envelope := api.Manifest(); envelope.Status != "available" {
+			return fmt.Errorf("readonly manifest unavailable: %s", readonlyUnavailableCode(envelope))
+		}
+		artifactIndex := api.Artifacts()
+		if artifactIndex.Status != "available" {
+			return fmt.Errorf("readonly artifact_index unavailable: %s", readonlyUnavailableCode(artifactIndex))
+		}
+		payload, ok := artifactIndex.Payload.(readonlyapi.ArtifactIndexPayload)
+		if !ok {
+			return fmt.Errorf("readonly artifact_index payload has unexpected type")
+		}
+		for _, artifact := range payload.Artifacts {
+			envelope := api.Artifact(artifact.Kind)
+			if envelope.Status != "available" {
+				return fmt.Errorf("readonly %s unavailable: %s", artifact.Kind, readonlyUnavailableCode(envelope))
+			}
+		}
+		fmt.Printf("ok readonly-run surfaces=3 artifacts=%d\n", payload.ArtifactCount)
+		return nil
 	default:
 		return fmt.Errorf("unknown target: %s", args[0])
 	}
+}
+
+func readonlyUnavailableCode(envelope readonlyapi.Envelope) string {
+	if envelope.Unavailable == nil || strings.TrimSpace(envelope.Unavailable.Code) == "" {
+		return "unknown"
+	}
+	return envelope.Unavailable.Code
 }
 
 func validateKnownSourceSnapshot(dir string, manifest sourcesnapshot.Manifest) (int, error) {

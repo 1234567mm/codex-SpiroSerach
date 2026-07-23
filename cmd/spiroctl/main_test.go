@@ -38,6 +38,13 @@ func TestRunValidatesManifestDiscoveredArtifactsReadOnly(t *testing.T) {
 	}
 }
 
+func TestRunValidatesReadonlyRunEnvelopes(t *testing.T) {
+	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+	if err := run([]string{"readonly-run", "validate", outputDir}); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+}
+
 func TestRunValidatesLocalBackendReadOnly(t *testing.T) {
 	dbPath := createSpiroctlBackendFixture(t, true)
 
