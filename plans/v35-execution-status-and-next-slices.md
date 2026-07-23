@@ -2,8 +2,8 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `338f508`
-Date: 2026-07-23
+Latest implementation HEAD before this status update: `b01f0fd`
+Date: 2026-07-24
 
 ## Goal
 
@@ -31,6 +31,7 @@ The current branch contains these V35 execution commits:
 | `72ecd86` | Go readonly run envelope foundation | V11-shaped read-only envelopes for `manifest`, `artifact_index`, and `artifact_by_kind`, plus `spiroctl readonly-run validate` over existing fixture runs. |
 | `5cf3680` | Go readonly run surface expansion | V11-shaped read-only envelopes for `scoring_view`, `review_summary`, and `provider_lineage`; CLI validation now covers six readonly surfaces and every manifest artifact. |
 | `338f508` | AtomReasonX Go readonly transport facade | TypeScript GET-only transport for V11 readonly run envelopes, with fail-closed envelope validation and no command-shaped methods. |
+| `b01f0fd` | Go readonly sidecar HTTP delivery | Loopback-only `spiroctl readonly-run serve <output-dir> [--addr <addr>]`, private startup JSON with `base_url`, `run_id`, and one-time readonly token, token-protected six-route GET surface, manifest run-id binding, unsafe segment rejection, write-shaped route rejection, no-side-effect guard, import guard, and TypeScript readonly token support. |
 
 ## Current Data Source Status
 
@@ -55,9 +56,10 @@ Recent gates run during this checkpoint:
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/runartifact ./cmd/spiroctl -v` passed for the run artifact slice.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/readonlyapi ./cmd/spiroctl -v` passed for both readonly envelope slices.
-- `npm.cmd test` in `frontend/atomreasonx` passed with 17 Vitest tests.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/readonlyserver ./internal/readonlyapi ./cmd/spiroctl -v` passed for the readonly sidecar slice.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 19 Vitest tests.
 - `npm.cmd run build` in `frontend/atomreasonx` passed.
-- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed after both Go read-side slices; generated root `uv.lock` was removed each time.
+- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed after both Go read-side slices and again after the sidecar slice; generated root `uv.lock` was removed each time.
 - `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_contracts tests.test_atomreasonx_frontend -v` passed outside sandbox after user-level `uv` cache failed inside sandbox.
 - `git diff --check` passed with LF-to-CRLF warnings only.
 - `scripts/check-agent-hygiene.ps1` passed.
@@ -80,8 +82,10 @@ Recent gates run during this checkpoint:
 
 ### P4 Transport And Packaging
 
-1. Select and implement the actual Go sidecar or Tauri IPC launch contract for
-   the existing AtomReasonX readonly transport facade.
+1. AtomReasonX/Tauri still needs the desktop launch bridge that starts
+   `spiroctl readonly-run serve`, captures the private startup JSON, passes
+   `base_url`, `run_id`, and `readonly_token` into the existing TypeScript
+   transport, and redacts the token from logs or diagnostics.
 2. Keep read transport side-effect free; command transport must remain separate
    and idempotent.
 3. Go must not become a second SQLite/provider-cache writer until schema
@@ -101,11 +105,13 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Choose one desktop runtime contract for Go readonly delivery:
-   local sidecar HTTP, Tauri IPC invoke, or stdio JSON protocol.
-2. Implement only the read launch/config surface first, using the existing
-   TypeScript readonly transport facade and Go `spiroctl readonly-run validate`
-   behavior as the oracle.
+1. Implement the AtomReasonX/Tauri readonly sidecar launch/config bridge:
+   spawn the loopback Go sidecar, capture the startup JSON as private process
+   state, configure the existing TypeScript readonly transport, and prove no
+   command-shaped methods or provider credentials cross that read channel.
+2. Add a P1 regression closure that runs all Go read/validation foundations
+   together: source registry, source snapshots, provider cache/index, local
+   backend read model, run artifacts, readonly API, and readonly sidecar.
 3. Keep command transport, provider sync, scoring rebuild, cache writes,
    SQLite writes, and experiment writes out of the same slice.
 
