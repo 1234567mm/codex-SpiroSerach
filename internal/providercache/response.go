@@ -39,6 +39,19 @@ type ProviderResponse struct {
 	TrustLevel      string         `json:"trust_level"`
 }
 
+func ValidateProviderResponse(response ProviderResponse) error {
+	payload, err := json.Marshal(response)
+	if err != nil {
+		return err
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return err
+	}
+	_, err = validateProviderResponse(raw)
+	return err
+}
+
 func validateProviderResponse(raw map[string]any) (ProviderResponse, error) {
 	payload, err := json.Marshal(raw)
 	if err != nil {

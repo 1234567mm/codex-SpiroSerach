@@ -1,0 +1,20 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 1,
+        "CanonicalSMILES": "CC",
+        "InChIKey": "KEY1",
+        "MolecularFormula": "A",
+        "MolecularWeight": 100.0
+      },
+      {
+        "CID": 2,
+        "CanonicalSMILES": "CCC",
+        "InChIKey": "KEY2",
+        "MolecularFormula": "B",
+        "MolecularWeight": 101.0
+      }
+    ]
+  }
+}

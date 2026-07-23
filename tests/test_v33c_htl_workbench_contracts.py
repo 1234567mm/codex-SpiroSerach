@@ -53,6 +53,9 @@ class SourceCoverageMatrixTests(unittest.TestCase):
         self.assertIn("source_url", nomad["provenance_fields"])
         self.assertIn("archive_unavailable", nomad["review_blockers"])
         self.assertEqual(nomad["blocking_review_count"], 6)
+        pubchem = {row["provider_id"]: row for row in matrix["sources"]}["pubchem"]
+        self.assertIn("inchi", pubchem["expected_fields"])
+        self.assertIn("source_attribution", pubchem["expected_fields"])
         self.assertEqual(
             {row["provider_id"]: row for row in matrix["sources"]}["hopv15"]["blocking_review_count"],
             1,

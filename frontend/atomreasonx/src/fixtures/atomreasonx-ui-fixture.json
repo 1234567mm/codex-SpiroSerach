@@ -150,8 +150,11 @@
         "expected_fields": [
           "cid",
           "canonical_smiles",
+          "isomeric_smiles",
+          "inchi",
           "inchi_key",
           "synonyms",
+          "source_attribution",
           "ambiguity_flag"
         ],
         "provenance_fields": [
@@ -611,7 +614,7 @@
         "required_citation": "NCBI PubChem; preserve CID, source URL, and retrieval lineage.",
         "last_verified_at": "2026-07-10",
         "quarantine_state": "none",
-        "go_migration_state": "parity_required",
+        "go_migration_state": "go_shadow_ready",
         "python_bridge_required": false,
         "typescript_surface": "source_coverage_and_settings_only",
         "requires_api_key": false,

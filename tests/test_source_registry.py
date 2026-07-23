@@ -60,6 +60,10 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual(pubchem.cache_ttl_hours, 24 * 30)
         self.assertTrue(pubchem.disambiguation_required)
         self.assertIn("canonical_smiles", pubchem.allowed_output_fields)
+        self.assertIn("inchi", pubchem.allowed_output_fields)
+        self.assertIn("source_attribution", pubchem.allowed_output_fields)
+        self.assertEqual(pubchem.go_migration_state, "go_shadow_ready")
+        self.assertFalse(pubchem.python_bridge_required)
 
         materials_project = registry.get("materials_project")
         self.assertTrue(materials_project.requires_api_key)

@@ -18,6 +18,8 @@
     "allowed_output_fields": [
       "cid",
       "canonical_smiles",
+      "isomeric_smiles",
+      "inchi",
       "inchi_key",
       "molecular_formula",
       "molecular_weight",
@@ -26,6 +28,7 @@
       "hbd_count",
       "hba_count",
       "synonyms",
+      "source_attribution",
       "ambiguity_flag",
       "ambiguous_cids",
       "resolution_status"
@@ -37,7 +40,7 @@
       "conflicting_source_identity",
       "license_scope_uncertain"
     ],
-    "go_migration_state": "parity_required",
+    "go_migration_state": "go_shadow_ready",
     "python_bridge_required": false,
     "typescript_surface": "source_coverage_and_settings_only",
     "disambiguation_required": true,

@@ -108,6 +108,9 @@ class TestFixtureStructure(unittest.TestCase):
         }
         self.assertEqual(profiles["materials_project"]["requires_api_key"], True)
         self.assertEqual(profiles["materials_project"]["api_key_env"], "MATERIALS_PROJECT_API_KEY")
+        self.assertEqual(profiles["pubchem"]["go_migration_state"], "go_shadow_ready")
+        self.assertIn("inchi", coverage["pubchem"]["expected_fields"])
+        self.assertIn("source_attribution", coverage["pubchem"]["expected_fields"])
         self.assertEqual(profiles["local_paper_vault"]["provider_kind"], "local_vault")
         self.assertEqual(profiles["future_model_assisted_claim_extraction"]["quarantine_state"], "deferred")
         self.assertEqual(profiles["pubchemqc"]["quarantine_state"], "provider_quarantined")

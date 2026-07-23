@@ -29,6 +29,14 @@ func TestLoadRepositoryRegistry(t *testing.T) {
 		t.Fatalf("materials_project TypeScript surface = %q", mp.TypeScriptSurface)
 	}
 
+	pubchem := index["pubchem"]
+	if !pubchem.LiveEnabled() {
+		t.Fatalf("pubchem should be live enabled")
+	}
+	if pubchem.GoMigrationState != "go_shadow_ready" || pubchem.PythonBridgeRequired {
+		t.Fatalf("pubchem Go parity state mismatch: state=%q bridge=%v", pubchem.GoMigrationState, pubchem.PythonBridgeRequired)
+	}
+
 	pubchemqc := index["pubchemqc"]
 	if pubchemqc.LiveEnabled() {
 		t.Fatalf("pubchemqc must not be live enabled while quarantined")
