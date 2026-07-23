@@ -50,3 +50,9 @@ For V35 Go read/validation changes:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
 ```
+
+For AtomReasonX readonly sidecar packaging changes:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-atomreasonx-sidecar-packaging.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
+```
