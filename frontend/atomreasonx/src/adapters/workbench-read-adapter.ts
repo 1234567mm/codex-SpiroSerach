@@ -4,6 +4,7 @@ export type WorkbenchReadSurface = "workspace";
 
 export interface WorkbenchReadAdapter {
   loadWorkspace(): Promise<AtomReasonXWorkspaceState>;
+  dispose?(): Promise<void>;
 }
 
 export interface WorkbenchReadTransport {

@@ -44,6 +44,7 @@ export const useWorkbenchWorkspaceStore = (
     });
     return () => {
       active = false;
+      void adapter.dispose?.();
     };
   }, [adapter]);
 

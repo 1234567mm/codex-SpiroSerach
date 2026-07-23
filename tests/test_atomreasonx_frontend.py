@@ -47,7 +47,12 @@ class TestFrontendDirectoryStructure(unittest.TestCase):
             self.assertTrue((FRONTEND_DIR / "src" / "components" / component).exists())
 
     def test_local_adapters_exist(self) -> None:
-        for adapter in ["command-adapter.ts", "read-only-artifact-adapter.ts", "tauri-readonly-sidecar.ts"]:
+        for adapter in [
+            "command-adapter.ts",
+            "read-only-artifact-adapter.ts",
+            "readonly-run-workbench-adapter.ts",
+            "tauri-readonly-sidecar.ts",
+        ]:
             self.assertTrue((FRONTEND_DIR / "src" / "adapters" / adapter).exists())
 
     def test_fixture_exists(self) -> None:
@@ -97,6 +102,28 @@ class TestTauriReadonlySidecarBridge(unittest.TestCase):
         self.assertNotIn("spiroctlPath", bridge)
         self.assertNotIn("console.", bridge)
         self.assertNotIn("localStorage", bridge)
+
+    def test_runtime_workbench_adapter_maps_readonly_run_without_command_surface(self) -> None:
+        adapter = (FRONTEND_DIR / "src" / "adapters" / "readonly-run-workbench-adapter.ts").read_text(
+            encoding="utf-8",
+        )
+        main_tsx = (FRONTEND_DIR / "src" / "main.tsx").read_text(encoding="utf-8")
+
+        self.assertIn("createReadonlyRunWorkbenchReadAdapter", adapter)
+        self.assertIn('transport.read("manifest")', adapter)
+        self.assertIn('transport.read("artifact_index")', adapter)
+        self.assertIn('transport.read("scoring_view")', adapter)
+        self.assertIn('transport.read("review_summary")', adapter)
+        self.assertIn('transport.read("provider_lineage")', adapter)
+        self.assertIn('workspace.active_workspace = `readonly_run:${runId}`', adapter)
+        self.assertIn("workspace._provisional = false", adapter)
+        self.assertIn("readonlyOutputDir", adapter)
+        self.assertNotIn("submit(", adapter)
+        self.assertNotIn("execute(", adapter)
+        self.assertNotIn("sync(", adapter)
+        self.assertIn("createRuntimeWorkbenchReadAdapter", main_tsx)
+        self.assertIn("runtimeReadAdapter.readOnly", main_tsx)
+        self.assertIn("? undefined", main_tsx)
 
 
 class TestFrontendFixtureValid(unittest.TestCase):

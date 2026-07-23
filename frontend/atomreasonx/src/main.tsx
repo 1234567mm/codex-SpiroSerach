@@ -2,19 +2,21 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppShell } from "./AppShell";
 import { createLocalCommandAdapter, createWorkbenchCommandDispatcher } from "./adapters/command-adapter";
-import { createFixtureWorkbenchReadAdapter } from "./adapters/workbench-read-adapter";
+import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import fixture from "./fixtures/atomreasonx-ui-fixture.json";
 import { useWorkbenchWorkspaceStore } from "./stores/workspace-store";
 import type { AtomReasonXWorkspaceState } from "./contracts/types";
 
-const readAdapter = createFixtureWorkbenchReadAdapter(fixture as unknown as AtomReasonXWorkspaceState);
+const runtimeReadAdapter = createRuntimeWorkbenchReadAdapter({
+  baseWorkspace: fixture as unknown as AtomReasonXWorkspaceState,
+});
 const commandAdapter = createLocalCommandAdapter(async () => ({
   status: "queued",
 }));
 
 const AtomReasonXRoot: React.FC = () => {
   const [showSettings, setShowSettings] = React.useState(false);
-  const workspaceState = useWorkbenchWorkspaceStore(readAdapter);
+  const workspaceState = useWorkbenchWorkspaceStore(runtimeReadAdapter.adapter);
 
   if (workspaceState.status === "loading") {
     return <div className="app-shell app-shell-loading">Loading AtomReasonX workspace</div>;
@@ -25,9 +27,11 @@ const AtomReasonXRoot: React.FC = () => {
   }
 
   const workspace = workspaceState.workspace;
-  const commandDispatcher = createWorkbenchCommandDispatcher(commandAdapter, () => ({
-    expectedTargetVersion: String(workspace.source_settings.config_version),
-  }));
+  const commandDispatcher = runtimeReadAdapter.readOnly
+    ? undefined
+    : createWorkbenchCommandDispatcher(commandAdapter, () => ({
+      expectedTargetVersion: String(workspace.source_settings.config_version),
+    }));
 
   return (
     <AppShell

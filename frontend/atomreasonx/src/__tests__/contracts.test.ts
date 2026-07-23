@@ -21,6 +21,10 @@ import {
   type ReadonlyRunEnvelope,
 } from "../adapters/go-readonly-run-transport";
 import {
+  createReadonlyRunWorkbenchReadAdapter,
+  createRuntimeWorkbenchReadAdapter,
+} from "../adapters/readonly-run-workbench-adapter";
+import {
   createTauriReadonlyRunSession,
   createTauriReadonlyRunTransport,
   isReadonlySidecarLoopbackBaseUrl,
@@ -81,6 +85,276 @@ describe("AtomReasonX contract fixtures", () => {
       status: "error",
       message: "read backend unavailable",
     });
+  });
+
+  it("projects Go readonly run envelopes into a defensive AtomReasonX workspace snapshot", async () => {
+    const baseWorkspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const requestedSurfaces: string[] = [];
+    const envelope = (
+      surface: ReadonlyRunEnvelope["surface"],
+      payload: unknown,
+      artifactKind: string | null = null,
+    ): ReadonlyRunEnvelope => ({
+      schema_version: "v11.readonly_api.envelope.v1",
+      status: "available",
+      severity: "info",
+      surface,
+      read_only: true,
+      run_id: "readonly-run-1",
+      artifact_kind: artifactKind,
+      source: {
+        backend: "json_artifact_repository",
+        manifest_path: "run-manifest.json",
+      },
+      payload,
+      unavailable: null,
+    });
+    const adapter = createReadonlyRunWorkbenchReadAdapter({
+      baseWorkspace,
+      transport: {
+        async read(surface) {
+          requestedSurfaces.push(surface);
+          if (surface === "manifest") {
+            return envelope("manifest", {
+              schema_version: "v6.run_manifest.v1",
+              run_id: "readonly-run-1",
+              generated_at: "2026-07-24T00:00:00+00:00",
+              producer_version: "spirosearch-v35",
+              candidate_count: 2,
+              context: {
+                provider_outcomes: {
+                  hit_count: 2,
+                  miss_count: 1,
+                },
+              },
+            });
+          }
+          if (surface === "artifact_index") {
+            return envelope("artifact_index", {
+              artifact_count: 5,
+              artifacts: [
+                { kind: "scoring_view" },
+                { kind: "review_summary" },
+                { kind: "provider_cache", record_count: 4 },
+                { kind: "provider_cache_index" },
+                { kind: "agent_trace", record_count: 3 },
+              ],
+            });
+          }
+          if (surface === "scoring_view") {
+            return envelope("scoring_view", {
+              kind: "scoring_view",
+              data: {
+                schema_version: "v10.scoring_view.v1",
+                energy_facts: [
+                  { evidence_id: "energy-1" },
+                  { evidence_id: "energy-2" },
+                ],
+              },
+            }, "scoring_view");
+          }
+          if (surface === "review_summary") {
+            return envelope("review_summary", {
+              kind: "review_summary",
+              data: {
+                schema_version: "v10.review_summary.v1",
+                run_id: "readonly-run-1",
+                generated_at: "2026-07-24T00:00:00+00:00",
+                review_count: 5,
+                open_blocking_count: 3,
+              },
+            }, "review_summary");
+          }
+          if (surface === "provider_lineage") {
+            return envelope("provider_lineage", {
+              provider_cache: { kind: "provider_cache", record_count: 4, records: [{}, {}, {}, {}] },
+              provider_cache_index: { kind: "provider_cache_index", data: {} },
+              agent_trace: { kind: "agent_trace", record_count: 3, records: [{}, {}, {}] },
+            });
+          }
+          throw new Error(`unexpected surface ${surface}`);
+        },
+      },
+    });
+
+    const workspace = await adapter.loadWorkspace();
+    workspace.source_coverage.sources[0].provider_id = "mutated";
+
+    expect(requestedSurfaces).toEqual([
+      "manifest",
+      "artifact_index",
+      "scoring_view",
+      "review_summary",
+      "provider_lineage",
+    ]);
+    expect(workspace.active_workspace).toBe("readonly_run:readonly-run-1");
+    expect(workspace._provisional).toBe(false);
+    expect(workspace.knowledge_library).toMatchObject({
+      candidate_entities: 2,
+      extracted_claims: 2,
+      provider_snapshots: 4,
+      blocked_review_items: 3,
+      index_freshness: "2026-07-24T00:00:00+00:00",
+    });
+    expect(workspace.telemetry.fields.find(field => field.name === "retrieval_hit_count")).toMatchObject({
+      value: 2,
+      source: "runtime_computed",
+    });
+    expect(workspace.telemetry.fields.find(field => field.name === "average_hit_rate")).toMatchObject({
+      value: 0.6667,
+      source: "runtime_computed",
+    });
+    expect(workspace.telemetry.fields.find(field => field.name === "active_session_state")).toMatchObject({
+      value: "readonly_run",
+      source: "runtime_computed",
+    });
+    expect(workspace.telemetry.fields.find(field => field.name === "provider_usage")).toMatchObject({
+      value: {
+        provider_cache_records: 4,
+        agent_trace_records: 3,
+      },
+      source: "runtime_computed",
+    });
+    expect(baseWorkspace.source_coverage.sources[0].provider_id).not.toBe("mutated");
+    expect("submit" in adapter).toBe(false);
+    expect("execute" in adapter).toBe(false);
+  });
+
+  it("fails closed instead of projecting unavailable readonly run surfaces", async () => {
+    const adapter = createReadonlyRunWorkbenchReadAdapter({
+      baseWorkspace: fixture as unknown as AtomReasonXWorkspaceState,
+      transport: {
+        async read(surface) {
+          if (surface === "manifest") {
+            return {
+              schema_version: "v11.readonly_api.envelope.v1",
+              status: "available",
+              severity: "info",
+              surface,
+              read_only: true,
+              run_id: "readonly-run-1",
+              artifact_kind: null,
+              source: {
+                backend: "json_artifact_repository",
+                manifest_path: "run-manifest.json",
+              },
+              payload: { run_id: "readonly-run-1" },
+              unavailable: null,
+            };
+          }
+          return {
+            schema_version: "v11.readonly_api.envelope.v1",
+            status: "unavailable",
+            severity: "error",
+            surface,
+            read_only: true,
+            run_id: "readonly-run-1",
+            artifact_kind: surface === "artifact_index" ? null : surface,
+            source: {
+              backend: "json_artifact_repository",
+              manifest_path: "run-manifest.json",
+            },
+            payload: null,
+            unavailable: {
+              code: "artifact_path_unsafe",
+            },
+          };
+        },
+      },
+    });
+
+    await expect(adapter.loadWorkspace()).rejects.toThrow(
+      "readonly artifact_index is not available: artifact_path_unsafe",
+    );
+  });
+
+  it("guards runtime bootstrap between fixture mode and disposable Tauri readonly sidecar mode", async () => {
+    const baseWorkspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const fixtureRuntime = createRuntimeWorkbenchReadAdapter({ baseWorkspace, readonlyOutputDir: "" });
+    const stopped: number[] = [];
+    const readonlyRuntime = createRuntimeWorkbenchReadAdapter({
+      baseWorkspace,
+      readonlyOutputDir: "D:\\runs\\readonly",
+      createSidecarSession: async ({ outputDir }) => {
+        expect(outputDir).toBe("D:\\runs\\readonly");
+        return {
+          launch: {
+            base_url: "http://127.0.0.1:49152",
+            run_id: "readonly-run-1",
+            read_only: true,
+            readonly_token: "0123456789abcdef",
+            process_id: 4242,
+          },
+          transport: {
+            async read(surface) {
+              const payloadBySurface: Record<string, unknown> = {
+                manifest: {
+                  run_id: "readonly-run-1",
+                  generated_at: "2026-07-24T00:00:00+00:00",
+                },
+                artifact_index: {
+                  artifact_count: 3,
+                  artifacts: [
+                    { kind: "scoring_view" },
+                    { kind: "review_summary" },
+                    { kind: "provider_cache" },
+                  ],
+                },
+                scoring_view: {
+                  kind: "scoring_view",
+                  data: {
+                    schema_version: "v10.scoring_view.v1",
+                    energy_facts: [],
+                  },
+                },
+                review_summary: {
+                  kind: "review_summary",
+                  data: {
+                    schema_version: "v10.review_summary.v1",
+                    open_blocking_count: 0,
+                  },
+                },
+                provider_lineage: {
+                  provider_cache: { kind: "provider_cache", record_count: 0 },
+                  provider_cache_index: { kind: "provider_cache_index", data: {} },
+                  agent_trace: { kind: "agent_trace", record_count: 0 },
+                },
+              };
+              return {
+                schema_version: "v11.readonly_api.envelope.v1",
+                status: "available",
+                severity: "info",
+                surface,
+                read_only: true,
+                run_id: "readonly-run-1",
+                artifact_kind: surface === "scoring_view" || surface === "review_summary" ? surface : null,
+                source: {
+                  backend: "json_artifact_repository",
+                  manifest_path: "run-manifest.json",
+                },
+                payload: payloadBySurface[surface],
+                unavailable: null,
+              };
+            },
+          },
+          stop: async () => {
+            stopped.push(4242);
+          },
+        };
+      },
+    });
+
+    await expect(fixtureRuntime.adapter.loadWorkspace()).resolves.toMatchObject({
+      active_workspace: baseWorkspace.active_workspace,
+    });
+    expect(fixtureRuntime.readOnly).toBe(false);
+    expect(readonlyRuntime.readOnly).toBe(true);
+    await expect(readonlyRuntime.adapter.loadWorkspace()).resolves.toMatchObject({
+      active_workspace: "readonly_run:readonly-run-1",
+      _provisional: false,
+    });
+    await readonlyRuntime.dispose();
+    expect(stopped).toEqual([4242]);
   });
 
   it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {
