@@ -44,3 +44,9 @@ Set-Location frontend/atomreasonx
 npm.cmd test
 npm.cmd run build
 ```
+
+For V35 Go read/validation changes:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
+```
