@@ -137,6 +137,27 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertTrue(pubchemqc.python_bridge_required)
         self.assertIn("snapshot_missing", pubchemqc.review_triggers)
 
+        hopv15 = registry.get("hopv15")
+        self.assertTrue(hopv15.local_dataset)
+        self.assertEqual(hopv15.go_migration_state, "go_shadow_ready")
+        self.assertTrue(hopv15.python_bridge_required)
+        for field in ("inchi", "conformer_id", "voc_v", "jsc_ma_cm2", "method", "basis_set"):
+            self.assertIn(field, hopv15.allowed_output_fields)
+        self.assertIn("opv_metric_used_as_psc_evidence", hopv15.review_triggers)
+
+        opv_db = registry.get("opv_db")
+        self.assertTrue(opv_db.local_dataset)
+        self.assertEqual(opv_db.go_migration_state, "go_shadow_ready")
+        self.assertFalse(opv_db.python_bridge_required)
+        for field in (
+            "donor_inchi_key",
+            "acceptor_inchi_key",
+            "benchmark_split",
+            "quality_annotation",
+        ):
+            self.assertIn(field, opv_db.allowed_output_fields)
+        self.assertIn("opv_metric_used_as_psc_evidence", opv_db.review_triggers)
+
     def test_registry_rejects_unknown_trust_levels(self):
         with self.assertRaisesRegex(ValueError, "unknown trust_level"):
             load_source_registry([_minimal_source_record("bad", trust_level="T9_fake")])

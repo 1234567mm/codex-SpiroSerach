@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from spirosearch.providers.hopv15 import Hopv15LocalProvider
 
@@ -55,6 +56,48 @@ class Hopv15ProviderTests(unittest.TestCase):
         self.assertEqual(manifest["source_id"], "hopv15")
         self.assertEqual(manifest["normalized_record_count"], len(records))
         self.assertEqual(manifest["files"][0]["relative_path"], "records.json")
+
+    def test_optional_snapshot_fields_are_preserved_for_python_bridge(self):
+        with TemporaryDirectory() as td:
+            data_path = Path(td) / "records.json"
+            data_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "molecule_id": "hopv-full",
+                            "smiles": "C",
+                            "inchi": "InChI=1S/CH4/h1H4",
+                            "inchi_key": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+                            "conformer_id": "conf-1",
+                            "homo_ev": -6.0,
+                            "lumo_ev": -2.0,
+                            "band_gap_ev": 4.0,
+                            "pce_percent": 1.2,
+                            "voc_v": 0.7,
+                            "jsc_ma_cm2": 5.4,
+                            "method": "B3LYP",
+                            "basis_set": "6-31G*",
+                            "source_doi": "10.1038/sdata.2016.86",
+                            "license": "CC-BY-4.0",
+                            "computed": True,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            provider = Hopv15LocalProvider(
+                data_path=data_path,
+                retrieved_at="2026-07-17T00:00:00+00:00",
+            )
+
+            response = provider.lookup_inchi_key("VNWKTOKETHGBQD-UHFFFAOYSA-N")
+
+        self.assertEqual(response.normalized_result["inchi"], "InChI=1S/CH4/h1H4")
+        self.assertEqual(response.normalized_result["conformer_id"], "conf-1")
+        self.assertEqual(response.normalized_result["voc_v"], 0.7)
+        self.assertEqual(response.normalized_result["jsc_ma_cm2"], 5.4)
+        self.assertEqual(response.normalized_result["method"], "B3LYP")
+        self.assertEqual(response.normalized_result["basis_set"], "6-31G*")
 
 
 if __name__ == "__main__":

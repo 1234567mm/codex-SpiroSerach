@@ -30,14 +30,20 @@ class Hopv15LocalProvider:
         self.allowed_output_fields = allowed_output_fields or [
             "molecule_id",
             "smiles",
+            "inchi",
             "inchi_key",
+            "conformer_id",
             "homo_ev",
             "lumo_ev",
             "band_gap_ev",
             "pce_percent",
+            "voc_v",
+            "jsc_ma_cm2",
             "source_doi",
             "license",
             "computed",
+            "method",
+            "basis_set",
         ]
 
     def load_records(self) -> list[dict[str, Any]]:
@@ -93,7 +99,10 @@ class Hopv15LocalProvider:
             "license": str(record.get("license", self.license_hint)),
             "computed": bool(record.get("computed", True)),
         }
-        for key in ("homo_ev", "lumo_ev", "band_gap_ev", "pce_percent"):
+        for key in ("inchi", "conformer_id", "method", "basis_set"):
+            if record.get(key):
+                normalized[key] = str(record[key])
+        for key in ("homo_ev", "lumo_ev", "band_gap_ev", "pce_percent", "voc_v", "jsc_ma_cm2"):
             if key in record and record[key] is not None:
                 normalized[key] = float(record[key])
         return normalized

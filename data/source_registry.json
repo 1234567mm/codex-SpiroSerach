@@ -365,6 +365,8 @@
       "record_id",
       "donor_identity",
       "acceptor_identity",
+      "donor_inchi_key",
+      "acceptor_inchi_key",
       "pce_percent",
       "voc_v",
       "jsc_ma_cm2",
@@ -372,7 +374,9 @@
       "source_doi",
       "validation_flag",
       "license",
-      "computed"
+      "computed",
+      "benchmark_split",
+      "quality_annotation"
     ],
     "review_triggers": [
       "missing_source_doi",
@@ -383,7 +387,7 @@
       "attribution_file_missing",
       "opv_metric_used_as_psc_evidence"
     ],
-    "go_migration_state": "parity_required",
+    "go_migration_state": "go_shadow_ready",
     "python_bridge_required": false,
     "typescript_surface": "settings_and_import_commands",
     "disambiguation_required": false,
@@ -420,14 +424,20 @@
     "allowed_output_fields": [
       "molecule_id",
       "smiles",
+      "inchi",
       "inchi_key",
+      "conformer_id",
       "homo_ev",
       "lumo_ev",
       "band_gap_ev",
       "pce_percent",
+      "voc_v",
+      "jsc_ma_cm2",
       "source_doi",
       "license",
-      "computed"
+      "computed",
+      "method",
+      "basis_set"
     ],
     "review_triggers": [
       "missing_source_doi",
@@ -437,7 +447,7 @@
       "method_basis_missing",
       "opv_metric_used_as_psc_evidence"
     ],
-    "go_migration_state": "parity_required",
+    "go_migration_state": "go_shadow_ready",
     "python_bridge_required": true,
     "typescript_surface": "settings_and_import_commands",
     "disambiguation_required": false,

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -42,6 +45,39 @@ func TestRunRejectsPartialLocalBackend(t *testing.T) {
 	err := run([]string{"local-backend", "validate", dbPath})
 	if err == nil || !strings.Contains(err.Error(), "provider_snapshots") {
 		t.Fatalf("expected missing provider_snapshots error, got %v", err)
+	}
+}
+
+func TestSourceSnapshotValidateChecksKnownDatasetRecords(t *testing.T) {
+	dir := t.TempDir()
+	records := `[{"molecule_id":"hopv-1","inchi_key":"","source_doi":"","license":"CC-BY-4.0"}]`
+	recordPath := filepath.Join(dir, "records.json")
+	if err := os.WriteFile(recordPath, []byte(records), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte(records))
+	manifest := `{
+		"schema_version":"v35.source_snapshot_manifest.v1",
+		"source_id":"hopv15",
+		"dataset_doi":"10.1000/fixture",
+		"dataset_version":"fixture-v1",
+		"retrieved_at":"2026-07-23T00:00:00+00:00",
+		"source_url":"https://example.invalid/source",
+		"license_hint":"CC-BY-4.0",
+		"required_citation":"fixture citation",
+		"files":[{"relative_path":"records.json","bytes":` + strconv.Itoa(len(records)) + `,"sha256":"` + hex.EncodeToString(digest[:]) + `","role":"normalized_records"}],
+		"importer":{"name":"fixture_importer","version":"v35.p4","normalizer_version":"fixture-normalizer-v1"},
+		"normalized_record_count":1,
+		"quarantine_status":"fixture_only"
+	}`
+	manifestPath := filepath.Join(dir, "source-manifest.json")
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := run([]string{"source-snapshot", "validate", manifestPath})
+	if err == nil || !strings.Contains(err.Error(), "source_doi") {
+		t.Fatalf("expected record validation error, got %v", err)
 	}
 }
 

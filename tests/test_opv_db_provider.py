@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from spirosearch.providers.opv_db import OpvDbLocalProvider
 
@@ -63,6 +64,46 @@ class OpvDbProviderTests(unittest.TestCase):
         self.assertEqual(manifest["source_id"], "opv_db")
         self.assertEqual(manifest["normalized_record_count"], len(records))
         self.assertEqual(manifest["files"][0]["relative_path"], "records.json")
+
+    def test_optional_identity_and_quality_fields_are_preserved(self):
+        with TemporaryDirectory() as td:
+            data_path = Path(td) / "records.json"
+            data_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "record_id": "opv-full",
+                            "donor_identity": "P3HT",
+                            "acceptor_identity": "PCBM",
+                            "donor_inchi_key": "DONOR-INCHIKEY",
+                            "acceptor_inchi_key": "ACCEPTOR-INCHIKEY",
+                            "pce_percent": 3.2,
+                            "voc_v": 0.58,
+                            "jsc_ma_cm2": 9.1,
+                            "fill_factor": 0.61,
+                            "source_doi": "10.1000/opv.fixture",
+                            "validation_flag": "strict_benchmark",
+                            "license": "CC-BY-4.0",
+                            "computed": True,
+                            "benchmark_split": "validation",
+                            "quality_annotation": "strict fixture",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            provider = OpvDbLocalProvider(
+                data_path=data_path,
+                retrieved_at="2026-07-17T00:00:00+00:00",
+            )
+
+            response = provider.lookup_record_id("opv-full")
+
+        self.assertEqual(response.normalized_result["donor_inchi_key"], "DONOR-INCHIKEY")
+        self.assertEqual(response.normalized_result["acceptor_inchi_key"], "ACCEPTOR-INCHIKEY")
+        self.assertEqual(response.normalized_result["benchmark_split"], "validation")
+        self.assertEqual(response.normalized_result["quality_annotation"], "strict fixture")
+        self.assertFalse(response.normalized_result["computed"])
 
 
 if __name__ == "__main__":

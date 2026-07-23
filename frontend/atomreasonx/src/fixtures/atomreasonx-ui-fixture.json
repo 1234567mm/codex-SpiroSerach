@@ -240,13 +240,19 @@
         "expected_fields": [
           "molecule_id",
           "smiles",
+          "inchi",
           "inchi_key",
+          "conformer_id",
           "homo_ev",
           "lumo_ev",
           "band_gap_ev",
           "pce_percent",
+          "voc_v",
+          "jsc_ma_cm2",
           "source_doi",
-          "license"
+          "license",
+          "method",
+          "basis_set"
         ],
         "provenance_fields": [
           "source_url",
@@ -272,12 +278,16 @@
           "record_id",
           "donor_identity",
           "acceptor_identity",
+          "donor_inchi_key",
+          "acceptor_inchi_key",
           "pce_percent",
           "voc_v",
           "jsc_ma_cm2",
           "fill_factor",
           "source_doi",
-          "license"
+          "license",
+          "benchmark_split",
+          "quality_annotation"
         ],
         "provenance_fields": [
           "source_url",
@@ -754,7 +764,7 @@
         "required_citation": "HOPV15 Harvard Organic Photovoltaic Dataset; cite the Scientific Data publication and Figshare record.",
         "last_verified_at": "2026-07-17",
         "quarantine_state": "fixture_only",
-        "go_migration_state": "parity_required",
+        "go_migration_state": "go_shadow_ready",
         "python_bridge_required": true,
         "typescript_surface": "settings_and_import_commands",
         "requires_api_key": false,
@@ -782,7 +792,7 @@
         "required_citation": "OPV-DB Zenodo record; preserve OPV-DB citation and third-party attribution tables for full imports.",
         "last_verified_at": "2026-07-17",
         "quarantine_state": "fixture_only",
-        "go_migration_state": "parity_required",
+        "go_migration_state": "go_shadow_ready",
         "python_bridge_required": false,
         "typescript_surface": "settings_and_import_commands",
         "requires_api_key": false,

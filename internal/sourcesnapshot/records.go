@@ -1,0 +1,471 @@
+package sourcesnapshot
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"spirosearch/internal/providercache"
+)
+
+const (
+	hopv15Provider        = "hopv15"
+	opvDbProvider         = "opv_db"
+	hopv15TrustLevel      = "T2_computed_db"
+	opvDbTrustLevel       = "T3_literature_machine"
+	defaultHOPVConfidence = 0.6
+	defaultOPVConfidence  = 0.55
+	notFoundConfidence    = 0.1
+)
+
+var (
+	hopv15AllowedFields = setOf(
+		"molecule_id",
+		"smiles",
+		"inchi",
+		"inchi_key",
+		"conformer_id",
+		"source_doi",
+		"pce_percent",
+		"voc_v",
+		"jsc_ma_cm2",
+		"homo_ev",
+		"lumo_ev",
+		"band_gap_ev",
+		"method",
+		"basis_set",
+		"computed",
+		"license",
+	)
+	opvDbAllowedFields = setOf(
+		"record_id",
+		"donor_identity",
+		"acceptor_identity",
+		"donor_inchi_key",
+		"acceptor_inchi_key",
+		"pce_percent",
+		"voc_v",
+		"jsc_ma_cm2",
+		"fill_factor",
+		"source_doi",
+		"validation_flag",
+		"license",
+		"computed",
+		"benchmark_split",
+		"quality_annotation",
+	)
+)
+
+type Hopv15Dataset struct {
+	Manifest Manifest
+	Records  []map[string]any
+}
+
+type OpvDbDataset struct {
+	Manifest Manifest
+	Records  []map[string]any
+}
+
+func LoadHopv15Dataset(dir string) (Hopv15Dataset, error) {
+	manifest, records, err := loadDatasetRecords(dir, hopv15Provider)
+	if err != nil {
+		return Hopv15Dataset{}, err
+	}
+	for index, record := range records {
+		if err := validateHopv15Record(record); err != nil {
+			return Hopv15Dataset{}, fmt.Errorf("hopv15 record %d: %w", index, err)
+		}
+	}
+	return Hopv15Dataset{Manifest: manifest, Records: records}, nil
+}
+
+func LoadOpvDbDataset(dir string) (OpvDbDataset, error) {
+	manifest, records, err := loadDatasetRecords(dir, opvDbProvider)
+	if err != nil {
+		return OpvDbDataset{}, err
+	}
+	for index, record := range records {
+		if err := validateOpvDbRecord(record); err != nil {
+			return OpvDbDataset{}, fmt.Errorf("opv_db record %d: %w", index, err)
+		}
+	}
+	return OpvDbDataset{Manifest: manifest, Records: records}, nil
+}
+
+func (d Hopv15Dataset) LookupInChIKey(
+	ctx context.Context,
+	inchiKey string,
+) (providercache.ProviderResponse, error) {
+	if err := contextError(ctx); err != nil {
+		return providercache.ProviderResponse{}, err
+	}
+	query := strings.TrimSpace(inchiKey)
+	if query == "" {
+		return providercache.ProviderResponse{}, errors.New("inchi_key is required")
+	}
+	for _, record := range d.Records {
+		if stringField(record, "inchi_key") == query {
+			return providerResponseFromRecord(
+				hopv15Provider,
+				"inchi_key:"+query,
+				normalizeHopv15Record(record),
+				d.Manifest,
+				record,
+				defaultHOPVConfidence,
+				hopv15TrustLevel,
+				hopv15AllowedFields,
+			)
+		}
+	}
+	raw := map[string]any{"inchi_key": query, "status": "not_found"}
+	return providerResponseFromRecord(
+		hopv15Provider,
+		"inchi_key:"+query,
+		map[string]any{
+			"molecule_id": "",
+			"smiles":      "",
+			"inchi_key":   query,
+			"license":     d.Manifest.LicenseHint,
+			"computed":    false,
+		},
+		d.Manifest,
+		raw,
+		notFoundConfidence,
+		hopv15TrustLevel,
+		hopv15AllowedFields,
+	)
+}
+
+func (d OpvDbDataset) LookupRecordID(
+	ctx context.Context,
+	recordID string,
+) (providercache.ProviderResponse, error) {
+	if err := contextError(ctx); err != nil {
+		return providercache.ProviderResponse{}, err
+	}
+	query := strings.TrimSpace(recordID)
+	if query == "" {
+		return providercache.ProviderResponse{}, errors.New("record_id is required")
+	}
+	for _, record := range d.Records {
+		if stringField(record, "record_id") == query {
+			return providerResponseFromRecord(
+				opvDbProvider,
+				"record_id:"+query,
+				normalizeOpvDbRecord(record),
+				d.Manifest,
+				record,
+				defaultOPVConfidence,
+				opvDbTrustLevel,
+				opvDbAllowedFields,
+			)
+		}
+	}
+	raw := map[string]any{"record_id": query, "status": "not_found"}
+	return providerResponseFromRecord(
+		opvDbProvider,
+		"record_id:"+query,
+		map[string]any{
+			"record_id":       query,
+			"validation_flag": "not_found",
+			"license":         d.Manifest.LicenseHint,
+			"computed":        false,
+		},
+		d.Manifest,
+		raw,
+		notFoundConfidence,
+		opvDbTrustLevel,
+		opvDbAllowedFields,
+	)
+}
+
+func loadDatasetRecords(dir string, expectedSourceID string) (Manifest, []map[string]any, error) {
+	manifestPath := filepath.Join(dir, "source-manifest.json")
+	manifest, err := LoadFile(manifestPath)
+	if err != nil {
+		return Manifest{}, nil, err
+	}
+	if manifest.SourceID != expectedSourceID {
+		return Manifest{}, nil, fmt.Errorf("source_id mismatch: got %s want %s", manifest.SourceID, expectedSourceID)
+	}
+	if err := manifest.CheckFiles(dir); err != nil {
+		return Manifest{}, nil, err
+	}
+	recordsPath, err := normalizedRecordsPath(dir, manifest)
+	if err != nil {
+		return Manifest{}, nil, err
+	}
+	records, err := readRecordArray(recordsPath)
+	if err != nil {
+		return Manifest{}, nil, err
+	}
+	if len(records) != manifest.NormalizedRecordCount {
+		return Manifest{}, nil, fmt.Errorf(
+			"normalized_record_count mismatch for %s: manifest=%d records=%d",
+			expectedSourceID,
+			manifest.NormalizedRecordCount,
+			len(records),
+		)
+	}
+	return manifest, records, nil
+}
+
+func normalizedRecordsPath(dir string, manifest Manifest) (string, error) {
+	paths := make([]string, 0, 1)
+	for _, file := range manifest.Files {
+		if file.Role == "normalized_records" {
+			paths = append(paths, file.RelativePath)
+		}
+	}
+	if len(paths) == 0 {
+		return "", fmt.Errorf("%s manifest missing normalized_records file", manifest.SourceID)
+	}
+	if len(paths) > 1 {
+		sort.Strings(paths)
+		return "", fmt.Errorf("%s manifest has multiple normalized_records files: %s", manifest.SourceID, strings.Join(paths, ", "))
+	}
+	return JoinSafe(dir, paths[0])
+}
+
+func readRecordArray(path string) ([]map[string]any, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var records []map[string]any
+	if err := decoder.Decode(&records); err != nil {
+		return nil, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, errors.New("normalized records must contain a single JSON array")
+		}
+		return nil, err
+	}
+	if records == nil {
+		return nil, errors.New("normalized records must be a JSON array")
+	}
+	return records, nil
+}
+
+func contextError(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+func validateHopv15Record(record map[string]any) error {
+	for _, field := range []string{"source_doi", "license", "molecule_id", "inchi_key"} {
+		if stringField(record, field) == "" {
+			return fmt.Errorf("%s is required", field)
+		}
+	}
+	for _, field := range []string{
+		"homo_ev",
+		"lumo_ev",
+		"band_gap_ev",
+		"pce_percent",
+		"voc_v",
+		"jsc_ma_cm2",
+	} {
+		if _, err := optionalFloatField(record, field); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateOpvDbRecord(record map[string]any) error {
+	for _, field := range []string{
+		"source_doi",
+		"license",
+		"record_id",
+		"donor_identity",
+		"acceptor_identity",
+	} {
+		if stringField(record, field) == "" {
+			return fmt.Errorf("%s is required", field)
+		}
+	}
+	for _, field := range []string{"pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor"} {
+		if _, err := optionalFloatField(record, field); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeHopv15Record(record map[string]any) map[string]any {
+	normalized := map[string]any{
+		"molecule_id": stringField(record, "molecule_id"),
+		"smiles":      stringField(record, "smiles"),
+		"inchi_key":   stringField(record, "inchi_key"),
+		"source_doi":  stringField(record, "source_doi"),
+		"license":     stringField(record, "license"),
+		"computed":    boolField(record, "computed", true),
+	}
+	putOptionalString(normalized, record, "inchi")
+	putOptionalString(normalized, record, "conformer_id")
+	putOptionalString(normalized, record, "method")
+	putOptionalString(normalized, record, "basis_set")
+	for _, field := range []string{
+		"homo_ev",
+		"lumo_ev",
+		"band_gap_ev",
+		"pce_percent",
+		"voc_v",
+		"jsc_ma_cm2",
+	} {
+		putOptionalFloat(normalized, record, field)
+	}
+	return normalized
+}
+
+func normalizeOpvDbRecord(record map[string]any) map[string]any {
+	normalized := map[string]any{
+		"record_id":         stringField(record, "record_id"),
+		"donor_identity":    stringField(record, "donor_identity"),
+		"acceptor_identity": stringField(record, "acceptor_identity"),
+		"source_doi":        stringField(record, "source_doi"),
+		"validation_flag":   defaultStringField(record, "validation_flag", "unvalidated"),
+		"license":           stringField(record, "license"),
+		"computed":          false,
+	}
+	putOptionalString(normalized, record, "donor_inchi_key")
+	putOptionalString(normalized, record, "acceptor_inchi_key")
+	putOptionalString(normalized, record, "benchmark_split")
+	putOptionalString(normalized, record, "quality_annotation")
+	for _, field := range []string{"pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor"} {
+		putOptionalFloat(normalized, record, field)
+	}
+	return normalized
+}
+
+func providerResponseFromRecord(
+	provider string,
+	query string,
+	normalized map[string]any,
+	manifest Manifest,
+	raw map[string]any,
+	confidence float64,
+	trustLevel string,
+	allowedFields map[string]bool,
+) (providercache.ProviderResponse, error) {
+	if err := validateAllowedOutputFields(provider, normalized, allowedFields); err != nil {
+		return providercache.ProviderResponse{}, err
+	}
+	rawHash, err := providercache.StableHash(raw)
+	if err != nil {
+		return providercache.ProviderResponse{}, err
+	}
+	response := providercache.ProviderResponse{
+		ContractVersion: providercache.ProviderResponseContractVersion,
+		Provider:        provider,
+		Query:           query,
+		Normalized:      normalized,
+		SourceURL:       manifest.SourceURL,
+		RetrievedAt:     manifest.RetrievedAt,
+		LicenseHint:     manifest.LicenseHint,
+		RawHash:         rawHash,
+		Confidence:      confidence,
+		TrustLevel:      trustLevel,
+	}
+	response.ResponseID = response.ComputedResponseID()
+	if err := providercache.ValidateProviderResponse(response); err != nil {
+		return providercache.ProviderResponse{}, err
+	}
+	return response, nil
+}
+
+func validateAllowedOutputFields(provider string, normalized map[string]any, allowedFields map[string]bool) error {
+	extra := make([]string, 0)
+	for field := range normalized {
+		if !allowedFields[field] {
+			extra = append(extra, field)
+		}
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	sort.Strings(extra)
+	return fmt.Errorf("%s output fields are not allowed: %s", provider, strings.Join(extra, ", "))
+}
+
+func stringField(record map[string]any, field string) string {
+	value, ok := record[field]
+	if !ok || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func defaultStringField(record map[string]any, field string, fallback string) string {
+	value := stringField(record, field)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func boolField(record map[string]any, field string, fallback bool) bool {
+	value, ok := record[field]
+	if !ok || value == nil {
+		return fallback
+	}
+	if parsed, ok := value.(bool); ok {
+		return parsed
+	}
+	return fallback
+}
+
+func optionalFloatField(record map[string]any, field string) (float64, error) {
+	value, ok := record[field]
+	if !ok || value == nil {
+		return 0, nil
+	}
+	switch item := value.(type) {
+	case json.Number:
+		number, err := item.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("%s must be numeric", field)
+		}
+		return number, nil
+	case float64:
+		return item, nil
+	case int:
+		return float64(item), nil
+	default:
+		return 0, fmt.Errorf("%s must be numeric", field)
+	}
+}
+
+func putOptionalString(target map[string]any, record map[string]any, field string) {
+	if value := stringField(record, field); value != "" {
+		target[field] = value
+	}
+}
+
+func putOptionalFloat(target map[string]any, record map[string]any, field string) {
+	value, err := optionalFloatField(record, field)
+	if err == nil {
+		if _, ok := record[field]; ok && record[field] != nil {
+			target[field] = value
+		}
+	}
+}

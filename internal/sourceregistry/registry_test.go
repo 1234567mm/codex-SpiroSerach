@@ -60,6 +60,32 @@ func TestLoadRepositoryRegistry(t *testing.T) {
 	if materialsCloud.AcquisitionMode != "manual_archive_import" {
 		t.Fatalf("materials_cloud acquisition mode = %q", materialsCloud.AcquisitionMode)
 	}
+
+	hopv15 := index["hopv15"]
+	if !hopv15.LocalDataset() || hopv15.GoMigrationState != "go_shadow_ready" {
+		t.Fatalf("hopv15 should be Go shadow local snapshot provider: %#v", hopv15)
+	}
+	for _, field := range []string{"inchi", "conformer_id", "voc_v", "jsc_ma_cm2", "method", "basis_set"} {
+		if !contains(hopv15.AllowedOutputFields, field) {
+			t.Fatalf("hopv15 missing allowed output field %q", field)
+		}
+	}
+	if !contains(hopv15.ReviewTriggers, "opv_metric_used_as_psc_evidence") {
+		t.Fatalf("hopv15 must keep OPV-to-PSC scoring boundary trigger")
+	}
+
+	opvDB := index["opv_db"]
+	if !opvDB.LocalDataset() || opvDB.GoMigrationState != "go_shadow_ready" {
+		t.Fatalf("opv_db should be Go shadow local snapshot provider: %#v", opvDB)
+	}
+	for _, field := range []string{"donor_inchi_key", "acceptor_inchi_key", "benchmark_split", "quality_annotation"} {
+		if !contains(opvDB.AllowedOutputFields, field) {
+			t.Fatalf("opv_db missing allowed output field %q", field)
+		}
+	}
+	if !contains(opvDB.ReviewTriggers, "opv_metric_used_as_psc_evidence") {
+		t.Fatalf("opv_db must keep OPV-to-PSC scoring boundary trigger")
+	}
 }
 
 func TestGoRegistryContractMatchesJSONSchema(t *testing.T) {

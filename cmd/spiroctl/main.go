@@ -39,7 +39,11 @@ func run(args []string) error {
 		if err := manifest.CheckFiles(filepath.Dir(args[2])); err != nil {
 			return err
 		}
-		fmt.Printf("ok source-snapshot source_id=%s files=%d\n", manifest.SourceID, len(manifest.Files))
+		recordCount, err := validateKnownSourceSnapshot(filepath.Dir(args[2]), manifest)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("ok source-snapshot source_id=%s files=%d records=%d\n", manifest.SourceID, len(manifest.Files), recordCount)
 		return nil
 	case "provider-cache":
 		records, err := providercache.LoadFile(args[2])
@@ -69,5 +73,24 @@ func run(args []string) error {
 		return nil
 	default:
 		return fmt.Errorf("unknown target: %s", args[0])
+	}
+}
+
+func validateKnownSourceSnapshot(dir string, manifest sourcesnapshot.Manifest) (int, error) {
+	switch manifest.SourceID {
+	case "hopv15":
+		dataset, err := sourcesnapshot.LoadHopv15Dataset(dir)
+		if err != nil {
+			return 0, err
+		}
+		return len(dataset.Records), nil
+	case "opv_db":
+		dataset, err := sourcesnapshot.LoadOpvDbDataset(dir)
+		if err != nil {
+			return 0, err
+		}
+		return len(dataset.Records), nil
+	default:
+		return manifest.NormalizedRecordCount, nil
 	}
 }

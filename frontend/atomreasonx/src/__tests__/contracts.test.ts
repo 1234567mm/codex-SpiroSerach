@@ -127,6 +127,34 @@ describe("AtomReasonX contract fixtures", () => {
     expect(pubchemqc?.blocking_review_count).toBe(1);
   });
 
+  it("keeps HOPV15 and OPV-DB source coverage fields aligned with P4 snapshot imports", () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const hopv15 = workspace.source_coverage.sources.find(source => source.provider_id === "hopv15");
+    const opvDb = workspace.source_coverage.sources.find(source => source.provider_id === "opv_db");
+    const profiles = workspace.source_profiles.profiles;
+    const hopv15Profile = profiles.find(profile => profile.provider_id === "hopv15");
+    const opvDbProfile = profiles.find(profile => profile.provider_id === "opv_db");
+
+    expect(hopv15?.expected_fields).toEqual(expect.arrayContaining([
+      "inchi",
+      "conformer_id",
+      "voc_v",
+      "jsc_ma_cm2",
+      "method",
+      "basis_set",
+    ]));
+    expect(opvDb?.expected_fields).toEqual(expect.arrayContaining([
+      "donor_inchi_key",
+      "acceptor_inchi_key",
+      "benchmark_split",
+      "quality_annotation",
+    ]));
+    expect(hopv15Profile?.go_migration_state).toBe("go_shadow_ready");
+    expect(opvDbProfile?.go_migration_state).toBe("go_shadow_ready");
+    expect(hopv15Profile?.python_bridge_required).toBe(true);
+    expect(opvDbProfile?.python_bridge_required).toBe(false);
+  });
+
   it("gates workflow commands that require form input", async () => {
     const workspace = fixture as unknown as AtomReasonXWorkspaceState;
     const action = workspace.command_actions.find(item => item.action_type === "import_materials_cloud_archive_record");
