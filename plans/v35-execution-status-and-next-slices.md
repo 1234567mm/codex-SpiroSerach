@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `4d417ce`
+Latest implementation HEAD before this status update: `092192b`
 Date: 2026-07-24
 
 ## Goal
@@ -36,6 +36,7 @@ The current branch contains these V35 execution commits:
 | `71ee063` | AtomReasonX readonly run workspace adapter | TypeScript projects Go readonly envelopes for manifest, artifact index, scoring view, review summary, and provider lineage into `AtomReasonXWorkspaceState`, fails closed on unavailable surfaces, preserves fixture fallback when no readonly output directory is configured, disposes sidecar sessions, and withholds command dispatchers in readonly mode. |
 | `c33727b` | V35 read validation regression gate | Adds `scripts/check-v35-read-validation.ps1` to run Go read/validation packages plus CLI fixture checks for source registry, V35 source snapshots, provider cache/index, run artifacts, and readonly run envelopes. |
 | `4d417ce` | AtomReasonX readonly run operator config | Adds a Data Sources settings entry for operator-controlled readonly run output directories, moves readonly output-dir normalization into a side-effect-free TypeScript config module, rebuilds the runtime read adapter from React state, keeps command dispatch unavailable in readonly mode, and preserves an error-state settings path so a bad directory can be cleared without command or credential exposure. |
+| `092192b` | AtomReasonX sidecar packaging preflight | Adds an executable packaging preflight for readonly sidecar release boundaries: current `dev_path_only` mode is explicit, future bundled mode must use `bundle.externalBin = ["binaries/spiroctl"]`, `spiroctl` must not be hidden in resources, and WebView/Rust bridges must not expose executable paths or credential-shaped state. |
 
 ## Current Data Source Status
 
@@ -90,6 +91,9 @@ Recent gates run during this checkpoint:
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the readonly run operator config slice.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed after the readonly run operator config slice.
 - `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed outside sandbox with 928 tests and 9 skipped after the readonly run operator config slice; generated root `uv.lock` was removed again.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-atomreasonx-sidecar-packaging.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the sidecar packaging preflight slice with `mode=dev_path_only`.
+- `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_sidecar_packaging -v` passed outside sandbox with 2 tests after the sidecar packaging preflight slice.
+- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed outside sandbox with 930 tests and 9 skipped after the sidecar packaging preflight slice; generated root `uv.lock` was removed again.
 
 ## Remaining Work
 
@@ -112,9 +116,10 @@ Recent gates run during this checkpoint:
    readonly run output directory. A more polished desktop directory picker or
    recent-run selector remains open, but must keep the same read-adapter-only
    boundary.
-2. Packaging still needs a production decision for bundling `spiroctl` as a
-   sidecar binary, preferably through Tauri external-bin or shell-plugin policy
-   after dependency and release ownership are explicit.
+2. Packaging preflight is now executable and documents the current
+   `dev_path_only` state. Full production bundling still needs a release-owned
+   `spiroctl` binary build/output policy before enabling
+   `bundle.externalBin = ["binaries/spiroctl"]`.
 3. Keep read transport side-effect free; command transport must remain separate
    and idempotent.
 4. Go must not become a second SQLite/provider-cache writer until schema
@@ -134,9 +139,11 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Define production packaging for the Go sidecar binary once Tauri dependency
-   and external-bin ownership are explicit.
-2. Keep command transport, provider sync, scoring rebuild, cache writes,
+1. Start P3 provider closure with PubChemQC full snapshot acquisition/import
+   policy or Materials Cloud record-specific import policy.
+2. This requires real dataset paths, license/citation decisions, parser parity
+   fixtures, and Python oracle comparison before non-fixture facts are admitted.
+3. Keep command transport, provider sync, scoring rebuild, cache writes,
    SQLite writes, and experiment writes out of the same slice.
 
 Alternative if prioritizing operator workflow:
@@ -145,7 +152,7 @@ Alternative if prioritizing operator workflow:
    readonly output-dir settings entry, without adding any command credentials,
    executable-path input, provider sync, scoring rebuild, cache write, SQLite
    write, or experiment write surface.
-2. Start P3 provider closure with PubChemQC full snapshot acquisition/import
-   policy or Materials Cloud record-specific import policy.
-3. This requires real dataset paths, license/citation decisions, parser parity
-   fixtures, and Python oracle comparison before non-fixture facts are admitted.
+2. Enable actual Tauri `bundle.externalBin = ["binaries/spiroctl"]` only after
+   the release process owns deterministic Go sidecar binary names for each
+   target platform and the packaging preflight is run with
+   `-RequireBundledSidecar`.
