@@ -2,7 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,10 +15,13 @@ import (
 	"spirosearch/internal/localbackend"
 	"spirosearch/internal/providercache"
 	"spirosearch/internal/readonlyapi"
+	"spirosearch/internal/readonlyserver"
 	"spirosearch/internal/runartifact"
 	"spirosearch/internal/sourceregistry"
 	"spirosearch/internal/sourcesnapshot"
 )
+
+const defaultReadonlyServeAddr = "127.0.0.1:0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -22,9 +30,38 @@ func main() {
 	}
 }
 
+type readonlyServeFunc func(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error
+
+type readonlyServeAnnouncement struct {
+	BaseURL       string `json:"base_url"`
+	RunID         string `json:"run_id"`
+	ReadOnly      bool   `json:"read_only"`
+	OutputDir     string `json:"output_dir"`
+	ReadonlyToken string `json:"readonly_token"`
+}
+
 func run(args []string) error {
+	return runWithReadonlyServer(args, serveReadonlyHTTP)
+}
+
+func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
+	if len(args) >= 3 && args[0] == "readonly-run" && args[1] == "serve" {
+		outputDir, addr, ok := parseReadonlyServeArgs(args)
+		if !ok {
+			return readonlyServeUsageError()
+		}
+		readonlyToken, err := newReadonlyToken()
+		if err != nil {
+			return err
+		}
+		handler, err := readonlyserver.NewWithToken(outputDir, readonlyToken)
+		if err != nil {
+			return err
+		}
+		return serve(addr, outputDir, readonlyToken, handler)
+	}
 	if len(args) != 3 || args[1] != "validate" {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir>")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -127,6 +164,68 @@ func run(args []string) error {
 	default:
 		return fmt.Errorf("unknown target: %s", args[0])
 	}
+}
+
+func parseReadonlyServeArgs(args []string) (string, string, bool) {
+	if len(args) == 3 {
+		return args[2], defaultReadonlyServeAddr, true
+	}
+	if len(args) == 5 && args[3] == "--addr" {
+		return args[2], args[4], true
+	}
+	return "", "", false
+}
+
+func readonlyServeUsageError() error {
+	return fmt.Errorf("usage: spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+}
+
+func serveReadonlyHTTP(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error {
+	if !isLoopbackServeAddr(addr) {
+		return fmt.Errorf("readonly-run serve addr must bind to loopback, got %s", addr)
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	actualAddr := listener.Addr().String()
+	announcement := readonlyServeAnnouncementFor(actualAddr, outputDir, readonlyToken, handler)
+	if err := json.NewEncoder(os.Stdout).Encode(announcement); err != nil {
+		listener.Close()
+		return err
+	}
+	server := http.Server{Handler: handler}
+	return server.Serve(listener)
+}
+
+func readonlyServeAnnouncementFor(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) readonlyServeAnnouncement {
+	return readonlyServeAnnouncement{
+		BaseURL:       "http://" + addr,
+		RunID:         handler.RunID(),
+		ReadOnly:      true,
+		OutputDir:     outputDir,
+		ReadonlyToken: readonlyToken,
+	}
+}
+
+func newReadonlyToken() (string, error) {
+	token := make([]byte, 32)
+	if _, err := rand.Read(token); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(token), nil
+}
+
+func isLoopbackServeAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if strings.TrimSpace(host) == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func readonlyUnavailableCode(envelope readonlyapi.Envelope) string {

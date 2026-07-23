@@ -36,17 +36,19 @@ export interface ReadonlyRunTransport {
 export interface HttpReadonlyRunTransportOptions {
   baseUrl: string;
   runId: string;
-  fetchJson?: (url: string) => Promise<unknown>;
+  readonlyToken?: string;
+  fetchJson?: (url: string, init?: RequestInit) => Promise<unknown>;
 }
 
 export const createHttpReadonlyRunTransport = ({
   baseUrl,
   runId,
+  readonlyToken,
   fetchJson = defaultFetchJson,
 }: HttpReadonlyRunTransportOptions): ReadonlyRunTransport => ({
   async read(surface, options = {}) {
     const artifactKind = surface === "artifact_by_kind" ? requireArtifactKind(options) : undefined;
-    const raw = await fetchJson(readonlyRunUrl(baseUrl, runId, surface, artifactKind));
+    const raw = await fetchJson(readonlyRunUrl(baseUrl, runId, surface, artifactKind), readonlyFetchInit(readonlyToken));
     return validateReadonlyRunEnvelope(raw, surface, artifactKind);
   },
 });
@@ -118,8 +120,21 @@ const normalizeBaseUrl = (baseUrl: string): string => (
   baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`
 );
 
-const defaultFetchJson = async (url: string): Promise<unknown> => {
-  const response = await fetch(url, { method: "GET" });
+const readonlyFetchInit = (readonlyToken?: string): RequestInit => {
+  const token = readonlyToken?.trim();
+  if (!token) {
+    return { method: "GET" };
+  }
+  return {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
+};
+
+const defaultFetchJson = async (url: string, init?: RequestInit): Promise<unknown> => {
+  const response = await fetch(url, init ?? { method: "GET" });
   if (!response.ok) {
     throw new Error(`readonly run request failed: ${response.status}`);
   }

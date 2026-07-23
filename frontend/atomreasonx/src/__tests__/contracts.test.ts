@@ -17,6 +17,7 @@ import {
 } from "../adapters/workbench-read-adapter";
 import {
   createHttpReadonlyRunTransport,
+  readonlyRunUrl,
   type ReadonlyRunEnvelope,
 } from "../adapters/go-readonly-run-transport";
 import {
@@ -76,6 +77,7 @@ describe("AtomReasonX contract fixtures", () => {
 
   it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {
     const requestedPaths: string[] = [];
+    const requestedInits: Array<RequestInit | undefined> = [];
     const envelope = (
       surface: ReadonlyRunEnvelope["surface"],
       artifactKind: string | null = null,
@@ -105,9 +107,10 @@ describe("AtomReasonX contract fixtures", () => {
     const transport = createHttpReadonlyRunTransport({
       baseUrl: "http://127.0.0.1:47311",
       runId: "run-1",
-      fetchJson: async (url) => {
+      fetchJson: async (url, init) => {
         const path = new URL(url).pathname;
         requestedPaths.push(path);
+        requestedInits.push(init);
         const result = envelopesByPath[path];
         if (!result) {
           throw new Error(`unexpected path: ${path}`);
@@ -134,9 +137,61 @@ describe("AtomReasonX contract fixtures", () => {
       "/runs/run-1/review-summary",
       "/runs/run-1/provider-lineage",
     ]);
+    expect(requestedInits.every(init => init?.method === "GET" && init.headers === undefined)).toBe(true);
     expect("submit" in transport).toBe(false);
     expect("execute" in transport).toBe(false);
     expect("sync" in transport).toBe(false);
+  });
+
+  it("sends an optional readonly token without command credentials", async () => {
+    const requestedInits: Array<RequestInit | undefined> = [];
+    const envelope: ReadonlyRunEnvelope = {
+      schema_version: "v11.readonly_api.envelope.v1",
+      status: "available",
+      severity: "info",
+      surface: "manifest",
+      read_only: true,
+      run_id: "run-1",
+      artifact_kind: null,
+      source: {
+        backend: "json_artifact_repository",
+        manifest_path: "run-manifest.json",
+      },
+      payload: {},
+      unavailable: null,
+    };
+    const transport = createHttpReadonlyRunTransport({
+      baseUrl: "http://127.0.0.1:47311/",
+      runId: "run-1",
+      readonlyToken: " readonly-token-1 ",
+      fetchJson: async (_url, init) => {
+        requestedInits.push(init);
+        return envelope;
+      },
+    });
+
+    await expect(transport.read("manifest")).resolves.toMatchObject({ surface: "manifest" });
+
+    expect(requestedInits).toEqual([{
+      method: "GET",
+      headers: {
+        Authorization: "Bearer readonly-token-1",
+      },
+    }]);
+    expect("submit" in transport).toBe(false);
+    expect("execute" in transport).toBe(false);
+    expect("sync" in transport).toBe(false);
+  });
+
+  it("encodes readonly run ids and artifact kinds as path segments", () => {
+    const url = readonlyRunUrl(
+      "http://127.0.0.1:47311/",
+      "run id/1",
+      "artifact_by_kind",
+      "scoring view/unsafe",
+    );
+
+    expect(new URL(url).pathname).toBe("/runs/run%20id%2F1/artifacts/scoring%20view%2Funsafe");
   });
 
   it("fails closed for malformed Go readonly envelopes and missing artifact kind", async () => {

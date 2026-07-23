@@ -4,11 +4,15 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+
+	"spirosearch/internal/readonlyserver"
 
 	_ "modernc.org/sqlite"
 )
@@ -42,6 +46,97 @@ func TestRunValidatesReadonlyRunEnvelopes(t *testing.T) {
 	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
 	if err := run([]string{"readonly-run", "validate", outputDir}); err != nil {
 		t.Fatalf("run() error = %v", err)
+	}
+}
+
+func TestRunServesReadonlyRunWithInjectedHTTPServer(t *testing.T) {
+	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+	var observedAddr string
+	var observedOutputDir string
+	var observedToken string
+	err := runWithReadonlyServer([]string{"readonly-run", "serve", outputDir, "--addr", "127.0.0.1:0"}, func(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error {
+		observedAddr = addr
+		observedOutputDir = outputDir
+		observedToken = readonlyToken
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/runs/v11-diagnostic-run-001/manifest", nil)
+		request.Header.Set("Authorization", "Bearer "+readonlyToken)
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), `"surface":"manifest"`) {
+			t.Fatalf("manifest envelope missing from body: %s", recorder.Body.String())
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("runWithReadonlyServer() error = %v", err)
+	}
+	if observedAddr != "127.0.0.1:0" {
+		t.Fatalf("addr mismatch: %s", observedAddr)
+	}
+	if observedOutputDir != outputDir {
+		t.Fatalf("output dir mismatch: %s", observedOutputDir)
+	}
+	if len(observedToken) != 64 {
+		t.Fatalf("token length mismatch: %d", len(observedToken))
+	}
+}
+
+func TestRunServesReadonlyRunWithDefaultLoopbackAddr(t *testing.T) {
+	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+	var observedAddr string
+	err := runWithReadonlyServer([]string{"readonly-run", "serve", outputDir}, func(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error {
+		observedAddr = addr
+		if len(readonlyToken) != 64 {
+			t.Fatalf("token length mismatch: %d", len(readonlyToken))
+		}
+		if handler.RunID() != "v11-diagnostic-run-001" {
+			t.Fatalf("run id mismatch: %s", handler.RunID())
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("runWithReadonlyServer() error = %v", err)
+	}
+	if observedAddr != defaultReadonlyServeAddr {
+		t.Fatalf("addr mismatch: %s", observedAddr)
+	}
+}
+
+func TestRunRejectsReadonlyServePositionalAddr(t *testing.T) {
+	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+	err := runWithReadonlyServer([]string{"readonly-run", "serve", outputDir, "127.0.0.1:0"}, func(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error {
+		t.Fatalf("serve callback should not be invoked")
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "readonly-run serve") {
+		t.Fatalf("expected serve usage error, got %v", err)
+	}
+}
+
+func TestReadonlyServeRejectsNonLoopbackAddr(t *testing.T) {
+	for _, addr := range []string{"0.0.0.0:8080", "192.168.1.10:8080", ":8080", "bad-addr"} {
+		t.Run(addr, func(t *testing.T) {
+			if isLoopbackServeAddr(addr) {
+				t.Fatalf("expected non-loopback addr to be rejected: %s", addr)
+			}
+		})
+	}
+}
+
+func TestReadonlyServeAnnouncementIsMachineReadable(t *testing.T) {
+	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+	handler, err := readonlyserver.NewWithToken(outputDir, "readonly-test-token-0001")
+	if err != nil {
+		t.Fatalf("readonlyserver.NewWithToken() error = %v", err)
+	}
+
+	announcement := readonlyServeAnnouncementFor("127.0.0.1:54321", outputDir, "readonly-test-token-0001", handler)
+
+	if announcement.BaseURL != "http://127.0.0.1:54321" || announcement.RunID != "v11-diagnostic-run-001" || !announcement.ReadOnly || announcement.OutputDir != outputDir || announcement.ReadonlyToken != "readonly-test-token-0001" {
+		t.Fatalf("announcement mismatch: %#v", announcement)
 	}
 }
 

@@ -115,6 +115,10 @@ func (api *API) ProviderLineage() Envelope {
 	return availableEnvelope("provider_lineage", api.runID(), nil, payload)
 }
 
+func (api *API) RunID() *string {
+	return api.runID()
+}
+
 func (api *API) runID() *string {
 	return runIDFromManifest(api.repository.ManifestStatus())
 }
