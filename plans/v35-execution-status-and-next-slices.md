@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `c9e34ab`
+Latest implementation HEAD before this status update: `752a399`
 Date: 2026-07-24
 
 ## Goal
@@ -40,6 +40,7 @@ The current branch contains these V35 execution commits:
 | `3b58535` | NOMAD perovskite schema reference module | Records the downloaded FAIRmat/NFDI NOMAD perovskite package as a `nomad_perovskite_schema` schema/reference module under `data/lib`, validates its checksum through the Go source snapshot gate, and asserts it is not a data mirror or provider-fact source. |
 | `588c9b9` | AtomReasonX readonly run recent directory selector | Adds a read-side recent readonly run output-dir selector for operator workflow, deduplicates and filters recent paths, rejects credential-shaped and executable-looking values, and keeps the setting free of command, token, localStorage, and sidecar executable-path state. |
 | `c9e34ab` | AtomReasonX sidecar release build policy | Adds a repository-owned PowerShell build path for the Go `spiroctl` Tauri sidecar, writes the Tauri-required `spiroctl-<target-triple>[.exe]` artifact plus checksum and manifest, smoke-tests the host artifact, ignores generated binaries, and extends packaging preflight with production artifact manifest/hash checks. |
+| `752a399` | AtomReasonX bundled spiroctl sidecar enablement | Enables Tauri `bundle.externalBin = ["binaries/spiroctl"]`, routes `tauri:build` through sidecar build and preflight first, adds Rust-side bundled sidecar path resolution without exposing a WebView executable-path surface or shell plugin, and commits a Tauri `Cargo.lock` for reproducible desktop packaging inputs. |
 
 ## Current Data Source Status
 
@@ -110,6 +111,17 @@ Recent gates run during this checkpoint:
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_sidecar_packaging -v` passed outside sandbox with 4 tests after the release build policy slice; sandboxed `.venv` Python remained blocked by local trampoline permissions.
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest discover tests -q` passed outside sandbox with 933 tests and 9 skipped after the release build policy slice.
 - `git diff --check`, `git diff --cached --check`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed before the release build policy commit.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-atomreasonx-sidecar-packaging.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach -RequireBundledSidecar` passed after bundled sidecar enablement.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_sidecar_packaging tests.test_atomreasonx_frontend -v` passed outside sandbox with 22 tests after bundled sidecar enablement.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 32 Vitest tests after bundled sidecar enablement.
+- `npm.cmd run sidecar:build` in `frontend/atomreasonx` passed and smoke-tested `source-registry validate`.
+- `npm.cmd run sidecar:check` in `frontend/atomreasonx` passed in `bundled_external_bin` mode.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after bundled sidecar enablement.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after bundled sidecar enablement.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest discover tests -q` passed outside sandbox with 934 tests and 9 skipped after bundled sidecar enablement.
+- `npm.cmd run tauri:build` proved the release script order by completing `sidecar:build`, `sidecar:check`, and frontend `beforeBuildCommand`; the installer build then failed at Rust compile because MSVC `link.exe` is not installed.
+- `cargo fmt --check` remains environment-blocked because `cargo-fmt.exe` is not installed for `stable-x86_64-pc-windows-msvc`.
+- `cargo test` remains environment-blocked by crates.io proxy access, and `cargo test --offline` reaches compilation but fails because MSVC `link.exe` is not on PATH.
 
 ## Remaining Work
 
@@ -132,11 +144,10 @@ Recent gates run during this checkpoint:
    readonly run output directory and a read-side recent directory selector.
    A native desktop directory picker remains optional, but must keep the same
    read-adapter-only boundary and must not expose executable paths or tokens.
-2. Packaging preflight is executable, documents the current `dev_path_only`
-   state, and the release-owned Go `spiroctl` sidecar build policy is now
-   available. Full production bundling still needs a deliberate
-   `bundle.externalBin = ["binaries/spiroctl"]` enablement slice plus bundled
-   runtime resolution verification before shipping installers.
+2. Packaging preflight is executable, the release-owned Go `spiroctl` sidecar
+   build policy is available, and Tauri production bundling now declares
+   `bundle.externalBin = ["binaries/spiroctl"]`. Installer verification still
+   requires a Rust desktop build environment with MSVC `link.exe` and `rustfmt`.
 3. Keep read transport side-effect free; command transport must remain separate
    and idempotent.
 4. Go must not become a second SQLite/provider-cache writer until schema
@@ -169,8 +180,7 @@ Alternative if prioritizing operator workflow:
    settings entry, without adding any command credentials, executable-path
    input, provider sync, scoring rebuild, cache write, SQLite write, or
    experiment write surface.
-2. Enable actual Tauri `bundle.externalBin = ["binaries/spiroctl"]` now has a
-   build policy prerequisite, but still requires one final runtime packaging
-   slice: choose and verify how the Rust bridge resolves the bundled sidecar
-   inside installed Tauri layouts, then run packaging preflight with
-   `-RequireBundledSidecar`.
+2. Full installer verification for bundled sidecar packaging now requires the
+   local Rust desktop toolchain closure: install `rustfmt` plus MSVC Build Tools
+   with the C++ linker, then rerun `cargo fmt --check`, `cargo test`, and
+   `npm.cmd run tauri:build`.

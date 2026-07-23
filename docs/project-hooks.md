@@ -67,3 +67,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-atomreason
 Production packaging must run the sidecar preflight with
 `-RequireBundledSidecar` after `bundle.externalBin` is enabled for
 `binaries/spiroctl`.
+
+From `frontend/atomreasonx`, the production-oriented desktop build script now
+runs the Go sidecar build and packaging preflight before `tauri build`:
+
+```powershell
+npm.cmd run sidecar:build
+npm.cmd run sidecar:check
+npm.cmd run tauri:build
+```
