@@ -1,0 +1,26 @@
+{
+  "schema_version": "v35.source_snapshot_manifest.v1",
+  "source_id": "nomad_perovskite_schema",
+  "dataset_doi": "10.5281/zenodo.16910883",
+  "dataset_version": "v1.2.14-afd75e6",
+  "retrieved_at": "2026-07-24T00:00:00+08:00",
+  "source_url": "https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database",
+  "license_hint": "Apache-2.0",
+  "required_citation": "NOMAD Perovskite Solar Cells Database, DOI 10.5281/zenodo.16910883.",
+  "files": [
+    {
+      "relative_path": "schema-package.json",
+      "bytes": 2395,
+      "sha256": "d571cacd496bcb103c2cdb966c5789942b2529f2882732005259ae5add55f04f",
+      "role": "data_dictionary"
+    }
+  ],
+  "importer": {
+    "name": "spirosearch-nomad-perovskite-schema-reference",
+    "version": "v35.p3",
+    "normalizer_version": "v35.nomad_perovskite_schema.reference.v1"
+  },
+  "normalized_record_count": 0,
+  "quarantine_status": "local_only",
+  "notes": "Schema/reference package only; not a local NOMAD data mirror."
+}

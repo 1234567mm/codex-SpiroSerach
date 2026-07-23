@@ -18,6 +18,7 @@ data/lib/
     source-manifest.json
   nomad_perovskite_schema/
     raw/
+    schema-package.json
     source-manifest.json
   hopv15/
     raw/
@@ -56,3 +57,6 @@ Rules:
   database mirrors.
 - Raw provider payloads and large data files stay local unless an explicit
   export command creates a redistributable bundle.
+- `nomad_perovskite_schema` is a schema/reference module for the FAIRmat/NFDI
+  NOMAD plugin package. It is not a local NOMAD data mirror and must not create
+  provider facts without API/export records.

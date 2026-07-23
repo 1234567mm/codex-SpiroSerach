@@ -12,6 +12,7 @@ func TestRepositoryManifestsValidateAndMatchFiles(t *testing.T) {
 	paths := []string{
 		"../../data/lib/hopv15/source-manifest.json",
 		"../../data/lib/materials_cloud/source-manifest.json",
+		"../../data/lib/nomad_perovskite_schema/source-manifest.json",
 		"../../data/lib/opv_db/source-manifest.json",
 		"../../data/lib/pubchemqc/source-manifest.json",
 	}
