@@ -97,6 +97,82 @@ func TestAPIArtifactByKindWrapsJSONLRecords(t *testing.T) {
 	}
 }
 
+func TestAPIScoringAndReviewSurfacesRetargetArtifactEnvelopes(t *testing.T) {
+	api, err := Open(readonlyDiagnosticFixturePath())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	scoring := api.ScoringView()
+	if scoring.Status != "available" || scoring.Surface != "scoring_view" || scoring.ArtifactKind == nil || *scoring.ArtifactKind != "scoring_view" {
+		t.Fatalf("scoring envelope mismatch: %#v", scoring)
+	}
+	scoringPayload, ok := scoring.Payload.(ArtifactPayload)
+	if !ok || scoringPayload.Data == nil || scoringPayload.Kind != "scoring_view" {
+		t.Fatalf("scoring payload mismatch: %#v", scoring.Payload)
+	}
+
+	review := api.ReviewSummary()
+	if review.Status != "available" || review.Surface != "review_summary" || review.ArtifactKind == nil || *review.ArtifactKind != "review_summary" {
+		t.Fatalf("review envelope mismatch: %#v", review)
+	}
+	reviewPayload, ok := review.Payload.(ArtifactPayload)
+	if !ok || reviewPayload.Data == nil || reviewPayload.Kind != "review_summary" {
+		t.Fatalf("review payload mismatch: %#v", review.Payload)
+	}
+}
+
+func TestAPIProviderLineageWrapsRequiredArtifacts(t *testing.T) {
+	api, err := Open(readonlyDiagnosticFixturePath())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	envelope := api.ProviderLineage()
+	if envelope.Status != "available" || envelope.Surface != "provider_lineage" || envelope.ArtifactKind != nil {
+		t.Fatalf("lineage envelope mismatch: %#v", envelope)
+	}
+	payload, ok := envelope.Payload.(map[string]ArtifactPayload)
+	if !ok {
+		t.Fatalf("unexpected lineage payload: %#v", envelope.Payload)
+	}
+	for _, kind := range []string{"provider_cache_index", "provider_cache", "agent_trace"} {
+		lineage, ok := payload[kind]
+		if !ok || lineage.Kind != kind {
+			t.Fatalf("missing lineage kind %s in %#v", kind, payload)
+		}
+	}
+	if payload["provider_cache"].RecordCount == nil || *payload["provider_cache"].RecordCount == 0 {
+		t.Fatalf("provider_cache lineage should expose JSONL records: %#v", payload["provider_cache"])
+	}
+}
+
+func TestAPIProviderLineageFailsClosedWhenRequiredArtifactMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeReadonlyArtifactFixture(t, dir, "provider-cache-index.json", `{"schema_version":"fixture"}`)
+	writeReadonlyManifestFixture(t, dir, []string{readonlyArtifactMetadataJSON(t, dir, "provider_cache_index", "provider-cache-index.json", "json", nil, nil)})
+
+	api, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	envelope := api.ProviderLineage()
+
+	if envelope.Status != "unavailable" || envelope.Surface != "provider_lineage" || envelope.Severity != "error" {
+		t.Fatalf("expected provider lineage unavailable, got %#v", envelope)
+	}
+	if envelope.ArtifactKind == nil || *envelope.ArtifactKind != "provider_cache" {
+		t.Fatalf("artifact kind mismatch: %#v", envelope.ArtifactKind)
+	}
+	if envelope.Unavailable == nil || envelope.Unavailable.Code != "artifact_not_declared" {
+		t.Fatalf("unexpected unavailable: %#v", envelope.Unavailable)
+	}
+}
+
+func readonlyDiagnosticFixturePath() string {
+	return filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+}
+
 func writeReadonlyArtifactFixture(t *testing.T, dir string, name string, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {

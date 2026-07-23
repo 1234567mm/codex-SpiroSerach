@@ -113,7 +113,16 @@ func run(args []string) error {
 				return fmt.Errorf("readonly %s unavailable: %s", artifact.Kind, readonlyUnavailableCode(envelope))
 			}
 		}
-		fmt.Printf("ok readonly-run surfaces=3 artifacts=%d\n", payload.ArtifactCount)
+		for _, envelope := range []readonlyapi.Envelope{
+			api.ScoringView(),
+			api.ReviewSummary(),
+			api.ProviderLineage(),
+		} {
+			if envelope.Status != "available" {
+				return fmt.Errorf("readonly %s unavailable: %s", envelope.Surface, readonlyUnavailableCode(envelope))
+			}
+		}
+		fmt.Printf("ok readonly-run surfaces=6 artifacts=%d\n", payload.ArtifactCount)
 		return nil
 	default:
 		return fmt.Errorf("unknown target: %s", args[0])

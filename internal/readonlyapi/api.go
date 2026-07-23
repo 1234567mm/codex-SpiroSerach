@@ -92,6 +92,47 @@ func (api *API) Artifact(kind string) Envelope {
 	if !result.Available {
 		return resultEnvelope("artifact_by_kind", result, api.runID(), nil, ptrString(kind))
 	}
+	return availableEnvelope("artifact_by_kind", api.runID(), ptrString(kind), artifactPayload(result))
+}
+
+func (api *API) ScoringView() Envelope {
+	return retargetEnvelope(api.Artifact("scoring_view"), "scoring_view")
+}
+
+func (api *API) ReviewSummary() Envelope {
+	return retargetEnvelope(api.Artifact("review_summary"), "review_summary")
+}
+
+func (api *API) ProviderLineage() Envelope {
+	payload := map[string]ArtifactPayload{}
+	for _, kind := range []string{"provider_cache_index", "provider_cache", "agent_trace"} {
+		result := api.repository.ReadArtifact(kind)
+		if !result.Available {
+			return resultEnvelope("provider_lineage", result, api.runID(), nil, ptrString(kind))
+		}
+		payload[kind] = artifactPayload(result)
+	}
+	return availableEnvelope("provider_lineage", api.runID(), nil, payload)
+}
+
+func (api *API) runID() *string {
+	return runIDFromManifest(api.repository.ManifestStatus())
+}
+
+func resultEnvelope(surface string, result runartifact.Result, runID *string, payload any, artifactKind *string) Envelope {
+	if result.Available {
+		if artifactKind == nil && result.Kind != "run_manifest" {
+			artifactKind = ptrString(result.Kind)
+		}
+		return availableEnvelope(surface, runID, artifactKind, payload)
+	}
+	if artifactKind == nil && result.Kind != "run_manifest" {
+		artifactKind = ptrString(result.Kind)
+	}
+	return unavailableEnvelope(surface, runID, artifactKind, result.Unavailable)
+}
+
+func artifactPayload(result runartifact.Result) ArtifactPayload {
 	recordCount := result.RecordCount
 	if result.Format == "jsonl" {
 		recordCount = ptrInt(len(result.Records))
@@ -117,24 +158,12 @@ func (api *API) Artifact(kind string) Envelope {
 		payload.Records = copyRecords(result.Records)
 		payload.RecordCount = recordCount
 	}
-	return availableEnvelope("artifact_by_kind", api.runID(), ptrString(kind), payload)
+	return payload
 }
 
-func (api *API) runID() *string {
-	return runIDFromManifest(api.repository.ManifestStatus())
-}
-
-func resultEnvelope(surface string, result runartifact.Result, runID *string, payload any, artifactKind *string) Envelope {
-	if result.Available {
-		if artifactKind == nil && result.Kind != "run_manifest" {
-			artifactKind = ptrString(result.Kind)
-		}
-		return availableEnvelope(surface, runID, artifactKind, payload)
-	}
-	if artifactKind == nil && result.Kind != "run_manifest" {
-		artifactKind = ptrString(result.Kind)
-	}
-	return unavailableEnvelope(surface, runID, artifactKind, result.Unavailable)
+func retargetEnvelope(envelope Envelope, surface string) Envelope {
+	envelope.Surface = surface
+	return envelope
 }
 
 func availableEnvelope(surface string, runID *string, artifactKind *string, payload any) Envelope {
