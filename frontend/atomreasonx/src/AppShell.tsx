@@ -6,6 +6,7 @@ import { DatabaseView } from "./components/DatabaseView";
 import { KnowledgeLibraryView } from "./components/KnowledgeLibraryView";
 import { WorkflowView } from "./components/WorkflowView";
 import { InspectorPanel } from "./components/InspectorPanel";
+import type { WorkbenchCommandDispatcher } from "./adapters/command-adapter";
 import type { AtomReasonXWorkspaceState } from "./contracts/types";
 
 const RIGHT_INSPECTOR_TABS = ["Overview", "Files"];
@@ -22,8 +23,8 @@ export const AppShell: React.FC<{
   onOpenSettings?: () => void;
   showSettings?: boolean;
   onCloseSettings?: () => void;
-  onCommand?: (actionType: string, payload: Record<string, unknown>) => void;
-}> = ({ workspace, onOpenSettings, showSettings, onCloseSettings, onCommand }) => {
+  commandDispatcher?: WorkbenchCommandDispatcher;
+}> = ({ workspace, onOpenSettings, showSettings, onCloseSettings, commandDispatcher }) => {
   return (
     <div className="app-shell" style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
       <LeftSidebar
@@ -37,9 +38,18 @@ export const AppShell: React.FC<{
             <span className="app-title">{workspace.app}</span>
           </header>
           <div className="workbench-grid" style={{ flex: 1, overflowY: "auto" }}>
-            <DatabaseView sourceCoverage={workspace.source_coverage} syncJobs={workspace.sync_jobs} />
+            <DatabaseView
+              sourceCoverage={workspace.source_coverage}
+              sourceProfiles={workspace.source_profiles}
+              sourceSettings={workspace.source_settings}
+              syncJobs={workspace.sync_jobs}
+            />
             <KnowledgeLibraryView summary={workspace.knowledge_library} />
-            <WorkflowView workflow={workspace.workflow} commandActions={workspace.command_actions} />
+            <WorkflowView
+              workflow={workspace.workflow}
+              commandActions={workspace.command_actions}
+              commandDispatcher={commandDispatcher}
+            />
           </div>
           <div className="composer" style={{ padding: "8px" }}>
             <input type="text" placeholder="Ask AtomX..." style={{ width: "100%" }} />
@@ -56,7 +66,7 @@ export const AppShell: React.FC<{
         <SettingsModal
           categories={SETTINGS_CATEGORIES}
           sourceSettings={workspace.source_settings}
-          onCommand={onCommand}
+          commandDispatcher={commandDispatcher}
           onClose={onCloseSettings}
         />
       )}

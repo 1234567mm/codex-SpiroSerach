@@ -37,6 +37,9 @@ class SourceCoverageMatrixTests(unittest.TestCase):
             self.assertIn(by_provider[provider]["key_requirement"], ("none", "optional"))
 
         self.assertEqual(by_provider["pubchemqc"]["status"], "quarantined")
+        self.assertEqual(by_provider["pubchemqc"]["provider_kind"], "local_dataset")
+        self.assertTrue(by_provider["pubchemqc"]["local_dataset"])
+        self.assertEqual(by_provider["pubchemqc"]["automatic_acquisition"], "local_snapshot")
         self.assertEqual(by_provider["materials_project"]["key_requirement"], "required")
         self.assertEqual(
             by_provider["future_model_assisted_claim_extraction"]["phase_status"],
@@ -49,6 +52,11 @@ class SourceCoverageMatrixTests(unittest.TestCase):
         self.assertIn("pce_percent", nomad["expected_fields"])
         self.assertIn("source_url", nomad["provenance_fields"])
         self.assertIn("archive_unavailable", nomad["review_blockers"])
+        self.assertEqual(nomad["blocking_review_count"], 6)
+        self.assertEqual(
+            {row["provider_id"]: row for row in matrix["sources"]}["hopv15"]["blocking_review_count"],
+            1,
+        )
 
 
 class KnowledgeLibraryIntakeTests(unittest.TestCase):

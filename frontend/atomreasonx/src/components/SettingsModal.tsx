@@ -1,14 +1,32 @@
 import React from "react";
-import type { AtomReasonXSourceSettingsState } from "../contracts/types";
+import type { WorkbenchCommandDispatcher } from "../adapters/command-adapter";
+import type { AtomReasonXSourceSettingsState, SourceConfigStatusEntry } from "../contracts/types";
 
-type SettingsCommandHandler = (actionType: string, payload: Record<string, unknown>) => void;
+export const buildSourceSettingsCommandPayload = (
+  source: SourceConfigStatusEntry,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  ...extra,
+  provider: source.provider_id,
+  provider_scope: "source",
+});
+
+export const submitSourceSettingsCommand = (
+  commandDispatcher: WorkbenchCommandDispatcher,
+  actionType: string,
+  source: SourceConfigStatusEntry,
+  extra: Record<string, unknown> = {},
+): Promise<unknown> => commandDispatcher.submitAction(
+  actionType,
+  buildSourceSettingsCommandPayload(source, extra),
+);
 
 export const SettingsModal: React.FC<{
   categories: string[];
   sourceSettings?: AtomReasonXSourceSettingsState;
-  onCommand?: SettingsCommandHandler;
+  commandDispatcher?: WorkbenchCommandDispatcher;
   onClose?: () => void;
-}> = ({ categories, sourceSettings, onCommand, onClose }) => {
+}> = ({ categories, sourceSettings, commandDispatcher, onClose }) => {
   const [selected, setSelected] = React.useState(categories[0] ?? "General");
   const [sourceKeys, setSourceKeys] = React.useState<Record<string, string>>({});
   const isDataSources = selected === "Data Sources";
@@ -71,13 +89,13 @@ export const SettingsModal: React.FC<{
                         />
                         <button
                           type="button"
-                          disabled={!onCommand || !(sourceKeys[source.provider_id] ?? "").trim()}
+                          disabled={!commandDispatcher || !(sourceKeys[source.provider_id] ?? "").trim()}
                           onClick={() => {
-                            onCommand?.("key_rotate", {
-                              provider: source.provider_id,
-                              provider_scope: "source",
-                              api_key: sourceKeys[source.provider_id] ?? "",
-                            });
+                            if (commandDispatcher) {
+                              void submitSourceSettingsCommand(commandDispatcher, "key_rotate", source, {
+                                api_key: sourceKeys[source.provider_id] ?? "",
+                              });
+                            }
                             setSourceKeys({
                               ...sourceKeys,
                               [source.provider_id]: "",
@@ -88,11 +106,12 @@ export const SettingsModal: React.FC<{
                         </button>
                         <button
                           type="button"
-                          disabled={!onCommand || !source.has_api_key}
-                          onClick={() => onCommand?.("key_remove", {
-                            provider: source.provider_id,
-                            provider_scope: "source",
-                          })}
+                          disabled={!commandDispatcher || !source.has_api_key}
+                          onClick={() => {
+                            if (commandDispatcher) {
+                              void submitSourceSettingsCommand(commandDispatcher, "key_remove", source);
+                            }
+                          }}
                         >
                           Remove
                         </button>
@@ -100,11 +119,12 @@ export const SettingsModal: React.FC<{
                     )}
                     <button
                       type="button"
-                      disabled={!onCommand}
-                      onClick={() => onCommand?.("test_connection", {
-                        provider: source.provider_id,
-                        provider_scope: "source",
-                      })}
+                      disabled={!commandDispatcher}
+                      onClick={() => {
+                        if (commandDispatcher) {
+                          void submitSourceSettingsCommand(commandDispatcher, "test_connection", source);
+                        }
+                      }}
                     >
                       Test
                     </button>

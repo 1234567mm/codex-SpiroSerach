@@ -73,6 +73,7 @@ class TestFrontendFixtureValid(unittest.TestCase):
 
     def test_fixture_contains_v33c_workbench_modules(self) -> None:
         self.assertIn("source_coverage", self.fixture)
+        self.assertIn("source_profiles", self.fixture)
         self.assertIn("sync_jobs", self.fixture)
         self.assertIn("workflow", self.fixture)
         self.assertIn("command_actions", self.fixture)

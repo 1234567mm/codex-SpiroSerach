@@ -33,6 +33,12 @@ export interface WorkbenchCommandAdapter {
   submit(request: WorkbenchCommandRequest): Promise<unknown>;
 }
 
+export interface WorkbenchCommandDispatcher {
+  submitAction(actionType: string, payload: Record<string, unknown>): Promise<unknown>;
+}
+
+export type WorkbenchCommandRequestOptionsFactory = () => WorkbenchCommandRequestOptions;
+
 export const buildWorkbenchCommandRequest = (
   actionType: string,
   payload: Record<string, unknown>,
@@ -61,5 +67,15 @@ export const createLocalCommandAdapter = (
 ): WorkbenchCommandAdapter => ({
   submit(request) {
     return submitLocal(request);
+  },
+});
+
+export const createWorkbenchCommandDispatcher = (
+  adapter: WorkbenchCommandAdapter,
+  options: WorkbenchCommandRequestOptions | WorkbenchCommandRequestOptionsFactory = {},
+): WorkbenchCommandDispatcher => ({
+  submitAction(actionType, payload) {
+    const resolvedOptions = typeof options === "function" ? options() : options;
+    return adapter.submit(buildWorkbenchCommandRequest(actionType, payload, resolvedOptions));
   },
 });

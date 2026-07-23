@@ -66,17 +66,26 @@ export interface ProviderConfigStatusEntry {
 }
 
 export type ConfigProviderScope = "model" | "source";
+export type SourceProviderKind =
+  | "provider_api"
+  | "local_dataset"
+  | "schema_module"
+  | "archive_import"
+  | "local_vault"
+  | "deferred_extractor";
+export type SourceOperationalStatus = "active" | "experimental" | "quarantined" | "disabled";
+export type SourceKeyRequirement = "none" | "optional" | "required";
 
 export interface SourceConfigStatusEntry {
   provider_id: string;
   provider_scope: "source";
-  provider_kind: string;
-  status: "active" | "experimental" | "quarantined" | "disabled";
+  provider_kind: SourceProviderKind;
+  status: SourceOperationalStatus;
   v35_slice: string;
   acquisition_mode: string;
   distribution_policy: string;
   requires_api_key: boolean;
-  key_requirement: "none" | "optional" | "required";
+  key_requirement: SourceKeyRequirement;
   api_key_env: string | null;
   has_api_key: boolean;
   key_fingerprint: string | null;
@@ -84,6 +93,35 @@ export interface SourceConfigStatusEntry {
   data_library_path: string | null;
   execution_modes: string[];
   capabilities: string[];
+}
+
+export interface AtomReasonXSourceProfile {
+  schema_version: "v35.atomreasonx_source_profile.v1";
+  provider_id: string;
+  display_name: string;
+  provider_kind: SourceProviderKind;
+  source_family: string;
+  operational_status: SourceOperationalStatus;
+  v35_slice: string;
+  acquisition_mode: string;
+  distribution_policy: string;
+  license_hint: string;
+  license_scope: string;
+  trust_level: string;
+  default_curation_status: string;
+  base_url: string | null;
+  source_url: string | null;
+  data_library_path: string | null;
+  dataset_doi: string | null;
+  dataset_version: string | null;
+  required_citation: string;
+  last_verified_at: string | null;
+  quarantine_state: "none" | "fixture_only" | "provider_quarantined" | "manual_import_required" | "deferred";
+  go_migration_state: string;
+  python_bridge_required: boolean;
+  typescript_surface: string;
+  requires_api_key: boolean;
+  api_key_env: string | null;
 }
 
 export interface AtomReasonXProviderStatus {
@@ -104,6 +142,12 @@ export interface AtomReasonXSourceSettingsState {
   producer_version: string;
   config_version: number;
   sources: SourceConfigStatusEntry[];
+}
+
+export interface AtomReasonXSourceProfilesState {
+  schema_version: "v35.atomreasonx_source_profiles.v1";
+  producer_version: string;
+  profiles: AtomReasonXSourceProfile[];
 }
 
 export interface AtomReasonXCommandEffectArtifact {
@@ -154,16 +198,17 @@ export interface KnowledgeLibrarySummary {
 
 export interface HtlSourceCoverageRow {
   provider_id: string;
-  provider_kind: string;
-  status: "active" | "experimental" | "quarantined" | "disabled";
+  provider_kind: SourceProviderKind;
+  status: SourceOperationalStatus;
   phase_status: "critical" | "useful" | "optional" | "optional_for_htl" | "blocked_until_validated" | "out_of_current_slice";
-  key_requirement: "none" | "optional" | "required";
+  key_requirement: SourceKeyRequirement;
   htl_capability: string;
   automatic_acquisition: string;
   local_dataset: boolean;
   expected_fields: string[];
   provenance_fields: string[];
   cache_ttl_hours: number | null;
+  blocking_review_count: number;
   review_blockers: string[];
 }
 
@@ -219,6 +264,7 @@ export interface AtomReasonXWorkspaceState {
   provider_status: AtomReasonXProviderStatus;
   settings: AtomReasonXSettingsState;
   source_settings: AtomReasonXSourceSettingsState;
+  source_profiles: AtomReasonXSourceProfilesState;
   source_coverage: HtlSourceCoverageMatrix;
   sync_jobs: HtlSyncJobSummary[];
   workflow: HtlWorkflowPreview;

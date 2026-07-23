@@ -77,6 +77,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
             "archive_status",
         ),
         "provenance_fields": ("entry_id", "source_url", "source_doi", "query_hash", "raw_sha256"),
+        "blocking_review_count": 6,
         "review_blockers": (
             "missing_source_doi",
             "missing_license",
@@ -94,6 +95,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "local_dataset": True,
         "expected_fields": ("schema_name", "schema_version", "field_aliases"),
         "provenance_fields": ("source_url", "sha256", "repository_ref"),
+        "blocking_review_count": 1,
         "review_blockers": ("schema_version_unpinned",),
     },
     "pubchem": {
@@ -104,6 +106,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "local_dataset": False,
         "expected_fields": ("cid", "canonical_smiles", "inchi_key", "synonyms", "ambiguity_flag"),
         "provenance_fields": ("cid", "source_url", "raw_sha256"),
+        "blocking_review_count": 1,
         "review_blockers": ("ambiguous_identity",),
     },
     "crossref": {
@@ -114,6 +117,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "local_dataset": False,
         "expected_fields": ("doi", "title", "journal", "published_at", "authors", "license"),
         "provenance_fields": ("doi", "source_url", "raw_sha256"),
+        "blocking_review_count": 2,
         "review_blockers": ("retraction_flag", "source_url_missing"),
     },
     "local_paper_vault": {
@@ -127,6 +131,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "expected_fields": ("paper_group", "main_pdf", "si_assets", "notes", "doi", "source_url"),
         "provenance_fields": ("deposit_path", "sha256", "doi", "source_url"),
         "cache_ttl_hours": None,
+        "blocking_review_count": 3,
         "review_blockers": ("missing_main_pdf", "missing_si", "source_url_missing"),
     },
     "hopv15": {
@@ -135,6 +140,8 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "organic PV molecular benchmark",
         "automatic_acquisition": "local_snapshot",
         "local_dataset": True,
+        "blocking_review_count": 1,
+        "review_blockers": ("snapshot_manifest_missing",),
     },
     "opv_db": {
         "provider_kind": "local_dataset",
@@ -142,6 +149,8 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "device-performance baseline",
         "automatic_acquisition": "local_snapshot",
         "local_dataset": True,
+        "blocking_review_count": 1,
+        "review_blockers": ("third_party_attribution_missing",),
     },
     "openalex": {
         "provider_kind": "provider_api",
@@ -150,6 +159,8 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "literature graph and open-access metadata",
         "automatic_acquisition": "api_lookup",
         "local_dataset": False,
+        "blocking_review_count": 0,
+        "review_blockers": (),
     },
     "materials_project": {
         "provider_kind": "provider_api",
@@ -158,6 +169,8 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "inorganic and computed material context",
         "automatic_acquisition": "api_lookup",
         "local_dataset": False,
+        "blocking_review_count": 0,
+        "review_blockers": (),
     },
     "materials_cloud": {
         "provider_kind": "archive_import",
@@ -166,6 +179,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "record-level computed datasets imported by DOI/archive record",
         "automatic_acquisition": "manual_archive_import",
         "local_dataset": True,
+        "blocking_review_count": 2,
         "review_blockers": ("record_license_unverified", "archive_manifest_missing"),
     },
     "custom_htl_dft": {
@@ -174,14 +188,17 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "user HTL calculations",
         "automatic_acquisition": "local_dataset",
         "local_dataset": True,
+        "blocking_review_count": 0,
+        "review_blockers": (),
     },
     "pubchemqc": {
-        "provider_kind": "provider_api",
+        "provider_kind": "local_dataset",
         "phase_status": "blocked_until_validated",
         "key_requirement": "none",
         "htl_capability": "computed molecular properties",
-        "automatic_acquisition": "disabled",
-        "local_dataset": False,
+        "automatic_acquisition": "local_snapshot",
+        "local_dataset": True,
+        "blocking_review_count": 1,
         "review_blockers": ("provider_quarantined",),
     },
     "future_model_assisted_claim_extraction": {
@@ -195,6 +212,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "expected_fields": ("claim_text", "field_name", "field_value", "provenance"),
         "provenance_fields": ("knowledge_chunk_id", "citation_link_id"),
         "cache_ttl_hours": None,
+        "blocking_review_count": 1,
         "review_blockers": ("extractor_not_enabled",),
     },
 }
@@ -225,6 +243,9 @@ def build_htl_source_coverage_matrix(source_registry_path: str | Path) -> dict[s
         registry = by_provider.get(provider_id, {})
         overrides = _SOURCE_OVERRIDES[provider_id]
         requires_key = bool(registry.get("requires_api_key", False))
+        if "blocking_review_count" not in overrides:
+            raise ValueError(f"blocking_review_count must be explicit for {provider_id}")
+        review_blockers = list(overrides.get("review_blockers", ()))
         row = {
             "provider_id": provider_id,
             "provider_kind": overrides.get("provider_kind", _provider_kind(registry)),
@@ -240,7 +261,8 @@ def build_htl_source_coverage_matrix(source_registry_path: str | Path) -> dict[s
             "expected_fields": list(overrides.get("expected_fields", registry.get("allowed_output_fields", ()))),
             "provenance_fields": list(overrides.get("provenance_fields", ("source_url", "raw_sha256"))),
             "cache_ttl_hours": overrides.get("cache_ttl_hours", registry.get("cache_ttl_hours")),
-            "review_blockers": list(overrides.get("review_blockers", ())),
+            "blocking_review_count": int(overrides["blocking_review_count"]),
+            "review_blockers": review_blockers,
         }
         sources.append(row)
     return {

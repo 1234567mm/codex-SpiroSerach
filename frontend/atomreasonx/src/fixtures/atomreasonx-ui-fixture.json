@@ -103,6 +103,7 @@
           "raw_sha256"
         ],
         "cache_ttl_hours": 168,
+        "blocking_review_count": 6,
         "review_blockers": [
           "missing_doi",
           "missing_license",
@@ -132,6 +133,7 @@
           "repository_ref"
         ],
         "cache_ttl_hours": 8760,
+        "blocking_review_count": 1,
         "review_blockers": [
           "schema_version_unpinned"
         ]
@@ -158,6 +160,7 @@
           "raw_sha256"
         ],
         "cache_ttl_hours": 720,
+        "blocking_review_count": 1,
         "review_blockers": [
           "ambiguous_identity"
         ]
@@ -185,6 +188,7 @@
           "raw_sha256"
         ],
         "cache_ttl_hours": 168,
+        "blocking_review_count": 2,
         "review_blockers": [
           "retraction_flag",
           "source_url_missing"
@@ -214,6 +218,7 @@
           "source_url"
         ],
         "cache_ttl_hours": null,
+        "blocking_review_count": 3,
         "review_blockers": [
           "missing_main_pdf",
           "missing_si",
@@ -246,6 +251,7 @@
           "sha256"
         ],
         "cache_ttl_hours": 720,
+        "blocking_review_count": 1,
         "review_blockers": [
           "snapshot_manifest_missing"
         ]
@@ -276,6 +282,7 @@
           "sha256"
         ],
         "cache_ttl_hours": 720,
+        "blocking_review_count": 1,
         "review_blockers": [
           "third_party_attribution_missing"
         ]
@@ -303,6 +310,7 @@
           "raw_sha256"
         ],
         "cache_ttl_hours": 168,
+        "blocking_review_count": 0,
         "review_blockers": []
       },
       {
@@ -325,6 +333,7 @@
           "raw_sha256"
         ],
         "cache_ttl_hours": 168,
+        "blocking_review_count": 0,
         "review_blockers": []
       },
       {
@@ -350,6 +359,7 @@
           "sha256"
         ],
         "cache_ttl_hours": 720,
+        "blocking_review_count": 2,
         "review_blockers": [
           "record_license_unverified",
           "archive_manifest_missing"
@@ -357,13 +367,13 @@
       },
       {
         "provider_id": "pubchemqc",
-        "provider_kind": "provider_api",
+        "provider_kind": "local_dataset",
         "status": "quarantined",
         "phase_status": "blocked_until_validated",
         "key_requirement": "none",
         "htl_capability": "computed molecular properties",
-        "automatic_acquisition": "disabled",
-        "local_dataset": false,
+        "automatic_acquisition": "local_snapshot",
+        "local_dataset": true,
         "expected_fields": [
           "pubchem_cid",
           "homo_ev",
@@ -372,9 +382,10 @@
         ],
         "provenance_fields": [
           "source_url",
-          "raw_sha256"
+          "sha256"
         ],
         "cache_ttl_hours": 168,
+        "blocking_review_count": 1,
         "review_blockers": [
           "provider_quarantined"
         ]
@@ -399,9 +410,408 @@
           "citation_link_id"
         ],
         "cache_ttl_hours": null,
+        "blocking_review_count": 1,
         "review_blockers": [
           "extractor_not_enabled"
         ]
+      }
+    ]
+  },
+  "source_profiles": {
+    "schema_version": "v35.atomreasonx_source_profiles.v1",
+    "producer_version": "v35",
+    "profiles": [
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "crossref",
+        "display_name": "Crossref",
+        "provider_kind": "provider_api",
+        "source_family": "literature_metadata",
+        "operational_status": "active",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "Crossref REST API terms",
+        "license_scope": "source_record",
+        "trust_level": "T3_literature_machine",
+        "default_curation_status": "machine_extracted",
+        "base_url": "https://api.crossref.org",
+        "source_url": "https://api.crossref.org",
+        "data_library_path": null,
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "Crossref REST API terms; preserve DOI and source metadata attribution.",
+        "last_verified_at": "2026-07-10",
+        "quarantine_state": "none",
+        "go_migration_state": "deferred",
+        "python_bridge_required": false,
+        "typescript_surface": "source_coverage_and_settings_only",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "local_paper_vault",
+        "display_name": "Local Paper Vault",
+        "provider_kind": "local_vault",
+        "source_family": "manual_literature_assets",
+        "operational_status": "active",
+        "v35_slice": "p0_local_intake",
+        "acquisition_mode": "manual_import",
+        "distribution_policy": "local_only_until_license_review",
+        "license_hint": "User-imported papers and SI retain source-specific licenses; do not redistribute without review.",
+        "license_scope": "record_specific",
+        "trust_level": "T4_user_supplied",
+        "default_curation_status": "user_import_required",
+        "base_url": "file://data/lib/local_paper_vault/",
+        "source_url": null,
+        "data_library_path": "data/lib/local_paper_vault",
+        "dataset_doi": null,
+        "dataset_version": "local-fixture",
+        "required_citation": "Local paper vault records must preserve DOI, source URL, asset checksum, and license review state.",
+        "last_verified_at": null,
+        "quarantine_state": "none",
+        "go_migration_state": "parity_required",
+        "python_bridge_required": true,
+        "typescript_surface": "source_coverage_settings_and_commands",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "custom_htl_dft",
+        "display_name": "Custom HTL DFT",
+        "provider_kind": "local_dataset",
+        "source_family": "project_generated",
+        "operational_status": "experimental",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "local_dataset",
+        "distribution_policy": "project_generated",
+        "license_hint": "Project-generated calculations; source structures retain their own provenance",
+        "license_scope": "project_generated",
+        "trust_level": "T1_calculated",
+        "default_curation_status": "calculated",
+        "base_url": "file://data/custom_htl_pilot/",
+        "source_url": "file://data/custom_htl_pilot/",
+        "data_library_path": null,
+        "dataset_doi": null,
+        "dataset_version": "pilot-fixture",
+        "required_citation": "Project-generated DFT calculations; preserve source structure provenance.",
+        "last_verified_at": null,
+        "quarantine_state": "fixture_only",
+        "go_migration_state": "deferred",
+        "python_bridge_required": true,
+        "typescript_surface": "source_coverage_and_settings_only",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "future_model_assisted_claim_extraction",
+        "display_name": "Future Model-Assisted Claim Extraction",
+        "provider_kind": "deferred_extractor",
+        "source_family": "claim_extraction",
+        "operational_status": "disabled",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "deferred",
+        "distribution_policy": "no_distribution_until_evidence_review",
+        "license_hint": "Deferred model-generated extraction; output cannot become evidence without span-level provenance and review.",
+        "license_scope": "derived_claim",
+        "trust_level": "T5_untrusted_generated",
+        "default_curation_status": "requires_review",
+        "base_url": null,
+        "source_url": null,
+        "data_library_path": null,
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "Deferred extractor output requires original paper citation and span-level evidence provenance before use.",
+        "last_verified_at": null,
+        "quarantine_state": "deferred",
+        "go_migration_state": "deferred",
+        "python_bridge_required": true,
+        "typescript_surface": "source_coverage_only",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "nomad",
+        "display_name": "NOMAD Materials",
+        "provider_kind": "provider_api",
+        "source_family": "computed_materials",
+        "operational_status": "experimental",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "NOMAD public data terms",
+        "license_scope": "source_record",
+        "trust_level": "T2_computed_db",
+        "default_curation_status": "machine_extracted",
+        "base_url": "https://nomad-lab.eu/prod/v1/api/v1",
+        "source_url": "https://nomad-lab.eu/prod/v1/api/v1",
+        "data_library_path": null,
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "NOMAD public data terms; preserve NOMAD entry provenance.",
+        "last_verified_at": "2026-07-19",
+        "quarantine_state": "deferred",
+        "go_migration_state": "deferred",
+        "python_bridge_required": false,
+        "typescript_surface": "source_coverage_and_settings_only",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "openalex",
+        "display_name": "OpenAlex",
+        "provider_kind": "provider_api",
+        "source_family": "literature_metadata",
+        "operational_status": "experimental",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "OpenAlex CC0 data",
+        "license_scope": "source_record",
+        "trust_level": "T3_literature_machine",
+        "default_curation_status": "machine_extracted",
+        "base_url": "https://api.openalex.org",
+        "source_url": "https://api.openalex.org",
+        "data_library_path": null,
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "OpenAlex CC0 data; preserve work and source identifiers.",
+        "last_verified_at": null,
+        "quarantine_state": "none",
+        "go_migration_state": "deferred",
+        "python_bridge_required": false,
+        "typescript_surface": "source_coverage_and_settings_only",
+        "requires_api_key": true,
+        "api_key_env": "OPENALEX_API_KEY"
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "pubchem",
+        "display_name": "PubChem",
+        "provider_kind": "provider_api",
+        "source_family": "molecule_identity",
+        "operational_status": "active",
+        "v35_slice": "p0_live_provider",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "license_scope": "source_record",
+        "trust_level": "T3_literature_machine",
+        "default_curation_status": "machine_extracted",
+        "base_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug",
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug",
+        "data_library_path": "data/lib/pubchem",
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "NCBI PubChem; preserve CID, source URL, and retrieval lineage.",
+        "last_verified_at": "2026-07-10",
+        "quarantine_state": "none",
+        "go_migration_state": "parity_required",
+        "python_bridge_required": false,
+        "typescript_surface": "source_coverage_and_settings_only",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "pubchemqc",
+        "display_name": "PubChemQC",
+        "provider_kind": "local_dataset",
+        "source_family": "computed_molecule",
+        "operational_status": "quarantined",
+        "v35_slice": "p0_local_snapshot",
+        "acquisition_mode": "local_snapshot",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "PubChemQC public dataset terms; cite PubChemQC and original quantum chemistry calculations",
+        "license_scope": "dataset_snapshot",
+        "trust_level": "T2_computed_db",
+        "default_curation_status": "machine_extracted",
+        "base_url": "https://pubchemqc.riken.jp/api",
+        "source_url": "https://pubchemqc.riken.jp/api",
+        "data_library_path": "data/lib/pubchemqc",
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "PubChemQC public dataset terms; cite PubChemQC and original calculations.",
+        "last_verified_at": null,
+        "quarantine_state": "provider_quarantined",
+        "go_migration_state": "python_bridge_retained",
+        "python_bridge_required": true,
+        "typescript_surface": "settings_and_import_commands",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "materials_project",
+        "display_name": "Materials Project",
+        "provider_kind": "provider_api",
+        "source_family": "computed_materials",
+        "operational_status": "active",
+        "v35_slice": "p0_live_provider",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "Materials Project API terms",
+        "license_scope": "api_terms_record",
+        "trust_level": "T2_computed_db",
+        "default_curation_status": "machine_extracted",
+        "base_url": "https://api.materialsproject.org",
+        "source_url": "https://materialsproject.org",
+        "data_library_path": "data/lib/materials_project",
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "Materials Project API terms; cite Materials Project records and database version.",
+        "last_verified_at": "2026-07-10",
+        "quarantine_state": "none",
+        "go_migration_state": "parity_required",
+        "python_bridge_required": false,
+        "typescript_surface": "source_coverage_settings_and_commands",
+        "requires_api_key": true,
+        "api_key_env": "MATERIALS_PROJECT_API_KEY"
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "nomad_perla_psc",
+        "display_name": "NOMAD PERLA PSC",
+        "provider_kind": "provider_api",
+        "source_family": "psc_device_performance",
+        "operational_status": "experimental",
+        "v35_slice": "p0_live_provider",
+        "acquisition_mode": "api_sync",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "NOMAD PERLA PSC CC-BY-4.0; preserve original dataset attribution",
+        "license_scope": "source_record",
+        "trust_level": "T3_literature_machine",
+        "default_curation_status": "machine_extracted",
+        "base_url": "https://nomad-lab.eu/prod/v1/api/v1",
+        "source_url": "https://nomad-lab.eu/prod/v1/staging/gui/search/solarcells",
+        "data_library_path": "data/lib/nomad_perla_psc",
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "NOMAD PERLA PSC dataset; preserve NOMAD and original record attribution.",
+        "last_verified_at": "2026-07-19",
+        "quarantine_state": "none",
+        "go_migration_state": "python_oracle_p0",
+        "python_bridge_required": true,
+        "typescript_surface": "source_coverage_settings_and_commands",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "nomad_perovskite_schema",
+        "display_name": "NOMAD Perovskite Schema",
+        "provider_kind": "schema_module",
+        "source_family": "schema_reference",
+        "operational_status": "experimental",
+        "v35_slice": "p0_schema_module",
+        "acquisition_mode": "schema_fixture",
+        "distribution_policy": "schema_only",
+        "license_hint": "NOMAD perovskite solar cells database schema/plugin source; preserve repository license and FAIRmat attribution",
+        "license_scope": "schema_software_only",
+        "trust_level": "T3_literature_machine",
+        "default_curation_status": "schema_reference",
+        "base_url": "file://data/lib/nomad_perovskite_schema/",
+        "source_url": "https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database",
+        "data_library_path": "data/lib/nomad_perovskite_schema",
+        "dataset_doi": null,
+        "dataset_version": "schema-fixture",
+        "required_citation": "FAIRmat/NFDI NOMAD perovskite solar cells database schema source.",
+        "last_verified_at": "2026-07-23",
+        "quarantine_state": "fixture_only",
+        "go_migration_state": "parity_required",
+        "python_bridge_required": false,
+        "typescript_surface": "read_only_reference",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "hopv15",
+        "display_name": "HOPV15",
+        "provider_kind": "local_dataset",
+        "source_family": "opv_benchmark",
+        "operational_status": "experimental",
+        "v35_slice": "p0_local_snapshot",
+        "acquisition_mode": "local_snapshot",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "CC BY 4.0 Scientific Data / Figshare HOPV15",
+        "license_scope": "dataset_snapshot",
+        "trust_level": "T2_computed_db",
+        "default_curation_status": "machine_extracted",
+        "base_url": "file://data/public_baselines/hopv15/",
+        "source_url": "https://doi.org/10.6084/m9.figshare.1610063.v4",
+        "data_library_path": "data/lib/hopv15",
+        "dataset_doi": "10.6084/m9.figshare.1610063.v4",
+        "dataset_version": "figshare-v4-fixture",
+        "required_citation": "HOPV15 Harvard Organic Photovoltaic Dataset; cite the Scientific Data publication and Figshare record.",
+        "last_verified_at": "2026-07-17",
+        "quarantine_state": "fixture_only",
+        "go_migration_state": "parity_required",
+        "python_bridge_required": true,
+        "typescript_surface": "settings_and_import_commands",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "opv_db",
+        "display_name": "OPV-DB",
+        "provider_kind": "local_dataset",
+        "source_family": "opv_benchmark",
+        "operational_status": "experimental",
+        "v35_slice": "p0_local_snapshot",
+        "acquisition_mode": "local_snapshot",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "CC BY 4.0; preserve third-party attribution tables",
+        "license_scope": "dataset_snapshot",
+        "trust_level": "T3_literature_machine",
+        "default_curation_status": "machine_extracted",
+        "base_url": "file://data/public_baselines/opv_db/",
+        "source_url": "https://zenodo.org/records/20841543",
+        "data_library_path": "data/lib/opv_db",
+        "dataset_doi": "10.5281/zenodo.20841543",
+        "dataset_version": "zenodo-fixture",
+        "required_citation": "OPV-DB Zenodo record; preserve OPV-DB citation and third-party attribution tables for full imports.",
+        "last_verified_at": "2026-07-17",
+        "quarantine_state": "fixture_only",
+        "go_migration_state": "parity_required",
+        "python_bridge_required": false,
+        "typescript_surface": "settings_and_import_commands",
+        "requires_api_key": false,
+        "api_key_env": null
+      },
+      {
+        "schema_version": "v35.atomreasonx_source_profile.v1",
+        "provider_id": "materials_cloud",
+        "display_name": "Materials Cloud",
+        "provider_kind": "archive_import",
+        "source_family": "archive_metadata",
+        "operational_status": "experimental",
+        "v35_slice": "p0_manual_import",
+        "acquisition_mode": "manual_archive_import",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "license_hint": "Materials Cloud archive record terms vary by record; import manifest must preserve DOI, license, and citation",
+        "license_scope": "record_specific",
+        "trust_level": "T2_computed_db",
+        "default_curation_status": "user_import_required",
+        "base_url": "https://archive.materialscloud.org",
+        "source_url": "https://archive.materialscloud.org",
+        "data_library_path": "data/lib/materials_cloud",
+        "dataset_doi": null,
+        "dataset_version": null,
+        "required_citation": "Materials Cloud archive record; cite record DOI, version, license, and citation.",
+        "last_verified_at": null,
+        "quarantine_state": "manual_import_required",
+        "go_migration_state": "parity_required",
+        "python_bridge_required": true,
+        "typescript_surface": "settings_and_import_commands",
+        "requires_api_key": false,
+        "api_key_env": null
       }
     ]
   },
@@ -509,7 +919,10 @@
       "declared_effects": [
         "provider_sync_jobs"
       ],
-      "enabled": true
+      "enabled": true,
+      "input_fields": [
+        "job_id"
+      ]
     },
     {
       "action_type": "resume_nomad_sync",
@@ -517,7 +930,10 @@
       "declared_effects": [
         "provider_sync_jobs"
       ],
-      "enabled": true
+      "enabled": true,
+      "input_fields": [
+        "job_id"
+      ]
     },
     {
       "action_type": "cancel_nomad_sync",
@@ -525,7 +941,10 @@
       "declared_effects": [
         "provider_sync_jobs"
       ],
-      "enabled": true
+      "enabled": true,
+      "input_fields": [
+        "job_id"
+      ]
     },
     {
       "action_type": "import_doi_list",
@@ -534,7 +953,11 @@
         "paper_sources",
         "manual_acquisition_tasks"
       ],
-      "enabled": true
+      "enabled": true,
+      "input_fields": [
+        "doi_list",
+        "reason"
+      ]
     },
     {
       "action_type": "import_paper_group",
@@ -543,7 +966,13 @@
         "paper_groups",
         "paper_assets"
       ],
-      "enabled": true
+      "enabled": true,
+      "input_fields": [
+        "group_name",
+        "main_pdf",
+        "si_assets",
+        "notes"
+      ]
     },
     {
       "action_type": "import_hopv15_snapshot",

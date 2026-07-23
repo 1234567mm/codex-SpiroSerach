@@ -53,6 +53,10 @@ class TestFixtureStructure(unittest.TestCase):
 
     def test_v33c_workbench_contracts_are_present(self) -> None:
         self.assertEqual(self.fixture["source_coverage"]["lane"], "htl_only")
+        self.assertEqual(
+            self.fixture["source_profiles"]["schema_version"],
+            "v35.atomreasonx_source_profiles.v1",
+        )
         self.assertEqual(self.fixture["workflow"]["lane"], "htl_only")
         actions = {action["action_type"]: action for action in self.fixture["command_actions"]}
         for action in [
@@ -69,22 +73,86 @@ class TestFixtureStructure(unittest.TestCase):
         ]:
             self.assertIn(action, actions)
         self.assertEqual(actions["import_pubchemqc_snapshot"]["provider_scope"], "source")
+        self.assertEqual(actions["pause_nomad_sync"]["input_fields"], ["job_id"])
+        self.assertEqual(actions["cancel_nomad_sync"]["input_fields"], ["job_id"])
+        self.assertEqual(actions["import_doi_list"]["input_fields"], ["doi_list", "reason"])
+        self.assertNotIn("input_fields", actions["start_nomad_sync"])
         self.assertIn("EvidenceQualityPolicy", self.fixture["workflow"]["gates"])
+
+    def test_v35_source_profiles_cover_configured_and_rendered_data_sources(self) -> None:
+        source_settings_ids = {
+            p["provider_id"] for p in self.fixture["source_settings"]["sources"]
+        }
+        source_coverage_ids = {
+            p["provider_id"] for p in self.fixture["source_coverage"]["sources"]
+        }
+        source_profile_ids = {
+            p["provider_id"] for p in self.fixture["source_profiles"]["profiles"]
+        }
+        self.assertEqual(len(source_profile_ids), len(self.fixture["source_profiles"]["profiles"]))
+        self.assertTrue(source_settings_ids.issubset(source_profile_ids))
+        self.assertTrue(source_coverage_ids.issubset(source_profile_ids))
+        self.assertTrue(all(
+            p["schema_version"] == "v35.atomreasonx_source_profile.v1"
+            for p in self.fixture["source_profiles"]["profiles"]
+        ))
+
+        profiles = {
+            p["provider_id"]: p for p in self.fixture["source_profiles"]["profiles"]
+        }
+        coverage = {
+            p["provider_id"]: p for p in self.fixture["source_coverage"]["sources"]
+        }
+        settings = {
+            p["provider_id"]: p for p in self.fixture["source_settings"]["sources"]
+        }
+        self.assertEqual(profiles["materials_project"]["requires_api_key"], True)
+        self.assertEqual(profiles["materials_project"]["api_key_env"], "MATERIALS_PROJECT_API_KEY")
+        self.assertEqual(profiles["local_paper_vault"]["provider_kind"], "local_vault")
+        self.assertEqual(profiles["future_model_assisted_claim_extraction"]["quarantine_state"], "deferred")
+        self.assertEqual(profiles["pubchemqc"]["quarantine_state"], "provider_quarantined")
+        self.assertEqual(coverage["pubchemqc"]["provider_kind"], profiles["pubchemqc"]["provider_kind"])
+        self.assertEqual(coverage["pubchemqc"]["provider_kind"], settings["pubchemqc"]["provider_kind"])
+        self.assertEqual(coverage["pubchemqc"]["automatic_acquisition"], profiles["pubchemqc"]["acquisition_mode"])
+        self.assertEqual(profiles["materials_cloud"]["quarantine_state"], "manual_import_required")
+        self.assertEqual(profiles["hopv15"]["dataset_version"], "figshare-v4-fixture")
+        self.assertIn("citation", profiles["opv_db"]["required_citation"].lower())
+
+    def test_source_coverage_review_counts_are_explicit_not_reason_cardinality(self) -> None:
+        for source in self.fixture["source_coverage"]["sources"]:
+            self.assertIn("blocking_review_count", source)
+            self.assertGreaterEqual(source["blocking_review_count"], 0)
 
     def test_command_adapter_does_not_import_readonly_run_api(self) -> None:
         adapter = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "command-adapter.ts").read_text(
             encoding="utf-8",
         )
+        workflow = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "WorkflowView.tsx").read_text(
+            encoding="utf-8",
+        )
+        database = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "DatabaseView.tsx").read_text(
+            encoding="utf-8",
+        )
+        settings = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "SettingsModal.tsx").read_text(
+            encoding="utf-8",
+        )
         self.assertNotIn("ReadOnlyRunAPI", adapter)
+        self.assertNotIn("read-only-artifact-adapter", adapter)
+        self.assertNotIn("read-only-artifact-adapter", workflow)
+        self.assertNotIn("read-only-artifact-adapter", settings)
+        self.assertNotIn("command-adapter", database)
+        self.assertIn("buildDataSourceDisplayRows", database)
 
-    def test_settings_modal_wires_source_key_commands(self) -> None:
+    def test_settings_modal_wires_source_key_commands_through_dispatcher(self) -> None:
         modal = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "SettingsModal.tsx").read_text(
             encoding="utf-8",
         )
 
-        self.assertIn('onCommand?.("key_rotate"', modal)
-        self.assertIn('onCommand?.("key_remove"', modal)
-        self.assertIn('onCommand?.("test_connection"', modal)
+        self.assertIn("WorkbenchCommandDispatcher", modal)
+        self.assertIn('submitSourceSettingsCommand(commandDispatcher, "key_rotate"', modal)
+        self.assertIn('submitSourceSettingsCommand(commandDispatcher, "key_remove"', modal)
+        self.assertIn('submitSourceSettingsCommand(commandDispatcher, "test_connection"', modal)
+        self.assertNotIn("onCommand", modal)
         self.assertNotIn("key_fingerprint}", modal)
 
 
@@ -193,6 +261,8 @@ class TestCommandResultTypes(unittest.TestCase):
         self.assertIn("output_artifacts: AtomReasonXCommandEffectArtifact[];", types)
         self.assertIn("kind: \"config_command_effect\";", types)
         self.assertIn("source_settings: AtomReasonXSourceSettingsState;", types)
+        self.assertIn("source_profiles: AtomReasonXSourceProfilesState;", types)
+        self.assertIn("blocking_review_count: number;", types)
         self.assertIn("provider_scope: \"model\" | \"source\";", types)
         self.assertIn("validation_mode?: \"configuration_only\" | \"live_probe\";", types)
 
