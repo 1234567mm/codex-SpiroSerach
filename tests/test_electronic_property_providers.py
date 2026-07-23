@@ -1,5 +1,8 @@
+import json
 import os
 import unittest
+from pathlib import Path
+from urllib.error import HTTPError
 
 from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
@@ -42,8 +45,15 @@ MATERIALS_PROJECT_FIXTURE = {
             "energy_above_hull": 0.045,
             "density": 4.86,
             "symmetry": {"symbol": "Pm-3m"},
+            "origins": [
+                {"name": "structure", "task_id": "mp-567629-structure"},
+                {"name": "thermo", "task_id": "mp-567629-thermo"},
+            ],
+            "thermo_type": "GGA_GGA+U",
+            "deprecated": False,
         }
-    ]
+    ],
+    "meta": {"db_version": "2025.11.1"},
 }
 
 
@@ -60,6 +70,16 @@ PUBCHEMQC_FIXTURE = {
         }
     ]
 }
+
+
+class FixtureHTTPError(HTTPError):
+    def __init__(self, code: int, msg: str):
+        Exception.__init__(self, msg)
+        self.url = "https://api.materialsproject.org/materials/summary"
+        self.code = code
+        self.msg = msg
+        self.hdrs = None
+        self.fp = None
 
 
 class ElectronicPropertyProviderTests(unittest.TestCase):
@@ -160,13 +180,199 @@ class ElectronicPropertyProviderTests(unittest.TestCase):
 
         self.assertIn("/materials/summary", captured["url"])
         self.assertEqual(captured["headers"]["X-API-KEY"], "mp-fixture-key")
+        self.assertNotIn("mp-fixture-key", captured["url"])
         self.assertEqual(response.provider, "materials_project")
         self.assertEqual(response.trust_level, "T2_computed_db")
+        self.assertEqual(response.normalized_result["resolution_status"], "resolved")
+        self.assertFalse(response.normalized_result["ambiguity_flag"])
+        self.assertEqual(response.normalized_result["ambiguous_material_ids"], [])
         self.assertEqual(response.normalized_result["material_id"], "mp-567629")
         self.assertEqual(response.normalized_result["formula"], "CsPbI3")
         self.assertEqual(response.normalized_result["band_gap_ev"], 1.72)
         self.assertEqual(response.normalized_result["space_group"], "Pm-3m")
+        self.assertEqual(response.normalized_result["database_version"], "2025.11.1")
+        self.assertEqual(response.normalized_result["thermo_type"], "GGA_GGA+U")
+        self.assertFalse(response.normalized_result["deprecated"])
+        self.assertEqual(response.normalized_result["license"], "Materials Project API terms")
+        self.assertEqual(response.normalized_result["structure_ref"], "materials_project:mp-567629")
+        self.assertEqual(
+            response.normalized_result["origins"],
+            [
+                {"name": "structure", "task_id": "mp-567629-structure"},
+                {"name": "thermo", "task_id": "mp-567629-thermo"},
+            ],
+        )
         self.assertTrue(response.normalized_result["computed"])
+
+    def test_materials_project_uses_record_level_database_version_for_resolved_hit(self):
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-fixture-key"
+        record = {
+            **MATERIALS_PROJECT_FIXTURE["data"][0],
+            "database_version": "record-2026.1",
+        }
+        payload = {
+            "data": [record],
+            "meta": {"db_version": "meta-2025.11"},
+        }
+        try:
+            provider = MaterialsProjectProvider.from_registry(
+                load_source_registry("data/source_registry.json"),
+                api_keys=ApiKeyManager(load_source_registry("data/source_registry.json")),
+                transport=lambda _url, _headers: payload,
+                retrieved_at="2026-07-07T00:00:00+00:00",
+            )
+
+            response = provider.lookup_formula("CsPbI3")
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        self.assertEqual(response.normalized_result["resolution_status"], "resolved")
+        self.assertEqual(response.normalized_result["database_version"], "record-2026.1")
+
+    def test_materials_project_python_oracle_fixture_matches_provider_output(self):
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-fixture-key"
+        fixture_root = Path("tests/fixtures/providers/materials_project")
+        summary_fixture = json.loads((fixture_root / "summary_cs_pbi3.json").read_text(encoding="utf-8"))
+        expected = json.loads(
+            (fixture_root / "materials_project_python_oracle.json").read_text(encoding="utf-8")
+        )["cases"][0]["expected_response"]
+        try:
+            provider = MaterialsProjectProvider.from_registry(
+                load_source_registry("data/source_registry.json"),
+                api_keys=ApiKeyManager(load_source_registry("data/source_registry.json")),
+                transport=lambda _url, _headers: summary_fixture,
+                retrieved_at="2026-07-07T00:00:00+00:00",
+            )
+
+            response = provider.lookup_formula("CsPbI3")
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        self.assertEqual(response.to_dict(), expected)
+
+    def test_materials_project_multiple_hits_are_ambiguous_without_winner(self):
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-fixture-key"
+        try:
+            provider = MaterialsProjectProvider.from_registry(
+                load_source_registry("data/source_registry.json"),
+                api_keys=ApiKeyManager(load_source_registry("data/source_registry.json")),
+                transport=lambda _url, _headers: {
+                    "data": [
+                        {"material_id": "mp-1", "formula_pretty": "CsPbI3", "band_gap": 1.1},
+                        {"material_id": "mp-2", "formula_pretty": "CsPbI3", "band_gap": 1.3},
+                    ],
+                    "meta": {"db_version": "2025.11.1"},
+                },
+                retrieved_at="2026-07-07T00:00:00+00:00",
+            )
+
+            response = provider.lookup_formula("CsPbI3")
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        self.assertEqual(response.normalized_result["resolution_status"], "ambiguous")
+        self.assertTrue(response.normalized_result["ambiguity_flag"])
+        self.assertEqual(response.normalized_result["ambiguous_material_ids"], ["mp-1", "mp-2"])
+        self.assertNotIn("material_id", response.normalized_result)
+
+    def test_materials_project_auth_failure_does_not_retry_or_leak_api_key(self):
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-secret-do-not-log"
+        attempts = []
+
+        def unauthorized_transport(_url, _headers):
+            attempts.append("call")
+            raise FixtureHTTPError(401, "Unauthorized")
+
+        try:
+            provider = MaterialsProjectProvider.from_registry(
+                load_source_registry("data/source_registry.json"),
+                api_keys=ApiKeyManager(load_source_registry("data/source_registry.json")),
+                transport=unauthorized_transport,
+                retrieved_at="2026-07-07T00:00:00+00:00",
+                sleeper=lambda _seconds: self.fail("401 must not retry"),
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "MATERIALS_PROJECT_API_KEY") as caught:
+                provider.lookup_formula("CsPbI3")
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        self.assertEqual(attempts, ["call"])
+        self.assertNotIn("mp-secret-do-not-log", str(caught.exception))
+
+    def test_materials_project_retries_retryable_status_with_registry_backoff(self):
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-fixture-key"
+        attempts = []
+        sleeps = []
+
+        def retryable_transport(_url, _headers):
+            attempts.append("call")
+            if len(attempts) == 1:
+                raise FixtureHTTPError(429, "Too Many Requests")
+            return MATERIALS_PROJECT_FIXTURE
+
+        try:
+            provider = MaterialsProjectProvider.from_registry(
+                load_source_registry("data/source_registry.json"),
+                api_keys=ApiKeyManager(load_source_registry("data/source_registry.json")),
+                transport=retryable_transport,
+                retrieved_at="2026-07-07T00:00:00+00:00",
+                clock=lambda: 0.0,
+                sleeper=lambda seconds: sleeps.append(seconds),
+            )
+
+            response = provider.lookup_formula("CsPbI3")
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        self.assertEqual(response.normalized_result["material_id"], "mp-567629")
+        self.assertEqual(attempts, ["call", "call"])
+        self.assertEqual(sleeps, [0.5])
+
+    def test_materials_project_rejects_malformed_summary_payload(self):
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-fixture-key"
+        try:
+            cases = [
+                ({"data": "not a list"}, "data must be a list"),
+                ({"data": ["not an object"]}, r"data\[0\] must be an object"),
+            ]
+            for payload, message in cases:
+                with self.subTest(payload=payload):
+                    provider = MaterialsProjectProvider.from_registry(
+                        load_source_registry("data/source_registry.json"),
+                        api_keys=ApiKeyManager(load_source_registry("data/source_registry.json")),
+                        transport=lambda _url, _headers, payload=payload: payload,
+                        retrieved_at="2026-07-07T00:00:00+00:00",
+                    )
+
+                    with self.assertRaisesRegex(ValueError, message):
+                        provider.lookup_formula("CsPbI3")
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
 
     def test_materials_project_provider_requires_api_key(self):
         previous = os.environ.pop("MATERIALS_PROJECT_API_KEY", None)

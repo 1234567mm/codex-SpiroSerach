@@ -1,0 +1,49 @@
+{
+  "schema_version": "v35.materials_project_parity.v1",
+  "cases": [
+    {
+      "case_id": "cs_pbi3_summary",
+      "query_formula": "CsPbI3",
+      "expected_response": {
+        "provider": "materials_project",
+        "query": "formula:CsPbI3",
+        "normalized_result": {
+          "computed": true,
+          "resolution_status": "resolved",
+          "ambiguity_flag": false,
+          "ambiguous_material_ids": [],
+          "material_id": "mp-567629",
+          "formula": "CsPbI3",
+          "band_gap_ev": 1.72,
+          "formation_energy_ev_per_atom": -0.81,
+          "energy_above_hull": 0.045,
+          "density": 4.86,
+          "space_group": "Pm-3m",
+          "database_version": "2025.11.1",
+          "origins": [
+            {
+              "name": "structure",
+              "task_id": "mp-567629-structure"
+            },
+            {
+              "name": "thermo",
+              "task_id": "mp-567629-thermo"
+            }
+          ],
+          "thermo_type": "GGA_GGA+U",
+          "deprecated": false,
+          "license": "Materials Project API terms",
+          "structure_ref": "materials_project:mp-567629"
+        },
+        "source_url": "https://api.materialsproject.org/materials/summary?formula=CsPbI3&fields=material_id%2Cformula_pretty%2Cband_gap%2Cformation_energy_per_atom%2Cenergy_above_hull%2Cdensity%2Csymmetry%2Corigins%2Cthermo_type%2Cdeprecated",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "Materials Project API terms",
+        "raw_hash": "2300760e0f69557e798bfbc3186c0db51d7dceced13ac47e7f57c87c76932427",
+        "response_id": "405271a5a408537f",
+        "confidence": 0.75,
+        "trust_level": "T2_computed_db",
+        "contract_version": "provider-response-v1"
+      }
+    }
+  ]
+}

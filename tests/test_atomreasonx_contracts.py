@@ -108,6 +108,25 @@ class TestFixtureStructure(unittest.TestCase):
         }
         self.assertEqual(profiles["materials_project"]["requires_api_key"], True)
         self.assertEqual(profiles["materials_project"]["api_key_env"], "MATERIALS_PROJECT_API_KEY")
+        self.assertEqual(profiles["materials_project"]["go_migration_state"], "go_shadow_ready")
+        self.assertTrue(
+            {
+                "resolution_status",
+                "ambiguity_flag",
+                "ambiguous_material_ids",
+                "formation_energy_ev_per_atom",
+                "energy_above_hull",
+                "density",
+                "space_group",
+                "structure_ref",
+                "database_version",
+                "origins",
+                "thermo_type",
+                "deprecated",
+                "license",
+                "computed",
+            }.issubset(set(coverage["materials_project"]["expected_fields"]))
+        )
         self.assertEqual(profiles["pubchem"]["go_migration_state"], "go_shadow_ready")
         self.assertIn("inchi", coverage["pubchem"]["expected_fields"])
         self.assertIn("source_attribution", coverage["pubchem"]["expected_fields"])

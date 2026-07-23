@@ -155,6 +155,35 @@ describe("AtomReasonX contract fixtures", () => {
     expect(opvDbProfile?.python_bridge_required).toBe(false);
   });
 
+  it("keeps Materials Project source coverage aligned with P5 Go shadow summary fields", () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const materialsProject = workspace.source_coverage.sources.find(source => source.provider_id === "materials_project");
+    const materialsProjectProfile = workspace.source_profiles.profiles.find(profile => profile.provider_id === "materials_project");
+    const materialsProjectSettings = workspace.source_settings.sources.find(source => source.provider_id === "materials_project");
+
+    expect(materialsProject?.expected_fields).toEqual(expect.arrayContaining([
+      "resolution_status",
+      "ambiguity_flag",
+      "ambiguous_material_ids",
+      "formation_energy_ev_per_atom",
+      "energy_above_hull",
+      "density",
+      "space_group",
+      "structure_ref",
+      "database_version",
+      "origins",
+      "thermo_type",
+      "deprecated",
+      "license",
+      "computed",
+    ]));
+    expect(materialsProjectProfile?.go_migration_state).toBe("go_shadow_ready");
+    expect(materialsProjectProfile?.python_bridge_required).toBe(false);
+    expect(materialsProjectSettings?.api_key_env).toBe("MATERIALS_PROJECT_API_KEY");
+    expect(materialsProjectSettings?.has_api_key).toBe(false);
+    expect(materialsProjectSettings?.key_fingerprint).toBeNull();
+  });
+
   it("gates workflow commands that require form input", async () => {
     const workspace = fixture as unknown as AtomReasonXWorkspaceState;
     const action = workspace.command_actions.find(item => item.action_type === "import_materials_cloud_archive_record");

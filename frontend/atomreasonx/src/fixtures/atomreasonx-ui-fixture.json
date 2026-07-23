@@ -336,14 +336,29 @@
         "automatic_acquisition": "api_lookup",
         "local_dataset": false,
         "expected_fields": [
+          "resolution_status",
+          "ambiguity_flag",
+          "ambiguous_material_ids",
           "material_id",
           "formula",
-          "band_gap_ev"
+          "band_gap_ev",
+          "formation_energy_ev_per_atom",
+          "energy_above_hull",
+          "density",
+          "space_group",
+          "structure_ref",
+          "database_version",
+          "origins",
+          "thermo_type",
+          "deprecated",
+          "license",
+          "computed"
         ],
         "provenance_fields": [
           "material_id",
           "source_url",
-          "raw_sha256"
+          "raw_sha256",
+          "database_version"
         ],
         "cache_ttl_hours": 168,
         "blocking_review_count": 0,
@@ -680,7 +695,7 @@
         "required_citation": "Materials Project API terms; cite Materials Project records and database version.",
         "last_verified_at": "2026-07-10",
         "quarantine_state": "none",
-        "go_migration_state": "parity_required",
+        "go_migration_state": "go_shadow_ready",
         "python_bridge_required": false,
         "typescript_surface": "source_coverage_settings_and_commands",
         "requires_api_key": true,

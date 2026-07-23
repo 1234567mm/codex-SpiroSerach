@@ -311,6 +311,9 @@
     "api_key_env": "MATERIALS_PROJECT_API_KEY",
     "cache_ttl_hours": 168,
     "allowed_output_fields": [
+      "resolution_status",
+      "ambiguity_flag",
+      "ambiguous_material_ids",
       "material_id",
       "formula",
       "band_gap_ev",
@@ -318,15 +321,23 @@
       "energy_above_hull",
       "density",
       "space_group",
+      "structure_ref",
+      "database_version",
+      "origins",
+      "thermo_type",
+      "deprecated",
+      "license",
       "computed"
     ],
     "review_triggers": [
       "missing_api_key",
       "license_scope_uncertain",
       "database_version_missing",
-      "structure_identity_ambiguous"
+      "structure_identity_ambiguous",
+      "formula_query_multiple_unrelated_materials",
+      "computed_property_compared_to_experimental_device_performance"
     ],
-    "go_migration_state": "parity_required",
+    "go_migration_state": "go_shadow_ready",
     "python_bridge_required": false,
     "typescript_surface": "source_coverage_settings_and_commands",
     "disambiguation_required": false,

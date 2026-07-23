@@ -25,8 +25,30 @@ func TestLoadRepositoryRegistry(t *testing.T) {
 	if !mp.LiveEnabled() {
 		t.Fatalf("materials_project should be live enabled")
 	}
+	if mp.GoMigrationState != "go_shadow_ready" {
+		t.Fatalf("materials_project should be Go shadow ready: %q", mp.GoMigrationState)
+	}
 	if mp.TypeScriptSurface != "source_coverage_settings_and_commands" {
 		t.Fatalf("materials_project TypeScript surface = %q", mp.TypeScriptSurface)
+	}
+	for _, field := range []string{
+		"resolution_status",
+		"ambiguity_flag",
+		"ambiguous_material_ids",
+		"structure_ref",
+		"database_version",
+		"origins",
+		"thermo_type",
+		"deprecated",
+		"license",
+		"computed",
+	} {
+		if !contains(mp.AllowedOutputFields, field) {
+			t.Fatalf("materials_project missing allowed output field %q", field)
+		}
+	}
+	if !contains(mp.ReviewTriggers, "computed_property_compared_to_experimental_device_performance") {
+		t.Fatalf("materials_project must keep computed-to-device scoring boundary trigger")
 	}
 
 	pubchem := index["pubchem"]

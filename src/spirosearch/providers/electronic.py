@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Callable, Mapping
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -270,12 +271,12 @@ class MaterialsProjectProvider:
             self.rate_limiter.wait_for_slot()
         fields = (
             "material_id,formula_pretty,band_gap,formation_energy_per_atom,"
-            "energy_above_hull,density,symmetry"
+            "energy_above_hull,density,symmetry,origins,thermo_type,deprecated"
         )
         url = f"{self.base_url}/materials/summary?{urlencode({'formula': query_value, 'fields': fields})}"
         headers = {"X-API-KEY": self.api_key}
         payload = self._fetch_with_backoff(url, headers)
-        normalized, confidence = _normalize_materials_project_summary(payload)
+        normalized, confidence = _normalize_materials_project_summary(payload, self.license_hint)
         return ProviderResponse.from_payload(
             provider=self.provider_name,
             query=f"formula:{query_value}",
@@ -292,8 +293,12 @@ class MaterialsProjectProvider:
     def _fetch_with_backoff(self, url: str, headers: Mapping[str, str]) -> Mapping[str, Any]:
         try:
             return self.transport(url, headers)
-        except Exception:
-            if self.rate_limiter is None:
+        except Exception as exc:
+            if _is_materials_project_auth_error(exc):
+                raise RuntimeError(
+                    "Materials Project authentication failed; check local config or MATERIALS_PROJECT_API_KEY"
+                ) from exc
+            if self.rate_limiter is None or not _is_materials_project_retryable(exc):
                 raise
             self.rate_limiter.wait_for_retry(attempt=1)
             return self.transport(url, headers)
@@ -322,12 +327,38 @@ def _normalize_nomad_electronic(payload: Mapping[str, Any]) -> tuple[dict[str, A
     return normalized, confidence
 
 
-def _normalize_materials_project_summary(payload: Mapping[str, Any]) -> tuple[dict[str, Any], float]:
-    record = _first_record(payload)
-    normalized: dict[str, Any] = {"computed": True}
-    if not record:
+def _normalize_materials_project_summary(
+    payload: Mapping[str, Any],
+    license_hint: str = "Materials Project API terms",
+) -> tuple[dict[str, Any], float]:
+    records = _materials_project_records(payload)
+    database_version = _materials_project_database_version(payload)
+    normalized: dict[str, Any] = {
+        "computed": True,
+        "resolution_status": "not_found",
+        "ambiguity_flag": True,
+        "ambiguous_material_ids": [],
+        "license": license_hint,
+    }
+    if database_version:
+        normalized["database_version"] = database_version
+    if not records:
         return normalized, 0.2
+    if len(records) > 1:
+        normalized["resolution_status"] = "ambiguous"
+        normalized["ambiguous_material_ids"] = [
+            str(record["material_id"])
+            for record in records
+            if record.get("material_id") is not None
+        ]
+        return normalized, 0.35
+    record = records[0]
     symmetry = dict(record.get("symmetry", {}))
+    normalized["resolution_status"] = "resolved"
+    normalized["ambiguity_flag"] = False
+    record_database_version = _materials_project_database_version(payload, record)
+    if record_database_version:
+        normalized["database_version"] = record_database_version
     _put_optional(normalized, "material_id", record.get("material_id"), str)
     _put_optional(normalized, "formula", record.get("formula_pretty") or record.get("formula"), str)
     _put_optional(normalized, "band_gap_ev", record.get("band_gap"), float)
@@ -335,8 +366,53 @@ def _normalize_materials_project_summary(payload: Mapping[str, Any]) -> tuple[di
     _put_optional(normalized, "energy_above_hull", record.get("energy_above_hull"), float)
     _put_optional(normalized, "density", record.get("density"), float)
     _put_optional(normalized, "space_group", symmetry.get("symbol"), str)
+    _put_optional(normalized, "thermo_type", record.get("thermo_type"), str)
+    _put_optional(normalized, "deprecated", record.get("deprecated"), bool)
+    if isinstance(record.get("origins"), list):
+        normalized["origins"] = list(record["origins"])
+    if "material_id" in normalized:
+        normalized["structure_ref"] = f"materials_project:{normalized['material_id']}"
     confidence = 0.75 if "band_gap_ev" in normalized else 0.35
     return normalized, confidence
+
+
+def _materials_project_records(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    data = payload.get("data", [])
+    if isinstance(data, list):
+        records = []
+        for index, item in enumerate(data):
+            if not isinstance(item, Mapping):
+                raise ValueError(f"data[{index}] must be an object")
+            records.append(dict(item))
+        return records
+    raise ValueError("data must be a list")
+
+
+def _materials_project_database_version(
+    payload: Mapping[str, Any],
+    record: Mapping[str, Any] | None = None,
+) -> str | None:
+    if record is not None and record.get("database_version") is not None:
+        return str(record["database_version"])
+    if payload.get("database_version") is not None:
+        return str(payload["database_version"])
+    meta = payload.get("meta", {})
+    if isinstance(meta, Mapping):
+        if meta.get("db_version") is not None:
+            return str(meta["db_version"])
+        if meta.get("database_version") is not None:
+            return str(meta["database_version"])
+    return None
+
+
+def _is_materials_project_auth_error(exc: Exception) -> bool:
+    return isinstance(exc, HTTPError) and exc.code in {401, 403}
+
+
+def _is_materials_project_retryable(exc: Exception) -> bool:
+    if isinstance(exc, HTTPError):
+        return exc.code == 429 or exc.code >= 500
+    return True
 
 
 def _normalize_pubchemqc_properties(payload: Mapping[str, Any]) -> tuple[dict[str, Any], float]:

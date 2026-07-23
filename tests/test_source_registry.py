@@ -94,13 +94,31 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual(materials_project.v35_slice, "p0_live_provider")
         self.assertEqual(materials_project.acquisition_mode, "api_lookup")
         self.assertEqual(materials_project.data_library_path, "data/lib/materials_project")
-        self.assertEqual(materials_project.go_migration_state, "parity_required")
+        self.assertEqual(materials_project.go_migration_state, "go_shadow_ready")
         self.assertFalse(materials_project.python_bridge_required)
         self.assertEqual(
             materials_project.typescript_surface,
             "source_coverage_settings_and_commands",
         )
         self.assertIn("missing_api_key", materials_project.review_triggers)
+        self.assertIn("formula_query_multiple_unrelated_materials", materials_project.review_triggers)
+        self.assertIn(
+            "computed_property_compared_to_experimental_device_performance",
+            materials_project.review_triggers,
+        )
+        for field in (
+            "resolution_status",
+            "ambiguity_flag",
+            "ambiguous_material_ids",
+            "structure_ref",
+            "database_version",
+            "origins",
+            "thermo_type",
+            "deprecated",
+            "license",
+            "computed",
+        ):
+            self.assertIn(field, materials_project.allowed_output_fields)
         self.assertEqual(
             materials_project.distribution_policy,
             "derived_facts_with_source_pointers",

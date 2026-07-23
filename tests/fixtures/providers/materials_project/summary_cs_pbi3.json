@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "material_id": "mp-567629",
+      "formula_pretty": "CsPbI3",
+      "band_gap": 1.72,
+      "formation_energy_per_atom": -0.81,
+      "energy_above_hull": 0.045,
+      "density": 4.86,
+      "symmetry": {
+        "symbol": "Pm-3m"
+      },
+      "origins": [
+        {
+          "name": "structure",
+          "task_id": "mp-567629-structure"
+        },
+        {
+          "name": "thermo",
+          "task_id": "mp-567629-thermo"
+        }
+      ],
+      "thermo_type": "GGA_GGA+U",
+      "deprecated": false
+    }
+  ],
+  "meta": {
+    "db_version": "2025.11.1"
+  }
+}
