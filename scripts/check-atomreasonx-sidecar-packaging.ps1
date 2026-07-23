@@ -91,7 +91,7 @@ function Get-SidecarArtifactName {
 function Test-SidecarReleaseArtifact {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string]$RequestedTargetTriple
+        [string]$RequestedTargetTriple
     )
 
     $targetTriple = Get-TargetTriple $RequestedTargetTriple
@@ -178,12 +178,13 @@ catch {
 }
 
 $TauriConfigPath = Join-Path $Root 'frontend\atomreasonx\src-tauri\tauri.conf.json'
+$CargoTomlPath = Join-Path $Root 'frontend\atomreasonx\src-tauri\Cargo.toml'
 $RustBridgePath = Join-Path $Root 'frontend\atomreasonx\src-tauri\src\main.rs'
 $TypeScriptBridgePath = Join-Path $Root 'frontend\atomreasonx\src\adapters\tauri-readonly-sidecar.ts'
 $SpiroctlMainPath = Join-Path $Root 'cmd\spiroctl\main.go'
 $SidecarBuildScriptPath = Join-Path $Root 'scripts\build-atomreasonx-spiroctl-sidecar.ps1'
 
-foreach ($requiredPath in @($TauriConfigPath, $RustBridgePath, $TypeScriptBridgePath, $SpiroctlMainPath, $SidecarBuildScriptPath)) {
+foreach ($requiredPath in @($TauriConfigPath, $CargoTomlPath, $RustBridgePath, $TypeScriptBridgePath, $SpiroctlMainPath, $SidecarBuildScriptPath)) {
     if (-not [IO.File]::Exists($requiredPath)) {
         Add-Violation "Required sidecar packaging file is missing: $requiredPath"
     }
@@ -246,6 +247,9 @@ if ($Violations.Count -eq 0) {
     foreach ($requiredToken in @(
         'start_readonly_sidecar',
         'Command::new(executable)',
+        'resolve_spiroctl_path(&app)',
+        'resolve_bundled_spiroctl_path',
+        'bundled_spiroctl_artifact_name',
         '"readonly-run"',
         '"serve"',
         'SPIROCTL_PATH'
@@ -258,6 +262,9 @@ if ($Violations.Count -eq 0) {
         'spiroctl_path:',
         'spiroctlPath',
         'shell()',
+        'tauri_plugin_shell',
+        'ShellExt',
+        'CommandEvent',
         'emit(',
         'println!'
     )) {
@@ -275,6 +282,13 @@ if ($Violations.Count -eq 0) {
     foreach ($forbiddenToken in @('spiroctlPath', 'localStorage', 'console.')) {
         if ($typescriptBridge.Contains($forbiddenToken)) {
             Add-Violation "TypeScript readonly sidecar bridge contains forbidden token: $forbiddenToken"
+        }
+    }
+
+    $cargoToml = Read-StrictUtf8 $CargoTomlPath
+    foreach ($forbiddenToken in @('tauri-plugin-shell', 'tauri_plugin_shell')) {
+        if ($cargoToml.Contains($forbiddenToken)) {
+            Add-Violation "AtomReasonX Tauri dependencies must not expose shell plugin sidecar control: $forbiddenToken"
         }
     }
 }

@@ -69,7 +69,7 @@ class TestTauriReadonlySidecarBridge(unittest.TestCase):
         self.assertIn("connect-src 'self' http://127.0.0.1:* http://localhost:* http://[::1]:*", csp)
         self.assertNotIn("https:", csp)
         self.assertNotIn("http://*:*", csp)
-        self.assertEqual(config["bundle"]["externalBin"], [])
+        self.assertEqual(config["bundle"]["externalBin"], ["binaries/spiroctl"])
 
     def test_tauri_rust_bridge_spawns_fixed_readonly_command_without_shell(self) -> None:
         main_rs = (TAURI_DIR / "src" / "main.rs").read_text(encoding="utf-8")
@@ -78,6 +78,10 @@ class TestTauriReadonlySidecarBridge(unittest.TestCase):
         self.assertIn("stop_readonly_sidecar", main_rs)
         self.assertIn('DEFAULT_READONLY_SIDECAR_ADDR: &str = "127.0.0.1:0"', main_rs)
         self.assertIn('Command::new(executable)', main_rs)
+        self.assertIn("resolve_spiroctl_path(&app)", main_rs)
+        self.assertIn("resolve_bundled_spiroctl_path", main_rs)
+        self.assertIn("bundled_spiroctl_artifact_name", main_rs)
+        self.assertIn("SPIROCTL_PATH", main_rs)
         self.assertIn('"readonly-run"', main_rs)
         self.assertIn('"serve"', main_rs)
         self.assertIn('"--addr"', main_rs)

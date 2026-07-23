@@ -10,6 +10,7 @@ use std::{
     sync::{mpsc, Mutex},
     time::Duration,
 };
+use tauri::Manager;
 
 const DEFAULT_READONLY_SIDECAR_ADDR: &str = "127.0.0.1:0";
 const READONLY_SIDECAR_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -49,12 +50,13 @@ struct ReadonlySidecarLaunch {
 
 #[tauri::command]
 fn start_readonly_sidecar(
+    app: tauri::AppHandle,
     state: tauri::State<'_, ReadonlySidecarProcesses>,
     output_dir: String,
 ) -> Result<ReadonlySidecarLaunch, String> {
     let output_dir = canonical_output_dir(&output_dir)?;
     stop_existing_sidecar_for_output_dir(&state, &output_dir)?;
-    let executable = resolve_spiroctl_path();
+    let executable = resolve_spiroctl_path(&app);
     let mut child = Command::new(executable)
         .args([
             "readonly-run",
@@ -167,12 +169,85 @@ fn canonical_output_dir(output_dir: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-fn resolve_spiroctl_path() -> String {
+fn resolve_spiroctl_path(app: &tauri::AppHandle) -> PathBuf {
+    if let Some(path) = resolve_spiroctl_env_override() {
+        return path;
+    }
+    resolve_bundled_spiroctl_path(app).unwrap_or_else(|| PathBuf::from("spiroctl"))
+}
+
+fn resolve_spiroctl_env_override() -> Option<PathBuf> {
     std::env::var("SPIROCTL_PATH")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "spiroctl".to_string())
+        .map(PathBuf::from)
+}
+
+fn resolve_bundled_spiroctl_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let artifact_name = bundled_spiroctl_artifact_name();
+    let mut candidates = Vec::new();
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("binaries").join(&artifact_name));
+        candidates.push(resource_dir.join(&artifact_name));
+    }
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            candidates.push(exe_dir.join("binaries").join(&artifact_name));
+            candidates.push(exe_dir.join(&artifact_name));
+        }
+    }
+    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+        candidates.push(PathBuf::from(manifest_dir).join("binaries").join(&artifact_name));
+    }
+
+    candidates.into_iter().find(|path| path.is_file())
+}
+
+fn bundled_spiroctl_artifact_name() -> String {
+    let extension = if cfg!(target_os = "windows") { ".exe" } else { "" };
+    format!("spiroctl-{}{}", bundled_spiroctl_target_triple(), extension)
+}
+
+fn bundled_spiroctl_target_triple() -> &'static str {
+    if cfg!(all(
+        target_os = "windows",
+        target_arch = "x86_64",
+        target_env = "gnu"
+    )) {
+        "x86_64-pc-windows-gnu"
+    } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        "aarch64-pc-windows-msvc"
+    } else if cfg!(all(target_os = "windows", target_arch = "x86")) {
+        "i686-pc-windows-msvc"
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        "x86_64-apple-darwin"
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        "aarch64-apple-darwin"
+    } else if cfg!(all(
+        target_os = "linux",
+        target_arch = "x86_64",
+        target_env = "musl"
+    )) {
+        "x86_64-unknown-linux-musl"
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        "x86_64-unknown-linux-gnu"
+    } else if cfg!(all(
+        target_os = "linux",
+        target_arch = "aarch64",
+        target_env = "musl"
+    )) {
+        "aarch64-unknown-linux-musl"
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        "aarch64-unknown-linux-gnu"
+    } else if cfg!(all(target_os = "linux", target_arch = "arm")) {
+        "armv7-unknown-linux-gnueabihf"
+    } else {
+        "unsupported-target"
+    }
 }
 
 fn read_startup_announcement(stdout: ChildStdout) -> Result<String, String> {
@@ -293,7 +368,15 @@ mod tests {
     }
 
     #[test]
-    fn resolves_spiroctl_path_without_logging_or_requiring_secret_state() {
-        assert!(!resolve_spiroctl_path().trim().is_empty());
+    fn bundled_spiroctl_artifact_name_matches_external_bin_policy() {
+        let artifact_name = bundled_spiroctl_artifact_name();
+        assert!(artifact_name.starts_with("spiroctl-"));
+        assert!(!artifact_name.contains("SPIROCTL_PATH"));
+        assert!(!artifact_name.contains("readonly_token"));
+        if cfg!(target_os = "windows") {
+            assert!(artifact_name.ends_with(".exe"));
+        } else {
+            assert!(!artifact_name.ends_with(".exe"));
+        }
     }
 }
