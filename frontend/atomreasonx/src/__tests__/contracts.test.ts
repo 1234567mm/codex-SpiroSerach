@@ -9,6 +9,16 @@ import {
   createWorkbenchCommandDispatcher,
   type WorkbenchCommandRequest,
 } from "../adapters/command-adapter";
+import {
+  createFixtureWorkbenchReadAdapter,
+  createNoopLocalWorkbenchTransport,
+  createTransportWorkbenchReadAdapter,
+  type WorkbenchReadAdapter,
+} from "../adapters/workbench-read-adapter";
+import {
+  createLoadingWorkbenchWorkspaceState,
+  loadWorkbenchWorkspace,
+} from "../stores/workspace-store";
 import { buildDataSourceDisplayRows } from "../components/DatabaseView";
 import { buildSourceSettingsCommandPayload, submitSourceSettingsCommand } from "../components/SettingsModal";
 import {
@@ -17,7 +27,49 @@ import {
   submitWorkflowCommandAction,
 } from "../components/WorkflowView";
 
+const COMMAND_CONTROL_MODULES = import.meta.glob<string>("../components/{WorkflowView,SettingsModal}.tsx", {
+  eager: true,
+  import: "default",
+  query: "?raw",
+});
+
 describe("AtomReasonX contract fixtures", () => {
+  it("loads workspace through the read adapter as a defensive fixture snapshot", async () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const adapter = createFixtureWorkbenchReadAdapter(workspace);
+
+    const loaded = await adapter.loadWorkspace();
+    loaded.source_coverage.sources[0].provider_id = "mutated";
+
+    expect(workspace.source_coverage.sources[0].provider_id).not.toBe("mutated");
+    expect((await adapter.loadWorkspace()).source_profiles.profiles.map(profile => profile.provider_id)).toContain("materials_project");
+  });
+
+  it("models workspace store loading ready and error states", async () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const ready = await loadWorkbenchWorkspace(createTransportWorkbenchReadAdapter(
+      createNoopLocalWorkbenchTransport(workspace),
+    ));
+    const broken: WorkbenchReadAdapter = {
+      async loadWorkspace() {
+        throw new Error("read backend unavailable");
+      },
+    };
+
+    expect(createLoadingWorkbenchWorkspaceState().status).toBe("loading");
+    expect(ready.status).toBe("ready");
+    if (ready.status === "ready") {
+      expect(ready.workspace.source_coverage.lane).toBe("htl_only");
+    }
+    await expect(createNoopLocalWorkbenchTransport(workspace).request("missing" as never)).rejects.toThrow(
+      "unsupported workbench read surface",
+    );
+    expect(await loadWorkbenchWorkspace(broken)).toEqual({
+      status: "error",
+      message: "read backend unavailable",
+    });
+  });
+
   it("keeps provider status and settings provider sets aligned", () => {
     const workspace = fixture as unknown as AtomReasonXWorkspaceState;
     const providerStatus = workspace.provider_status.providers.map(provider => provider.provider);
@@ -307,6 +359,14 @@ describe("AtomReasonX contract fixtures", () => {
     expect(submitted[1].idempotency_key).toBe("atomx-dispatch-test-2");
     expect(submitted[1].payload.provider).toBe("materials_project");
     expect(submitted[1].payload.provider_scope).toBe("source");
+  });
+
+  it("keeps command controls free of read-side adapter imports", () => {
+    for (const [path, source] of Object.entries(COMMAND_CONTROL_MODULES)) {
+      expect(source, path).not.toContain("workbench-read-adapter");
+      expect(source, path).not.toContain("read-only-artifact-adapter");
+      expect(source, path).toContain("WorkbenchCommandDispatcher");
+    }
   });
 
   it("keeps source settings command identity authoritative over extra payload", () => {
