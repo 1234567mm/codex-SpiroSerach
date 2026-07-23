@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest reviewed HEAD: `2417dfc`  
+Latest implementation HEAD before this status update: `72ecd86`
 Date: 2026-07-23
 
 ## Goal
@@ -27,6 +27,8 @@ The current branch contains these V35 execution commits:
 | `ef17208` | NOMAD PERLA Go shadow parity | Search/archive query parity, fallback review markers, and HTL-focused fields. |
 | `2d44a67` | PubChemQC and Materials Cloud snapshot foundation | Local snapshot contracts, manifests, quarantine enforcement, metadata-only Materials Cloud. |
 | `2417dfc` | AtomReasonX workbench read adapter | Fixture-backed read adapter, no-op local transport facade, workspace loading/error/ready store. |
+| `f9e478c` | Go run artifact read-only validation | Manifest-discovered artifact repository with safe relative paths, junction/symlink rejection, duplicate kind rejection, byte/hash checks, JSON/JSONL parsing, and `spiroctl run-artifacts validate`. |
+| `72ecd86` | Go readonly run envelope foundation | V11-shaped read-only envelopes for `manifest`, `artifact_index`, and `artifact_by_kind`, plus `spiroctl readonly-run validate` over existing fixture runs. |
 
 ## Current Data Source Status
 
@@ -49,9 +51,11 @@ The current branch contains these V35 execution commits:
 Recent gates run during this checkpoint:
 
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/runartifact ./cmd/spiroctl -v` passed for the run artifact slice.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/readonlyapi ./cmd/spiroctl -v` passed for the readonly envelope slice.
 - `npm.cmd test` in `frontend/atomreasonx` passed with 15 Vitest tests.
 - `npm.cmd run build` in `frontend/atomreasonx` passed.
-- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed after removing generated `uv.lock`.
+- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed after both Go read-side slices; generated root `uv.lock` was removed each time.
 - `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_contracts tests.test_atomreasonx_frontend -v` passed outside sandbox after user-level `uv` cache failed inside sandbox.
 - `git diff --check` passed with LF-to-CRLF warnings only.
 - `scripts/check-agent-hygiene.ps1` passed.
@@ -95,17 +99,17 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Build a Go read-only artifact/envelope parity slice for manifest-discovered
-   run artifacts, using Python `JsonArtifactRepository`/`ReadOnlyRunAPI` as the
-   oracle.
-2. Acceptance should include unsafe path rejection, manifest byte/hash checks,
-   JSONL record-count checks, schema-ref checks, and unavailable envelope shape.
-3. Keep this read-only; no provider sync, scoring rebuild, cache writes, or
-   experiment writes in the same slice.
+1. Extend Go readonly envelope parity from the current foundation surfaces to
+   `scoring_view`, `review_summary`, and `provider_lineage`.
+2. Use Python `ReadOnlyRunAPI` and `JsonArtifactRepository.provider_lineage()`
+   as the oracle for surface names, payload layout, run-level vs artifact-level
+   unavailable severity, and panel-local degradation.
+3. Keep this read-only; no provider sync, scoring rebuild, cache writes,
+   SQLite writes, command execution, or experiment writes in the same slice.
 
 Alternative if prioritizing operator workflow:
 
-1. Add AtomReasonX local read transport implementation against a fixture/Go
-   mock endpoint.
-2. Preserve the current adapter/store boundary and add tests that command
-   controls cannot import read-side transports.
+1. Add an AtomReasonX local read transport implementation against the new Go
+   readonly envelope facade or a fixture/Go mock endpoint.
+2. Preserve the current adapter/store boundary and keep command controls
+   isolated behind `WorkbenchCommandAdapter`.
