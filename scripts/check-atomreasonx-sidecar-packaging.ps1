@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot,
+    [string]$TargetTriple,
     [switch]$RequireBundledSidecar
 )
 
@@ -63,6 +64,111 @@ function Test-RelativeBundlePath {
     return $true
 }
 
+function Get-TargetTriple {
+    param([string]$RequestedTargetTriple)
+
+    if (-not [string]::IsNullOrWhiteSpace($RequestedTargetTriple)) {
+        return $RequestedTargetTriple.Trim()
+    }
+
+    $hostTriple = & rustc --print host-tuple 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($hostTriple | Select-Object -First 1))) {
+        return ($hostTriple | Select-Object -First 1).Trim()
+    }
+    return ''
+}
+
+function Get-SidecarArtifactName {
+    param([Parameter(Mandatory = $true)][string]$targetTriple)
+
+    $extension = ''
+    if ($targetTriple -match 'windows') {
+        $extension = '.exe'
+    }
+    return "spiroctl-$targetTriple$extension"
+}
+
+function Test-SidecarReleaseArtifact {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$RequestedTargetTriple
+    )
+
+    $targetTriple = Get-TargetTriple $RequestedTargetTriple
+    if ([string]::IsNullOrWhiteSpace($targetTriple)) {
+        Add-Violation 'Unable to determine production sidecar targetTriple; pass -TargetTriple or install rustc.'
+        return
+    }
+
+    $artifactName = Get-SidecarArtifactName $targetTriple
+    $artifactPath = Join-Path $Root "frontend\atomreasonx\src-tauri\binaries\$artifactName"
+    $sha256Path = "$artifactPath.sha256"
+    $manifestPath = "$artifactPath.manifest.json"
+
+    if (-not [IO.File]::Exists($artifactPath)) {
+        Add-Violation "Release sidecar artifact is missing: frontend/atomreasonx/src-tauri/binaries/$artifactName. Run scripts/build-atomreasonx-spiroctl-sidecar.ps1 before production packaging."
+        return
+    }
+    if (-not [IO.File]::Exists($sha256Path)) {
+        Add-Violation "Release sidecar checksum is missing: frontend/atomreasonx/src-tauri/binaries/$artifactName.sha256."
+        return
+    }
+    if (-not [IO.File]::Exists($manifestPath)) {
+        Add-Violation "Release sidecar manifest is missing: frontend/atomreasonx/src-tauri/binaries/$artifactName.manifest.json."
+        return
+    }
+
+    $actualHash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $checksumText = Read-StrictUtf8 $sha256Path
+    if (-not $checksumText.Trim().ToLowerInvariant().StartsWith($actualHash)) {
+        Add-Violation "Release sidecar checksum does not match artifact: $artifactName."
+    }
+
+    try {
+        $manifest = Read-StrictUtf8 $manifestPath | ConvertFrom-Json
+    }
+    catch {
+        Add-Violation "Release sidecar manifest is not valid JSON: frontend/atomreasonx/src-tauri/binaries/$artifactName.manifest.json."
+        return
+    }
+
+    foreach ($requiredProperty in @(
+        'schema_version',
+        'external_bin_entry',
+        'artifact_name',
+        'target_triple',
+        'source_package',
+        'sha256',
+        'bytes'
+    )) {
+        if (-not (Test-JsonProperty $manifest $requiredProperty)) {
+            Add-Violation "Release sidecar manifest missing property: $requiredProperty."
+        }
+    }
+
+    if ((Test-JsonProperty $manifest 'schema_version') -and $manifest.schema_version -ne 'v35.atomreasonx_spiroctl_sidecar_build.v1') {
+        Add-Violation 'Release sidecar manifest schema_version is not v35.atomreasonx_spiroctl_sidecar_build.v1.'
+    }
+    if ((Test-JsonProperty $manifest 'external_bin_entry') -and $manifest.external_bin_entry -ne 'binaries/spiroctl') {
+        Add-Violation 'Release sidecar manifest external_bin_entry must be binaries/spiroctl.'
+    }
+    if ((Test-JsonProperty $manifest 'artifact_name') -and $manifest.artifact_name -ne $artifactName) {
+        Add-Violation "Release sidecar manifest artifact_name must be $artifactName."
+    }
+    if ((Test-JsonProperty $manifest 'target_triple') -and $manifest.target_triple -ne $targetTriple) {
+        Add-Violation "Release sidecar manifest target_triple must be $targetTriple."
+    }
+    if ((Test-JsonProperty $manifest 'source_package') -and $manifest.source_package -ne './cmd/spiroctl') {
+        Add-Violation 'Release sidecar manifest source_package must be ./cmd/spiroctl.'
+    }
+    if ((Test-JsonProperty $manifest 'sha256') -and $manifest.sha256 -ne $actualHash) {
+        Add-Violation "Release sidecar manifest sha256 does not match artifact: $artifactName."
+    }
+    if ((Test-JsonProperty $manifest 'bytes') -and [int64]$manifest.bytes -ne (Get-Item -LiteralPath $artifactPath).Length) {
+        Add-Violation "Release sidecar manifest bytes does not match artifact: $artifactName."
+    }
+}
+
 try {
     $Root = Get-RepositoryRoot $RepositoryRoot
 }
@@ -75,8 +181,9 @@ $TauriConfigPath = Join-Path $Root 'frontend\atomreasonx\src-tauri\tauri.conf.js
 $RustBridgePath = Join-Path $Root 'frontend\atomreasonx\src-tauri\src\main.rs'
 $TypeScriptBridgePath = Join-Path $Root 'frontend\atomreasonx\src\adapters\tauri-readonly-sidecar.ts'
 $SpiroctlMainPath = Join-Path $Root 'cmd\spiroctl\main.go'
+$SidecarBuildScriptPath = Join-Path $Root 'scripts\build-atomreasonx-spiroctl-sidecar.ps1'
 
-foreach ($requiredPath in @($TauriConfigPath, $RustBridgePath, $TypeScriptBridgePath, $SpiroctlMainPath)) {
+foreach ($requiredPath in @($TauriConfigPath, $RustBridgePath, $TypeScriptBridgePath, $SpiroctlMainPath, $SidecarBuildScriptPath)) {
     if (-not [IO.File]::Exists($requiredPath)) {
         Add-Violation "Required sidecar packaging file is missing: $requiredPath"
     }
@@ -107,6 +214,7 @@ if ($Violations.Count -eq 0) {
             if ($externalBin.Count -eq 0) {
                 if ($RequireBundledSidecar) {
                     Add-Violation 'bundle.externalBin must include binaries/spiroctl for production sidecar packaging.'
+                    Add-Violation 'Run scripts/build-atomreasonx-spiroctl-sidecar.ps1 before enabling production sidecar packaging.'
                 }
             }
             else {
@@ -120,6 +228,9 @@ if ($Violations.Count -eq 0) {
                     if ($entry -match 'spiroctlPath|readonly_token|api_key') {
                         Add-Violation "bundle.externalBin entry exposes forbidden command or credential naming: $entry"
                     }
+                }
+                if ($externalBin -contains 'binaries/spiroctl') {
+                    Test-SidecarReleaseArtifact $Root $TargetTriple
                 }
             }
 

@@ -56,3 +56,14 @@ For AtomReasonX readonly sidecar packaging changes:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-atomreasonx-sidecar-packaging.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
 ```
+
+To generate the release-owned Go sidecar artifact for Tauri production
+packaging:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-atomreasonx-spiroctl-sidecar.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
+```
+
+Production packaging must run the sidecar preflight with
+`-RequireBundledSidecar` after `bundle.externalBin` is enabled for
+`binaries/spiroctl`.

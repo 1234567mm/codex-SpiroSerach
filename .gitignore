@@ -48,3 +48,5 @@ frontend/atomreasonx/node_modules/
 frontend/atomreasonx/dist/
 frontend/atomreasonx/src-tauri/target/
 frontend/atomreasonx/.vitest/
+frontend/atomreasonx/src-tauri/binaries/*
+!frontend/atomreasonx/src-tauri/binaries/README.md
