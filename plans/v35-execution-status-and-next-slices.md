@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `588c9b9`
+Latest implementation HEAD before this status update: `c9e34ab`
 Date: 2026-07-24
 
 ## Goal
@@ -39,6 +39,7 @@ The current branch contains these V35 execution commits:
 | `092192b` | AtomReasonX sidecar packaging preflight | Adds an executable packaging preflight for readonly sidecar release boundaries: current `dev_path_only` mode is explicit, future bundled mode must use `bundle.externalBin = ["binaries/spiroctl"]`, `spiroctl` must not be hidden in resources, and WebView/Rust bridges must not expose executable paths or credential-shaped state. |
 | `3b58535` | NOMAD perovskite schema reference module | Records the downloaded FAIRmat/NFDI NOMAD perovskite package as a `nomad_perovskite_schema` schema/reference module under `data/lib`, validates its checksum through the Go source snapshot gate, and asserts it is not a data mirror or provider-fact source. |
 | `588c9b9` | AtomReasonX readonly run recent directory selector | Adds a read-side recent readonly run output-dir selector for operator workflow, deduplicates and filters recent paths, rejects credential-shaped and executable-looking values, and keeps the setting free of command, token, localStorage, and sidecar executable-path state. |
+| `c9e34ab` | AtomReasonX sidecar release build policy | Adds a repository-owned PowerShell build path for the Go `spiroctl` Tauri sidecar, writes the Tauri-required `spiroctl-<target-triple>[.exe]` artifact plus checksum and manifest, smoke-tests the host artifact, ignores generated binaries, and extends packaging preflight with production artifact manifest/hash checks. |
 
 ## Current Data Source Status
 
@@ -103,6 +104,12 @@ Recent gates run during this checkpoint:
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts tests.test_atomreasonx_frontend -v` passed outside sandbox with 41 tests after the readonly run recent directory selector.
 - `git diff --check`, `git diff --cached --check`, and `scripts/check-agent-hygiene.ps1` passed before the readonly run recent directory selector commit.
 - `Test-Path uv.lock` was `False` before the readonly run recent directory selector commit.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-atomreasonx-spiroctl-sidecar.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed and smoke-tested `spiroctl-x86_64-pc-windows-msvc.exe` with `source-registry validate data/source_registry.json`.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-atomreasonx-sidecar-packaging.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed in explicit `dev_path_only` mode after the release build policy slice.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after the release build policy slice.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_sidecar_packaging -v` passed outside sandbox with 4 tests after the release build policy slice; sandboxed `.venv` Python remained blocked by local trampoline permissions.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest discover tests -q` passed outside sandbox with 933 tests and 9 skipped after the release build policy slice.
+- `git diff --check`, `git diff --cached --check`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed before the release build policy commit.
 
 ## Remaining Work
 
@@ -125,10 +132,11 @@ Recent gates run during this checkpoint:
    readonly run output directory and a read-side recent directory selector.
    A native desktop directory picker remains optional, but must keep the same
    read-adapter-only boundary and must not expose executable paths or tokens.
-2. Packaging preflight is now executable and documents the current
-   `dev_path_only` state. Full production bundling still needs a release-owned
-   `spiroctl` binary build/output policy before enabling
-   `bundle.externalBin = ["binaries/spiroctl"]`.
+2. Packaging preflight is executable, documents the current `dev_path_only`
+   state, and the release-owned Go `spiroctl` sidecar build policy is now
+   available. Full production bundling still needs a deliberate
+   `bundle.externalBin = ["binaries/spiroctl"]` enablement slice plus bundled
+   runtime resolution verification before shipping installers.
 3. Keep read transport side-effect free; command transport must remain separate
    and idempotent.
 4. Go must not become a second SQLite/provider-cache writer until schema
@@ -161,7 +169,8 @@ Alternative if prioritizing operator workflow:
    settings entry, without adding any command credentials, executable-path
    input, provider sync, scoring rebuild, cache write, SQLite write, or
    experiment write surface.
-2. Enable actual Tauri `bundle.externalBin = ["binaries/spiroctl"]` only after
-   the release process owns deterministic Go sidecar binary names for each
-   target platform and the packaging preflight is run with
+2. Enable actual Tauri `bundle.externalBin = ["binaries/spiroctl"]` now has a
+   build policy prerequisite, but still requires one final runtime packaging
+   slice: choose and verify how the Rust bridge resolves the bundled sidecar
+   inside installed Tauri layouts, then run packaging preflight with
    `-RequireBundledSidecar`.
