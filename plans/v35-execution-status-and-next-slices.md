@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `5cf3680`
+Latest implementation HEAD before this status update: `338f508`
 Date: 2026-07-23
 
 ## Goal
@@ -30,6 +30,7 @@ The current branch contains these V35 execution commits:
 | `f9e478c` | Go run artifact read-only validation | Manifest-discovered artifact repository with safe relative paths, junction/symlink rejection, duplicate kind rejection, byte/hash checks, JSON/JSONL parsing, and `spiroctl run-artifacts validate`. |
 | `72ecd86` | Go readonly run envelope foundation | V11-shaped read-only envelopes for `manifest`, `artifact_index`, and `artifact_by_kind`, plus `spiroctl readonly-run validate` over existing fixture runs. |
 | `5cf3680` | Go readonly run surface expansion | V11-shaped read-only envelopes for `scoring_view`, `review_summary`, and `provider_lineage`; CLI validation now covers six readonly surfaces and every manifest artifact. |
+| `338f508` | AtomReasonX Go readonly transport facade | TypeScript GET-only transport for V11 readonly run envelopes, with fail-closed envelope validation and no command-shaped methods. |
 
 ## Current Data Source Status
 
@@ -54,7 +55,7 @@ Recent gates run during this checkpoint:
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/runartifact ./cmd/spiroctl -v` passed for the run artifact slice.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/readonlyapi ./cmd/spiroctl -v` passed for both readonly envelope slices.
-- `npm.cmd test` in `frontend/atomreasonx` passed with 15 Vitest tests.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 17 Vitest tests.
 - `npm.cmd run build` in `frontend/atomreasonx` passed.
 - `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed after both Go read-side slices; generated root `uv.lock` was removed each time.
 - `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_contracts tests.test_atomreasonx_frontend -v` passed outside sandbox after user-level `uv` cache failed inside sandbox.
@@ -79,8 +80,8 @@ Recent gates run during this checkpoint:
 
 ### P4 Transport And Packaging
 
-1. Add a real local read transport for AtomReasonX only after Go sidecar or
-   Tauri IPC contract is chosen.
+1. Select and implement the actual Go sidecar or Tauri IPC launch contract for
+   the existing AtomReasonX readonly transport facade.
 2. Keep read transport side-effect free; command transport must remain separate
    and idempotent.
 3. Go must not become a second SQLite/provider-cache writer until schema
@@ -100,14 +101,13 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Wire AtomReasonX to a real local read transport facade backed by the Go
-   readonly envelope surface, or by a deterministic Go mock endpoint while the
-   sidecar/Tauri launch contract is selected.
-2. Preserve the current adapter/store boundary and keep command controls
-   isolated behind `WorkbenchCommandAdapter`.
-3. Add tests proving TypeScript reads accept V11-shaped envelopes and never
-   call provider sync, scoring rebuild, cache writes, SQLite writes, command
-   execution, or experiment writes.
+1. Choose one desktop runtime contract for Go readonly delivery:
+   local sidecar HTTP, Tauri IPC invoke, or stdio JSON protocol.
+2. Implement only the read launch/config surface first, using the existing
+   TypeScript readonly transport facade and Go `spiroctl readonly-run validate`
+   behavior as the oracle.
+3. Keep command transport, provider sync, scoring rebuild, cache writes,
+   SQLite writes, and experiment writes out of the same slice.
 
 Alternative if prioritizing operator workflow:
 
