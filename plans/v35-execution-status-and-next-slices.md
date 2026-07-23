@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `c33727b`
+Latest implementation HEAD before this status update: `4d417ce`
 Date: 2026-07-24
 
 ## Goal
@@ -35,6 +35,7 @@ The current branch contains these V35 execution commits:
 | `a764b60` | AtomReasonX readonly sidecar launch bridge | Tauri launches the loopback Go sidecar through a fixed command shape, validates private startup JSON, keeps executable selection out of the WebView, passes the readonly token only into the GET transport, exposes process-id stop, tightens run-id mismatch handling, and limits CSP fetches to loopback. |
 | `71ee063` | AtomReasonX readonly run workspace adapter | TypeScript projects Go readonly envelopes for manifest, artifact index, scoring view, review summary, and provider lineage into `AtomReasonXWorkspaceState`, fails closed on unavailable surfaces, preserves fixture fallback when no readonly output directory is configured, disposes sidecar sessions, and withholds command dispatchers in readonly mode. |
 | `c33727b` | V35 read validation regression gate | Adds `scripts/check-v35-read-validation.ps1` to run Go read/validation packages plus CLI fixture checks for source registry, V35 source snapshots, provider cache/index, run artifacts, and readonly run envelopes. |
+| `4d417ce` | AtomReasonX readonly run operator config | Adds a Data Sources settings entry for operator-controlled readonly run output directories, moves readonly output-dir normalization into a side-effect-free TypeScript config module, rebuilds the runtime read adapter from React state, keeps command dispatch unavailable in readonly mode, and preserves an error-state settings path so a bad directory can be cleared without command or credential exposure. |
 
 ## Current Data Source Status
 
@@ -83,6 +84,12 @@ Recent gates run during this checkpoint:
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed after the P1 regression gate slice.
 - `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_v35_read_validation_script -v` passed outside sandbox with 1 test after the P1 regression gate slice.
 - `$env:PYTHONPATH='src'; uv run python -m unittest discover tests` passed outside sandbox with 928 tests and 9 skipped after the P1 regression gate slice; generated root `uv.lock` was removed again.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 30 Vitest tests after the readonly run operator config slice.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the readonly run operator config slice.
+- `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_frontend -v` passed outside sandbox with 17 tests after the readonly run operator config slice.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the readonly run operator config slice.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed after the readonly run operator config slice.
+- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed outside sandbox with 928 tests and 9 skipped after the readonly run operator config slice; generated root `uv.lock` was removed again.
 
 ## Remaining Work
 
@@ -101,9 +108,10 @@ Recent gates run during this checkpoint:
 
 ### P4 Transport And Packaging
 
-1. AtomReasonX runtime bootstrap now supports a configured readonly output
-   directory through the TypeScript runtime adapter, but still needs a polished
-   desktop operator picker or recent-run selection flow.
+1. AtomReasonX now has a controlled operator settings path for configuring a
+   readonly run output directory. A more polished desktop directory picker or
+   recent-run selector remains open, but must keep the same read-adapter-only
+   boundary.
 2. Packaging still needs a production decision for bundling `spiroctl` as a
    sidecar binary, preferably through Tauri external-bin or shell-plugin policy
    after dependency and release ownership are explicit.
@@ -126,16 +134,18 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Add an AtomReasonX operator path for selecting or configuring a readonly run
-   output directory without exposing command credentials or enabling writes.
-2. Define production packaging for the Go sidecar binary once Tauri dependency
+1. Define production packaging for the Go sidecar binary once Tauri dependency
    and external-bin ownership are explicit.
-3. Keep command transport, provider sync, scoring rebuild, cache writes,
+2. Keep command transport, provider sync, scoring rebuild, cache writes,
    SQLite writes, and experiment writes out of the same slice.
 
 Alternative if prioritizing operator workflow:
 
-1. Start P3 provider closure with PubChemQC full snapshot acquisition/import
+1. Add a desktop directory picker or recent-run selector for the existing
+   readonly output-dir settings entry, without adding any command credentials,
+   executable-path input, provider sync, scoring rebuild, cache write, SQLite
+   write, or experiment write surface.
+2. Start P3 provider closure with PubChemQC full snapshot acquisition/import
    policy or Materials Cloud record-specific import policy.
-2. This requires real dataset paths, license/citation decisions, parser parity
+3. This requires real dataset paths, license/citation decisions, parser parity
    fixtures, and Python oracle comparison before non-fixture facts are admitted.
