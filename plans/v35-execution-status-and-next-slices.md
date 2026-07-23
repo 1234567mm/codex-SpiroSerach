@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `71ee063`
+Latest implementation HEAD before this status update: `c33727b`
 Date: 2026-07-24
 
 ## Goal
@@ -34,6 +34,7 @@ The current branch contains these V35 execution commits:
 | `b01f0fd` | Go readonly sidecar HTTP delivery | Loopback-only `spiroctl readonly-run serve <output-dir> [--addr <addr>]`, private startup JSON with `base_url`, `run_id`, and one-time readonly token, token-protected six-route GET surface, manifest run-id binding, unsafe segment rejection, write-shaped route rejection, no-side-effect guard, import guard, and TypeScript readonly token support. |
 | `a764b60` | AtomReasonX readonly sidecar launch bridge | Tauri launches the loopback Go sidecar through a fixed command shape, validates private startup JSON, keeps executable selection out of the WebView, passes the readonly token only into the GET transport, exposes process-id stop, tightens run-id mismatch handling, and limits CSP fetches to loopback. |
 | `71ee063` | AtomReasonX readonly run workspace adapter | TypeScript projects Go readonly envelopes for manifest, artifact index, scoring view, review summary, and provider lineage into `AtomReasonXWorkspaceState`, fails closed on unavailable surfaces, preserves fixture fallback when no readonly output directory is configured, disposes sidecar sessions, and withholds command dispatchers in readonly mode. |
+| `c33727b` | V35 read validation regression gate | Adds `scripts/check-v35-read-validation.ps1` to run Go read/validation packages plus CLI fixture checks for source registry, V35 source snapshots, provider cache/index, run artifacts, and readonly run envelopes. |
 
 ## Current Data Source Status
 
@@ -78,6 +79,10 @@ Recent gates run during this checkpoint:
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed after the readonly workspace adapter slice.
 - `$env:PYTHONPATH='src'; uv run python -m unittest discover tests` passed outside sandbox with 927 tests and 9 skipped after the readonly workspace adapter slice; generated root `uv.lock` was removed again.
 - `git diff --check` and `scripts/check-agent-hygiene.ps1` passed after the readonly workspace adapter slice.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the P1 regression gate slice.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed after the P1 regression gate slice.
+- `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_v35_read_validation_script -v` passed outside sandbox with 1 test after the P1 regression gate slice.
+- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests` passed outside sandbox with 928 tests and 9 skipped after the P1 regression gate slice; generated root `uv.lock` was removed again.
 
 ## Remaining Work
 
@@ -121,11 +126,10 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Add a P1 regression closure that runs all Go read/validation foundations
-   together: source registry, source snapshots, provider cache/index, local
-   backend read model, run artifacts, readonly API, and readonly sidecar.
-2. Add an AtomReasonX operator path for selecting or configuring a readonly run
+1. Add an AtomReasonX operator path for selecting or configuring a readonly run
    output directory without exposing command credentials or enabling writes.
+2. Define production packaging for the Go sidecar binary once Tauri dependency
+   and external-bin ownership are explicit.
 3. Keep command transport, provider sync, scoring rebuild, cache writes,
    SQLite writes, and experiment writes out of the same slice.
 
