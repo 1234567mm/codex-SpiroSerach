@@ -25,6 +25,10 @@ import {
   createRuntimeWorkbenchReadAdapter,
 } from "../adapters/readonly-run-workbench-adapter";
 import {
+  buildReadonlyRunOperatorConfig,
+  normalizeReadonlyRunOutputDir,
+} from "../adapters/readonly-run-operator-config";
+import {
   createTauriReadonlyRunSession,
   createTauriReadonlyRunTransport,
   isReadonlySidecarLoopbackBaseUrl,
@@ -45,6 +49,11 @@ import {
 } from "../components/WorkflowView";
 
 const COMMAND_CONTROL_MODULES = import.meta.glob<string>("../components/{WorkflowView,SettingsModal}.tsx", {
+  eager: true,
+  import: "default",
+  query: "?raw",
+});
+const MAIN_MODULE = import.meta.glob<string>("../main.tsx", {
   eager: true,
   import: "default",
   query: "?raw",
@@ -355,6 +364,43 @@ describe("AtomReasonX contract fixtures", () => {
     });
     await readonlyRuntime.dispose();
     expect(stopped).toEqual([4242]);
+  });
+
+  it("models operator readonly run configuration as a read-side output directory only", () => {
+    const readonlyConfig = buildReadonlyRunOperatorConfig("  D:\\runs\\readonly-v35  ");
+    const fixtureConfig = buildReadonlyRunOperatorConfig("   ");
+
+    expect(normalizeReadonlyRunOutputDir("  D:\\runs\\readonly-v35  ")).toBe("D:\\runs\\readonly-v35");
+    expect(normalizeReadonlyRunOutputDir("   ")).toBeNull();
+    expect(readonlyConfig).toEqual({
+      mode: "readonly_run",
+      outputDir: "D:\\runs\\readonly-v35",
+      readOnly: true,
+    });
+    expect(fixtureConfig).toEqual({
+      mode: "fixture",
+      outputDir: null,
+      readOnly: false,
+    });
+    expect(JSON.stringify(readonlyConfig)).not.toContain("api_key");
+    expect(JSON.stringify(readonlyConfig)).not.toContain("readonly_token");
+    expect(JSON.stringify(readonlyConfig)).not.toContain("spiroctl");
+  });
+
+  it("wires operator readonly run configuration through runtime read adapter state only", () => {
+    const mainSource = Object.values(MAIN_MODULE)[0] ?? "";
+
+    expect(mainSource).toContain("readonlyOutputDir");
+    expect(mainSource).toContain("setReadonlyOutputDir");
+    expect(mainSource).toContain("createRuntimeWorkbenchReadAdapter");
+    expect(mainSource).toContain("readonlyRunConfig");
+    expect(mainSource).toContain("onApplyReadonlyRunOutputDir");
+    expect(mainSource).toContain("workspaceState.status === \"error\"");
+    expect(mainSource).toContain("<SettingsModal");
+    expect(mainSource).toContain("runtimeReadAdapter.readOnly");
+    expect(mainSource).toContain("? undefined");
+    expect(mainSource).not.toContain("spiroctlPath");
+    expect(mainSource).not.toContain("localStorage");
   });
 
   it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {

@@ -7,6 +7,7 @@ import { KnowledgeLibraryView } from "./components/KnowledgeLibraryView";
 import { WorkflowView } from "./components/WorkflowView";
 import { InspectorPanel } from "./components/InspectorPanel";
 import type { WorkbenchCommandDispatcher } from "./adapters/command-adapter";
+import type { ReadonlyRunOperatorConfig } from "./adapters/readonly-run-operator-config";
 import type { AtomReasonXWorkspaceState } from "./contracts/types";
 
 const RIGHT_INSPECTOR_TABS = ["Overview", "Files"];
@@ -23,8 +24,18 @@ export const AppShell: React.FC<{
   onOpenSettings?: () => void;
   showSettings?: boolean;
   onCloseSettings?: () => void;
+  readonlyRunConfig?: ReadonlyRunOperatorConfig;
+  onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
   commandDispatcher?: WorkbenchCommandDispatcher;
-}> = ({ workspace, onOpenSettings, showSettings, onCloseSettings, commandDispatcher }) => {
+}> = ({
+  workspace,
+  onOpenSettings,
+  showSettings,
+  onCloseSettings,
+  readonlyRunConfig,
+  onApplyReadonlyRunOutputDir,
+  commandDispatcher,
+}) => {
   return (
     <div className="app-shell" style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
       <LeftSidebar
@@ -66,6 +77,8 @@ export const AppShell: React.FC<{
         <SettingsModal
           categories={SETTINGS_CATEGORIES}
           sourceSettings={workspace.source_settings}
+          readonlyRunConfig={readonlyRunConfig}
+          onApplyReadonlyRunOutputDir={onApplyReadonlyRunOutputDir}
           commandDispatcher={commandDispatcher}
           onClose={onCloseSettings}
         />

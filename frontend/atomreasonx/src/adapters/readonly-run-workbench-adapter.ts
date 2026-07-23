@@ -17,6 +17,10 @@ import {
   createTauriReadonlyRunSession,
   type TauriReadonlyRunSession,
 } from "./tauri-readonly-sidecar";
+import {
+  normalizeReadonlyRunOutputDir,
+  resolveConfiguredReadonlyOutputDir,
+} from "./readonly-run-operator-config";
 
 export interface ReadonlyRunWorkbenchReadAdapterOptions {
   baseWorkspace: AtomReasonXWorkspaceState;
@@ -92,7 +96,7 @@ export const createRuntimeWorkbenchReadAdapter = ({
   readonlyOutputDir = resolveConfiguredReadonlyOutputDir(),
   createSidecarSession = ({ outputDir }) => createTauriReadonlyRunSession({ outputDir }),
 }: RuntimeWorkbenchReadAdapterOptions): RuntimeWorkbenchReadAdapter => {
-  const outputDir = normalizeOptionalString(readonlyOutputDir);
+  const outputDir = normalizeReadonlyRunOutputDir(readonlyOutputDir);
   if (!outputDir) {
     const adapter = createFixtureWorkbenchReadAdapter(baseWorkspace);
     return {
@@ -144,24 +148,6 @@ export const createRuntimeWorkbenchReadAdapter = ({
       return adapter.dispose?.() ?? Promise.resolve();
     },
   };
-};
-
-export const resolveConfiguredReadonlyOutputDir = (): string | null => {
-  const globalValue = normalizeOptionalString((globalThis as {
-    __ATOMREASONX_READONLY_OUTPUT_DIR__?: unknown;
-  }).__ATOMREASONX_READONLY_OUTPUT_DIR__);
-  if (globalValue) {
-    return globalValue;
-  }
-  const href = (globalThis as { location?: { href?: string } }).location?.href;
-  if (!href) {
-    return null;
-  }
-  try {
-    return normalizeOptionalString(new URL(href).searchParams.get("readonlyOutputDir"));
-  } catch {
-    return null;
-  }
 };
 
 const requireAvailablePayload = (
@@ -270,14 +256,6 @@ const artifactRecordCount = (
     return records.length;
   }
   return numberValue(isRecord(artifact.metadata) ? artifact.metadata.record_count : undefined) ?? 0;
-};
-
-const normalizeOptionalString = (value: unknown): string | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 };
 
 const stringValue = (value: unknown): string | null => (

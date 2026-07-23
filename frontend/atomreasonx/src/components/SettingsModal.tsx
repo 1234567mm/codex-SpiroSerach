@@ -1,5 +1,9 @@
 import React from "react";
 import type { WorkbenchCommandDispatcher } from "../adapters/command-adapter";
+import {
+  normalizeReadonlyRunOutputDir,
+  type ReadonlyRunOperatorConfig,
+} from "../adapters/readonly-run-operator-config";
 import type { AtomReasonXSourceSettingsState, SourceConfigStatusEntry } from "../contracts/types";
 
 export const buildSourceSettingsCommandPayload = (
@@ -24,12 +28,32 @@ export const submitSourceSettingsCommand = (
 export const SettingsModal: React.FC<{
   categories: string[];
   sourceSettings?: AtomReasonXSourceSettingsState;
+  readonlyRunConfig?: ReadonlyRunOperatorConfig;
+  onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
   commandDispatcher?: WorkbenchCommandDispatcher;
   onClose?: () => void;
-}> = ({ categories, sourceSettings, commandDispatcher, onClose }) => {
+}> = ({
+  categories,
+  sourceSettings,
+  readonlyRunConfig,
+  onApplyReadonlyRunOutputDir,
+  commandDispatcher,
+  onClose,
+}) => {
   const [selected, setSelected] = React.useState(categories[0] ?? "General");
   const [sourceKeys, setSourceKeys] = React.useState<Record<string, string>>({});
+  const [readonlyOutputDirDraft, setReadonlyOutputDirDraft] = React.useState(
+    readonlyRunConfig?.outputDir ?? "",
+  );
   const isDataSources = selected === "Data Sources";
+  const readonlyOutputDir = readonlyRunConfig?.outputDir ?? null;
+  const normalizedReadonlyOutputDirDraft = normalizeReadonlyRunOutputDir(readonlyOutputDirDraft);
+  const readonlyOutputDirChanged = normalizedReadonlyOutputDirDraft !== readonlyOutputDir;
+  const canConfigureReadonlyRun = Boolean(onApplyReadonlyRunOutputDir);
+
+  React.useEffect(() => {
+    setReadonlyOutputDirDraft(readonlyRunConfig?.outputDir ?? "");
+  }, [readonlyRunConfig?.outputDir]);
 
   return (
     <div className="settings-overlay" style={{
@@ -59,6 +83,53 @@ export const SettingsModal: React.FC<{
           <h3>{selected}</h3>
           {isDataSources ? (
             <div style={{ display: "grid", gap: "8px" }}>
+              {readonlyRunConfig && (
+                <section
+                  aria-label="Readonly run output directory"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(140px, 0.8fr) minmax(220px, 1.4fr) 72px 72px",
+                    gap: "8px",
+                    alignItems: "center",
+                    padding: "8px",
+                    border: "1px solid rgba(255,255,255,0.16)",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                  }}
+                >
+                  <span>
+                    <strong>Readonly Run</strong>
+                    <span style={{ marginLeft: "8px", color: "#9fb" }}>
+                      {readonlyRunConfig.readOnly ? "readonly_run" : "fixture"}
+                    </span>
+                  </span>
+                  <input
+                    aria-label="Readonly run output directory"
+                    type="text"
+                    value={readonlyOutputDirDraft}
+                    disabled={!canConfigureReadonlyRun}
+                    onChange={(event) => setReadonlyOutputDirDraft(event.currentTarget.value)}
+                    style={{ minWidth: 0, width: "100%" }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!canConfigureReadonlyRun || !readonlyOutputDirChanged}
+                    onClick={() => onApplyReadonlyRunOutputDir?.(normalizedReadonlyOutputDirDraft)}
+                  >
+                    Apply
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canConfigureReadonlyRun || (!readonlyOutputDir && readonlyOutputDirDraft.trim() === "")}
+                    onClick={() => {
+                      setReadonlyOutputDirDraft("");
+                      onApplyReadonlyRunOutputDir?.(null);
+                    }}
+                  >
+                    Clear
+                  </button>
+                </section>
+              )}
               {(sourceSettings?.sources ?? []).map((source) => (
                 <div key={source.provider_id} style={{
                   display: "grid",

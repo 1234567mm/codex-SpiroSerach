@@ -50,6 +50,7 @@ class TestFrontendDirectoryStructure(unittest.TestCase):
         for adapter in [
             "command-adapter.ts",
             "read-only-artifact-adapter.ts",
+            "readonly-run-operator-config.ts",
             "readonly-run-workbench-adapter.ts",
             "tauri-readonly-sidecar.ts",
         ]:
@@ -107,6 +108,12 @@ class TestTauriReadonlySidecarBridge(unittest.TestCase):
         adapter = (FRONTEND_DIR / "src" / "adapters" / "readonly-run-workbench-adapter.ts").read_text(
             encoding="utf-8",
         )
+        operator_config = (FRONTEND_DIR / "src" / "adapters" / "readonly-run-operator-config.ts").read_text(
+            encoding="utf-8",
+        )
+        settings_modal = (FRONTEND_DIR / "src" / "components" / "SettingsModal.tsx").read_text(
+            encoding="utf-8",
+        )
         main_tsx = (FRONTEND_DIR / "src" / "main.tsx").read_text(encoding="utf-8")
 
         self.assertIn("createReadonlyRunWorkbenchReadAdapter", adapter)
@@ -118,12 +125,24 @@ class TestTauriReadonlySidecarBridge(unittest.TestCase):
         self.assertIn('workspace.active_workspace = `readonly_run:${runId}`', adapter)
         self.assertIn("workspace._provisional = false", adapter)
         self.assertIn("readonlyOutputDir", adapter)
+        self.assertIn("normalizeReadonlyRunOutputDir", operator_config)
+        self.assertIn("buildReadonlyRunOperatorConfig", operator_config)
+        self.assertIn("Readonly run output directory", settings_modal)
+        self.assertIn("onApplyReadonlyRunOutputDir", settings_modal)
         self.assertNotIn("submit(", adapter)
         self.assertNotIn("execute(", adapter)
         self.assertNotIn("sync(", adapter)
         self.assertIn("createRuntimeWorkbenchReadAdapter", main_tsx)
         self.assertIn("runtimeReadAdapter.readOnly", main_tsx)
+        self.assertIn("setReadonlyOutputDir", main_tsx)
+        self.assertIn("readonlyRunConfig", main_tsx)
+        self.assertIn('workspaceState.status === "error"', main_tsx)
+        self.assertIn("<SettingsModal", main_tsx)
         self.assertIn("? undefined", main_tsx)
+        self.assertNotIn("spiroctlPath", settings_modal)
+        self.assertNotIn("api_key", operator_config)
+        self.assertNotIn("readonly_token", operator_config)
+        self.assertNotIn("localStorage", operator_config)
 
 
 class TestFrontendFixtureValid(unittest.TestCase):
