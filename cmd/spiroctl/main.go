@@ -61,7 +61,7 @@ func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
 		return serve(addr, outputDir, readonlyToken, handler)
 	}
 	if len(args) != 3 || args[1] != "validate" {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -84,6 +84,22 @@ func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
 			return err
 		}
 		fmt.Printf("ok source-snapshot source_id=%s files=%d records=%d\n", manifest.SourceID, len(manifest.Files), recordCount)
+		return nil
+	case "source-closure":
+		manifest, err := sourcesnapshot.LoadFile(args[2])
+		if err != nil {
+			return err
+		}
+		report, err := sourcesnapshot.BuildClosureReadinessReport(filepath.Dir(args[2]), manifest)
+		if err != nil {
+			return err
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
+			return err
+		}
+		if !report.Ready {
+			return &sourcesnapshot.ClosureReadinessError{Report: report}
+		}
 		return nil
 	case "provider-cache":
 		records, err := providercache.LoadFile(args[2])

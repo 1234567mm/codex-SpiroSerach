@@ -63,20 +63,36 @@ type Importer struct {
 	NormalizerVersion string `json:"normalizer_version"`
 }
 
+type ClosureEvidence struct {
+	SchemaVersion        string `json:"schema_version,omitempty"`
+	ParserName           string `json:"parser_name,omitempty"`
+	ParserVersion        string `json:"parser_version,omitempty"`
+	UnitSystem           string `json:"unit_system,omitempty"`
+	ChecksumPolicy       string `json:"checksum_policy,omitempty"`
+	LicenseReview        string `json:"license_review,omitempty"`
+	CitationReview       string `json:"citation_review,omitempty"`
+	PythonOracleReport   string `json:"python_oracle_report,omitempty"`
+	ParserParityReport   string `json:"parser_parity_report,omitempty"`
+	RecordParserReport   string `json:"record_parser_report,omitempty"`
+	UnitValidationReport string `json:"unit_validation_report,omitempty"`
+	RecordLicenseReview  string `json:"record_license_review,omitempty"`
+}
+
 type Manifest struct {
-	SchemaVersion         string   `json:"schema_version"`
-	SourceID              string   `json:"source_id"`
-	DatasetDOI            string   `json:"dataset_doi"`
-	DatasetVersion        string   `json:"dataset_version"`
-	RetrievedAt           string   `json:"retrieved_at"`
-	SourceURL             string   `json:"source_url"`
-	LicenseHint           string   `json:"license_hint"`
-	RequiredCitation      string   `json:"required_citation"`
-	Files                 []File   `json:"files"`
-	Importer              Importer `json:"importer"`
-	NormalizedRecordCount int      `json:"normalized_record_count"`
-	QuarantineStatus      string   `json:"quarantine_status"`
-	Notes                 *string  `json:"notes,omitempty"`
+	SchemaVersion         string           `json:"schema_version"`
+	SourceID              string           `json:"source_id"`
+	DatasetDOI            string           `json:"dataset_doi"`
+	DatasetVersion        string           `json:"dataset_version"`
+	RetrievedAt           string           `json:"retrieved_at"`
+	SourceURL             string           `json:"source_url"`
+	LicenseHint           string           `json:"license_hint"`
+	RequiredCitation      string           `json:"required_citation"`
+	Files                 []File           `json:"files"`
+	Importer              Importer         `json:"importer"`
+	NormalizedRecordCount int              `json:"normalized_record_count"`
+	QuarantineStatus      string           `json:"quarantine_status"`
+	Notes                 *string          `json:"notes,omitempty"`
+	ClosureEvidence       *ClosureEvidence `json:"closure_evidence,omitempty"`
 }
 
 func LoadFile(path string) (Manifest, error) {
@@ -133,6 +149,31 @@ func (m Manifest) Validate() error {
 	for _, file := range m.Files {
 		if err := file.Validate(); err != nil {
 			return err
+		}
+	}
+	if m.ClosureEvidence != nil {
+		if err := m.ClosureEvidence.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e ClosureEvidence) Validate() error {
+	for _, item := range []struct {
+		field string
+		path  string
+	}{
+		{"python_oracle_report", e.PythonOracleReport},
+		{"parser_parity_report", e.ParserParityReport},
+		{"record_parser_report", e.RecordParserReport},
+		{"unit_validation_report", e.UnitValidationReport},
+	} {
+		if strings.TrimSpace(item.path) == "" {
+			continue
+		}
+		if err := ValidateRelativePath(item.path); err != nil {
+			return fmt.Errorf("%s: %w", item.field, err)
 		}
 	}
 	return nil

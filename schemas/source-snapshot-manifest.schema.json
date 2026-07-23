@@ -43,6 +43,7 @@
         "local_only"
       ]
     },
+    "closure_evidence": { "$ref": "#/$defs/closure_evidence" },
     "notes": { "type": "string" }
   },
   "$defs": {
@@ -69,6 +70,40 @@
             "validation_summary"
           ]
         }
+      }
+    },
+    "closure_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": "v35.source_closure_evidence.v1" },
+        "parser_name": { "type": "string", "minLength": 1 },
+        "parser_version": { "type": "string", "minLength": 1 },
+        "unit_system": { "type": "string", "minLength": 1 },
+        "checksum_policy": { "type": "string", "minLength": 1 },
+        "license_review": { "type": "string", "minLength": 1 },
+        "citation_review": { "type": "string", "minLength": 1 },
+        "python_oracle_report": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!file://)(?!.*(^|/)\\.\\.(/|$))[^\\\\]+$"
+        },
+        "parser_parity_report": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!file://)(?!.*(^|/)\\.\\.(/|$))[^\\\\]+$"
+        },
+        "record_parser_report": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!file://)(?!.*(^|/)\\.\\.(/|$))[^\\\\]+$"
+        },
+        "unit_validation_report": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!file://)(?!.*(^|/)\\.\\.(/|$))[^\\\\]+$"
+        },
+        "record_license_review": { "type": "string", "minLength": 1 }
       }
     },
     "importer": {

@@ -150,6 +150,25 @@ func TestPubChemQCDatasetLookupProducesComputedProviderResponse(t *testing.T) {
 	}
 }
 
+func TestPubChemQCDatasetLookupPreservesOptionalIdentityJoin(t *testing.T) {
+	dir := t.TempDir()
+	records := `[{"pubchem_cid":"5280754","inchi_key":"BSYNRYMUTXBXSQ-UHFFFAOYSA-N","source_doi":"10.1000/pubchemqc.fixture","license":"CC-BY-4.0","method":"B3LYP","basis_set":"6-31G*","homo_ev":-5.1,"lumo_ev":-2.1,"band_gap_ev":3.0,"computed":true}]`
+	writeSnapshotFixture(t, dir, "pubchemqc", records, 1)
+	dataset, err := LoadPubChemQCDataset(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := dataset.LookupCID(context.Background(), "5280754")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if response.Normalized["inchi_key"] != "BSYNRYMUTXBXSQ-UHFFFAOYSA-N" {
+		t.Fatalf("inchi_key was not preserved: %#v", response.Normalized)
+	}
+}
+
 func TestMaterialsCloudDatasetLookupProducesMetadataOnlyProviderResponse(t *testing.T) {
 	dataset, err := LoadMaterialsCloudDataset("../../data/lib/materials_cloud")
 	if err != nil {

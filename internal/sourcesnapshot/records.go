@@ -70,6 +70,7 @@ var (
 	)
 	pubchemqcAllowedFields = setOf(
 		"pubchem_cid",
+		"inchi_key",
 		"homo_ev",
 		"lumo_ev",
 		"band_gap_ev",
@@ -83,6 +84,27 @@ var (
 		"review_required",
 		"review_reasons",
 		"resolution_status",
+	)
+	pubchemqcClosureKnownFields = setOf(
+		"pubchem_cid",
+		"inchi_key",
+		"homo_ev",
+		"lumo_ev",
+		"band_gap_ev",
+		"method",
+		"basis_set",
+		"computed",
+		"source_doi",
+		"license",
+		"dataset_version",
+		"required_citation",
+	)
+	pubchemqcClosureDeferredFields = setOf(
+		"total_energy",
+		"dipole",
+		"geometry_ref",
+		"software",
+		"charge_state",
 	)
 	materialsCloudAllowedFields = setOf(
 		"archive_record_id",
@@ -373,23 +395,31 @@ func loadDatasetRecords(dir string, expectedSourceID string) (Manifest, []map[st
 	if err := manifest.CheckFiles(dir); err != nil {
 		return Manifest{}, nil, err
 	}
-	recordsPath, err := normalizedRecordsPath(dir, manifest)
+	records, err := LoadSnapshotRecords(dir, manifest)
 	if err != nil {
 		return Manifest{}, nil, err
+	}
+	return manifest, records, nil
+}
+
+func LoadSnapshotRecords(dir string, manifest Manifest) ([]map[string]any, error) {
+	recordsPath, err := normalizedRecordsPath(dir, manifest)
+	if err != nil {
+		return nil, err
 	}
 	records, err := readRecordArray(recordsPath)
 	if err != nil {
-		return Manifest{}, nil, err
+		return nil, err
 	}
 	if len(records) != manifest.NormalizedRecordCount {
-		return Manifest{}, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"normalized_record_count mismatch for %s: manifest=%d records=%d",
-			expectedSourceID,
+			manifest.SourceID,
 			manifest.NormalizedRecordCount,
 			len(records),
 		)
 	}
-	return manifest, records, nil
+	return records, nil
 }
 
 func normalizedRecordsPath(dir string, manifest Manifest) (string, error) {
@@ -610,6 +640,7 @@ func normalizePubChemQCRecord(record map[string]any, manifest Manifest) map[stri
 		"review_required":   true,
 		"review_reasons":    []string{"provider_quarantined"},
 	}
+	putOptionalString(normalized, record, "inchi_key")
 	for _, field := range []string{"homo_ev", "lumo_ev", "band_gap_ev"} {
 		putOptionalFloat(normalized, record, field)
 	}

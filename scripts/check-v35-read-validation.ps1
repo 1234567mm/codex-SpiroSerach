@@ -57,6 +57,63 @@ function Invoke-Spiroctl {
     Invoke-Go $Name (@('run', './cmd/spiroctl') + $Arguments)
 }
 
+function Convert-ToProcessArgument {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    if ($Value -notmatch '[\s"]') {
+        return $Value
+    }
+    $escaped = $Value -replace '(\\*)"', '$1$1\"'
+    $escaped = $escaped -replace '(\\+)$', '$1$1'
+    return '"' + $escaped + '"'
+}
+
+function Join-ProcessArguments {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+
+    return (($Arguments | ForEach-Object { Convert-ToProcessArgument $_ }) -join ' ')
+}
+
+function Invoke-SpiroctlExpectClosureBlocked {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$ExpectedReason
+    )
+
+    Write-Output "==> $Name"
+    $processStart = New-Object System.Diagnostics.ProcessStartInfo
+    $processStart.FileName = 'go'
+    $processStart.Arguments = Join-ProcessArguments (@('run', './cmd/spiroctl') + $Arguments)
+    $processStart.WorkingDirectory = (Get-Location).Path
+    $processStart.UseShellExecute = $false
+    $processStart.RedirectStandardOutput = $true
+    $processStart.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($processStart)
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
+    if ($exitCode -eq 0) {
+        throw "$Name was expected to fail but passed"
+    }
+    try {
+        $report = $stdout | ConvertFrom-Json
+    }
+    catch {
+        throw "$Name did not emit a JSON closure report on stdout. Stdout: $stdout Stderr: $stderr"
+    }
+    if ($report.schema_version -ne 'v35.source_closure_readiness.v1') {
+        throw "$Name emitted unexpected closure report schema_version: $($report.schema_version)"
+    }
+    if ($report.closure_gate_status -ne 'blocked' -or $report.ready -ne $false) {
+        throw "$Name did not emit a blocked closure report. Report: $stdout"
+    }
+    if (@($report.reasons) -notcontains $ExpectedReason) {
+        throw "$Name did not report expected reason '$ExpectedReason'. Report: $stdout Stderr: $stderr"
+    }
+}
+
 function Get-V35SourceSnapshotManifestPaths {
     param([Parameter(Mandatory = $true)][string]$Root)
 
@@ -125,6 +182,18 @@ foreach ($manifestPath in $snapshotManifestPaths) {
         $manifestPath
     )
 }
+
+Invoke-SpiroctlExpectClosureBlocked 'PubChemQC fixture closure readiness blocks production admission' @(
+    'source-closure',
+    'validate',
+    'data/lib/pubchemqc/source-manifest.json'
+) 'pubchemqc_python_oracle_missing'
+
+Invoke-SpiroctlExpectClosureBlocked 'Materials Cloud fixture closure readiness blocks scientific admission' @(
+    'source-closure',
+    'validate',
+    'data/lib/materials_cloud/source-manifest.json'
+) 'materials_cloud_metadata_only_records'
 
 Invoke-Spiroctl 'provider cache fixture validation' @(
     'provider-cache',

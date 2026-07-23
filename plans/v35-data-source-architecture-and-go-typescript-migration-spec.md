@@ -785,6 +785,46 @@ any local NOMAD-derived fixture:
 }
 ```
 
+`source-snapshot validate <source-manifest.json>` is the structural and
+integrity validator. It checks schema, safe relative paths, byte counts,
+SHA-256 hashes, normalized record counts, and known source record shape. It is
+not a production/scientific admission claim.
+
+`source-closure validate <source-manifest.json>` is the P3 production/scientific
+readiness gate. It emits a stable JSON report with
+`schema_version = "v35.source_closure_readiness.v1"`,
+`closure_gate_status = "pass" | "blocked"`, sorted `reasons`, and the source
+record count. Current fixture manifests are expected to pass
+`source-snapshot` and fail `source-closure`.
+
+Optional `closure_evidence` fields may be added to a manifest when a real
+snapshot is ready for closure review:
+
+- `schema_version = "v35.source_closure_evidence.v1"`
+- parser name and version
+- unit system
+- checksum policy, normally `sha256_all_manifest_files`
+- license review and citation review
+- Python oracle report path
+- parser parity report path
+- record parser report path
+- unit validation report path
+- record-specific license review for heterogeneous archive sources
+
+Closure rules:
+
+- `quarantine_status` must be `ready`; fixture versions are blocked.
+- Raw archive, normalized records, license, attribution, and validation summary
+  files must be listed and hash-checked.
+- PubChemQC requires parser parity, Python oracle comparison, explicit identity
+  join such as InChIKey, dataset version on records, method/basis, finite
+  HOMO/LUMO/gap values, citation/license, and no deferred scientific fields
+  such as geometry, total energy, dipole, charge state, or software until those
+  fields have parser parity.
+- Materials Cloud requires a record-specific parser report, unit validation,
+  record-specific license/citation review, per-file checksums, and non-metadata
+  scientific records before scientific facts can be admitted.
+
 ### SourceRecordEnvelope
 
 Every normalized record emitted by a provider or importer must carry:

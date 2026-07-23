@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `752a399`
+Latest implementation HEAD before this status update: `2896bf6`
 Date: 2026-07-24
 
 ## Goal
@@ -41,6 +41,7 @@ The current branch contains these V35 execution commits:
 | `588c9b9` | AtomReasonX readonly run recent directory selector | Adds a read-side recent readonly run output-dir selector for operator workflow, deduplicates and filters recent paths, rejects credential-shaped and executable-looking values, and keeps the setting free of command, token, localStorage, and sidecar executable-path state. |
 | `c9e34ab` | AtomReasonX sidecar release build policy | Adds a repository-owned PowerShell build path for the Go `spiroctl` Tauri sidecar, writes the Tauri-required `spiroctl-<target-triple>[.exe]` artifact plus checksum and manifest, smoke-tests the host artifact, ignores generated binaries, and extends packaging preflight with production artifact manifest/hash checks. |
 | `752a399` | AtomReasonX bundled spiroctl sidecar enablement | Enables Tauri `bundle.externalBin = ["binaries/spiroctl"]`, routes `tauri:build` through sidecar build and preflight first, adds Rust-side bundled sidecar path resolution without exposing a WebView executable-path surface or shell plugin, and commits a Tauri `Cargo.lock` for reproducible desktop packaging inputs. |
+| current slice | P3 source closure readiness gate | Adds `spiroctl source-closure validate <source-manifest>` with a stable JSON readiness report, separates fixture/integrity validation from production/scientific closure, and blocks current PubChemQC and Materials Cloud fixtures from being claimed as closure-ready. |
 
 ## Current Data Source Status
 
@@ -51,8 +52,8 @@ The current branch contains these V35 execution commits:
 | NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. | Keep archive fallback conservative; add live sync transport only behind explicit operator command. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
-| PubChemQC | Local snapshot foundation only; quarantined; `python_bridge_required=true`; records must be explicit computed facts. | Full dataset acquisition, parser parity, and storage policy before any non-fixture import. |
-| Materials Cloud | Manual archive metadata import only; metadata-only facts; closed field allowlist rejects unparsed scientific fields. | Record-specific parser, units, checksum, license, and citation validation before scientific facts. |
+| PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts. | Full dataset acquisition, parser parity, Python oracle report, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
+| Materials Cloud | Manual archive metadata import plus P3 closure-readiness gate; metadata-only facts; closed field allowlist rejects unparsed scientific fields. | Record-specific parser, units, checksum, license, citation, and non-metadata scientific record validation before scientific facts. |
 | NOMAD perovskite schema package | Schema/reference module; not a data mirror. | Optional deeper schema extraction only if it improves field alias coverage. |
 | Crossref/OpenAlex | Existing Python/provider plan surfaces; not part of current Go parity wave. | Future literature metadata Go parity after data-source P3 stabilizes. |
 | Custom HTL DFT | Project-generated calculation path; Python bridge retained. | Keep as science bridge until workflow/tooling parity exists. |
@@ -122,20 +123,28 @@ Recent gates run during this checkpoint:
 - `npm.cmd run tauri:build` proved the release script order by completing `sidecar:build`, `sidecar:check`, and frontend `beforeBuildCommand`; the installer build then failed at Rust compile because MSVC `link.exe` is not installed.
 - `cargo fmt --check` remains environment-blocked because `cargo-fmt.exe` is not installed for `stable-x86_64-pc-windows-msvc`.
 - `cargo test` remains environment-blocked by crates.io proxy access, and `cargo test --offline` reaches compilation but fails because MSVC `link.exe` is not on PATH.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed for the P3 source closure readiness gate, including blocked current PubChemQC and Materials Cloud fixtures plus a synthetic PubChemQC ready manifest.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed with JSON checks proving `source-snapshot validate` accepts current fixtures while `source-closure validate` blocks PubChemQC and Materials Cloud production/scientific closure claims.
 
 ## Remaining Work
 
 ### P3 Provider Closure
 
-1. PubChemQC full snapshot import remains open. Do not claim Go replacement
-   until dataset-size handling, parser parity, checksum, license/citation, and
-   Python oracle comparisons pass.
-2. Materials Cloud scientific import remains open. The current implementation
+1. The P3 closure-readiness gate is now machine-checkable, but real data
+   closure remains open. `source-snapshot validate` proves manifest and record
+   integrity; `source-closure validate` is the production/scientific admission
+   gate and currently blocks PubChemQC and Materials Cloud fixtures.
+2. PubChemQC full snapshot import remains open. Do not claim Go replacement
+   until dataset-size handling, parser parity, Python oracle comparison,
+   identity join, checksum, license/citation, and storage policy pass the
+   readiness gate. Deferred scientific fields such as geometry, total energy,
+   dipole, charge state, or software must fail closed until parser parity exists.
+3. Materials Cloud scientific import remains open. The current implementation
    is intentionally metadata-only; every unlisted field fails closed as
-   `parser_not_defined`.
-3. NOMAD PERLA live archive behavior remains conservative. Rate limit,
+   `parser_not_defined`, and metadata-only records fail `source-closure`.
+4. NOMAD PERLA live archive behavior remains conservative. Rate limit,
    archive-unavailable, and schema-unrecognized cases must stay review-routed.
-4. Crossref/OpenAlex and literature metadata Go parity are future slices, not
+5. Crossref/OpenAlex and literature metadata Go parity are future slices, not
    blockers for current data-source P3.
 
 ### P4 Transport And Packaging
@@ -167,10 +176,11 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Start P3 provider closure with PubChemQC full snapshot acquisition/import
-   policy or Materials Cloud record-specific import policy.
+1. Use the P3 closure gate on a real PubChemQC full snapshot acquisition/import
+   policy or a single Materials Cloud record-specific import policy.
 2. This requires real dataset paths, license/citation decisions, parser parity
-   fixtures, and Python oracle comparison before non-fixture facts are admitted.
+   fixtures, Python oracle comparison, and JSON closure reports before
+   non-fixture facts are admitted.
 3. Keep command transport, provider sync, scoring rebuild, cache writes,
    SQLite writes, and experiment writes out of the same slice.
 
