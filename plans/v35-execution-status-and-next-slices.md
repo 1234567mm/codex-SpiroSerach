@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `b01f0fd`
+Latest implementation HEAD before this status update: `a764b60`
 Date: 2026-07-24
 
 ## Goal
@@ -32,6 +32,7 @@ The current branch contains these V35 execution commits:
 | `5cf3680` | Go readonly run surface expansion | V11-shaped read-only envelopes for `scoring_view`, `review_summary`, and `provider_lineage`; CLI validation now covers six readonly surfaces and every manifest artifact. |
 | `338f508` | AtomReasonX Go readonly transport facade | TypeScript GET-only transport for V11 readonly run envelopes, with fail-closed envelope validation and no command-shaped methods. |
 | `b01f0fd` | Go readonly sidecar HTTP delivery | Loopback-only `spiroctl readonly-run serve <output-dir> [--addr <addr>]`, private startup JSON with `base_url`, `run_id`, and one-time readonly token, token-protected six-route GET surface, manifest run-id binding, unsafe segment rejection, write-shaped route rejection, no-side-effect guard, import guard, and TypeScript readonly token support. |
+| `a764b60` | AtomReasonX readonly sidecar launch bridge | Tauri launches the loopback Go sidecar through a fixed command shape, validates private startup JSON, keeps executable selection out of the WebView, passes the readonly token only into the GET transport, exposes process-id stop, tightens run-id mismatch handling, and limits CSP fetches to loopback. |
 
 ## Current Data Source Status
 
@@ -64,6 +65,13 @@ Recent gates run during this checkpoint:
 - `git diff --check` passed with LF-to-CRLF warnings only.
 - `scripts/check-agent-hygiene.ps1` passed.
 - `Test-Path uv.lock` was restored to `False` after Python gates generated a local lockfile.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 25 Vitest tests after the Tauri bridge slice.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the Tauri bridge slice.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed after the Tauri bridge slice.
+- `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_frontend tests.test_atomreasonx_contracts -v` passed outside sandbox with 40 tests after the Tauri bridge slice; sandboxed Python hit local uv trampoline/cache permissions.
+- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed outside sandbox with 926 tests and 9 skipped after the Tauri bridge slice; generated root `uv.lock` was removed again.
+- `git diff --cached --check` passed before committing the Tauri bridge slice.
+- Rust-native `rustfmt` and `cargo test` remain environment-blocked on this machine: `rustfmt.exe` is not installed for the stable MSVC toolchain, and MSVC `link.exe` is not on PATH.
 
 ## Remaining Work
 
@@ -82,13 +90,16 @@ Recent gates run during this checkpoint:
 
 ### P4 Transport And Packaging
 
-1. AtomReasonX/Tauri still needs the desktop launch bridge that starts
-   `spiroctl readonly-run serve`, captures the private startup JSON, passes
-   `base_url`, `run_id`, and `readonly_token` into the existing TypeScript
-   transport, and redacts the token from logs or diagnostics.
-2. Keep read transport side-effect free; command transport must remain separate
+1. AtomReasonX/Tauri still needs runtime bootstrap from an operator-selected
+   output directory into the workbench read adapter. The launch bridge exists,
+   but `main.tsx` remains fixture-first until the next slice converts readonly
+   envelopes into `AtomReasonXWorkspaceState` without command dispatch.
+2. Packaging still needs a production decision for bundling `spiroctl` as a
+   sidecar binary, preferably through Tauri external-bin or shell-plugin policy
+   after dependency and release ownership are explicit.
+3. Keep read transport side-effect free; command transport must remain separate
    and idempotent.
-3. Go must not become a second SQLite/provider-cache writer until schema
+4. Go must not become a second SQLite/provider-cache writer until schema
    ownership and write authorization are explicit.
 
 ### Scientific Bridge
@@ -105,14 +116,18 @@ Recent gates run during this checkpoint:
 
 Recommended next large stage:
 
-1. Implement the AtomReasonX/Tauri readonly sidecar launch/config bridge:
-   spawn the loopback Go sidecar, capture the startup JSON as private process
-   state, configure the existing TypeScript readonly transport, and prove no
-   command-shaped methods or provider credentials cross that read channel.
-2. Add a P1 regression closure that runs all Go read/validation foundations
+1. Implement the readonly-run envelope to AtomReasonX workbench state adapter:
+   convert `manifest`, `artifact_index`, `scoring_view`, `review_summary`, and
+   `provider_lineage` envelopes into the existing fixture-shaped
+   `AtomReasonXWorkspaceState` without inventing facts or exposing command
+   methods.
+2. Wire a guarded runtime bootstrap that can use the Tauri sidecar session when
+   an output directory is configured, while preserving fixture-first degraded
+   behavior for browser/static development.
+3. Add a P1 regression closure that runs all Go read/validation foundations
    together: source registry, source snapshots, provider cache/index, local
    backend read model, run artifacts, readonly API, and readonly sidecar.
-3. Keep command transport, provider sync, scoring rebuild, cache writes,
+4. Keep command transport, provider sync, scoring rebuild, cache writes,
    SQLite writes, and experiment writes out of the same slice.
 
 Alternative if prioritizing operator workflow:
