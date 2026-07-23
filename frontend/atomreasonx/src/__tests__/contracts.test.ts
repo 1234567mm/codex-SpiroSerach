@@ -16,6 +16,10 @@ import {
   type WorkbenchReadAdapter,
 } from "../adapters/workbench-read-adapter";
 import {
+  createHttpReadonlyRunTransport,
+  type ReadonlyRunEnvelope,
+} from "../adapters/go-readonly-run-transport";
+import {
   createLoadingWorkbenchWorkspaceState,
   loadWorkbenchWorkspace,
 } from "../stores/workspace-store";
@@ -68,6 +72,97 @@ describe("AtomReasonX contract fixtures", () => {
       status: "error",
       message: "read backend unavailable",
     });
+  });
+
+  it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {
+    const requestedPaths: string[] = [];
+    const envelope = (
+      surface: ReadonlyRunEnvelope["surface"],
+      artifactKind: string | null = null,
+    ): ReadonlyRunEnvelope => ({
+      schema_version: "v11.readonly_api.envelope.v1",
+      status: "available",
+      severity: "info",
+      surface,
+      read_only: true,
+      run_id: "run-1",
+      artifact_kind: artifactKind,
+      source: {
+        backend: "json_artifact_repository",
+        manifest_path: "run-manifest.json",
+      },
+      payload: {},
+      unavailable: null,
+    });
+    const envelopesByPath: Record<string, ReadonlyRunEnvelope> = {
+      "/runs/run-1/manifest": envelope("manifest"),
+      "/runs/run-1/artifacts": envelope("artifact_index"),
+      "/runs/run-1/artifacts/scoring_view": envelope("artifact_by_kind", "scoring_view"),
+      "/runs/run-1/scoring-view": envelope("scoring_view", "scoring_view"),
+      "/runs/run-1/review-summary": envelope("review_summary", "review_summary"),
+      "/runs/run-1/provider-lineage": envelope("provider_lineage"),
+    };
+    const transport = createHttpReadonlyRunTransport({
+      baseUrl: "http://127.0.0.1:47311",
+      runId: "run-1",
+      fetchJson: async (url) => {
+        const path = new URL(url).pathname;
+        requestedPaths.push(path);
+        const result = envelopesByPath[path];
+        if (!result) {
+          throw new Error(`unexpected path: ${path}`);
+        }
+        return result;
+      },
+    });
+
+    await expect(transport.read("manifest")).resolves.toMatchObject({ surface: "manifest" });
+    await expect(transport.read("artifact_index")).resolves.toMatchObject({ surface: "artifact_index" });
+    await expect(transport.read("artifact_by_kind", { artifactKind: "scoring_view" })).resolves.toMatchObject({
+      surface: "artifact_by_kind",
+      artifact_kind: "scoring_view",
+    });
+    await expect(transport.read("scoring_view")).resolves.toMatchObject({ surface: "scoring_view" });
+    await expect(transport.read("review_summary")).resolves.toMatchObject({ surface: "review_summary" });
+    await expect(transport.read("provider_lineage")).resolves.toMatchObject({ surface: "provider_lineage" });
+
+    expect(requestedPaths).toEqual([
+      "/runs/run-1/manifest",
+      "/runs/run-1/artifacts",
+      "/runs/run-1/artifacts/scoring_view",
+      "/runs/run-1/scoring-view",
+      "/runs/run-1/review-summary",
+      "/runs/run-1/provider-lineage",
+    ]);
+    expect("submit" in transport).toBe(false);
+    expect("execute" in transport).toBe(false);
+    expect("sync" in transport).toBe(false);
+  });
+
+  it("fails closed for malformed Go readonly envelopes and missing artifact kind", async () => {
+    const notReadOnly: ReadonlyRunEnvelope = {
+      schema_version: "v11.readonly_api.envelope.v1",
+      status: "available",
+      severity: "info",
+      surface: "manifest",
+      read_only: false,
+      run_id: "run-1",
+      artifact_kind: null,
+      source: {
+        backend: "json_artifact_repository",
+        manifest_path: "run-manifest.json",
+      },
+      payload: {},
+      unavailable: null,
+    };
+    const transport = createHttpReadonlyRunTransport({
+      baseUrl: "http://127.0.0.1:47311",
+      runId: "run-1",
+      fetchJson: async () => notReadOnly,
+    });
+
+    await expect(transport.read("manifest")).rejects.toThrow("readonly envelope read_only");
+    await expect(transport.read("artifact_by_kind")).rejects.toThrow("artifact_by_kind requires artifactKind");
   });
 
   it("keeps provider status and settings provider sets aligned", () => {
