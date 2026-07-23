@@ -5,9 +5,11 @@ import { SettingsModal } from "./components/SettingsModal";
 import { createLocalCommandAdapter, createWorkbenchCommandDispatcher } from "./adapters/command-adapter";
 import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import {
+  buildReadonlyRunRecentOutputDirs,
   buildReadonlyRunOperatorConfig,
   normalizeReadonlyRunOutputDir,
   resolveConfiguredReadonlyOutputDir,
+  resolveConfiguredReadonlyRecentOutputDirs,
 } from "./adapters/readonly-run-operator-config";
 import fixture from "./fixtures/atomreasonx-ui-fixture.json";
 import { useWorkbenchWorkspaceStore } from "./stores/workspace-store";
@@ -23,6 +25,9 @@ const AtomReasonXRoot: React.FC = () => {
   const [readonlyOutputDir, setReadonlyOutputDir] = React.useState<string | null>(
     () => resolveConfiguredReadonlyOutputDir(),
   );
+  const [readonlyRecentOutputDirs, setReadonlyRecentOutputDirs] = React.useState<string[]>(
+    () => resolveConfiguredReadonlyRecentOutputDirs(),
+  );
   const runtimeReadAdapter = React.useMemo(() => createRuntimeWorkbenchReadAdapter({
     baseWorkspace,
     readonlyOutputDir,
@@ -31,8 +36,16 @@ const AtomReasonXRoot: React.FC = () => {
     () => buildReadonlyRunOperatorConfig(readonlyOutputDir),
     [readonlyOutputDir],
   );
+  const readonlyRecentOutputDirEntries = React.useMemo(
+    () => buildReadonlyRunRecentOutputDirs(readonlyRecentOutputDirs, readonlyOutputDir),
+    [readonlyOutputDir, readonlyRecentOutputDirs],
+  );
   const applyReadonlyRunOutputDir = React.useCallback((nextOutputDir: string | null) => {
-    setReadonlyOutputDir(normalizeReadonlyRunOutputDir(nextOutputDir));
+    const normalized = normalizeReadonlyRunOutputDir(nextOutputDir);
+    setReadonlyOutputDir(normalized);
+    if (normalized) {
+      setReadonlyRecentOutputDirs(previous => [normalized, ...previous]);
+    }
   }, []);
   const workspaceState = useWorkbenchWorkspaceStore(runtimeReadAdapter.adapter);
 
@@ -52,6 +65,7 @@ const AtomReasonXRoot: React.FC = () => {
             categories={baseWorkspace.settings_categories}
             sourceSettings={baseWorkspace.source_settings}
             readonlyRunConfig={readonlyRunConfig}
+            readonlyRecentOutputDirs={readonlyRecentOutputDirEntries}
             onApplyReadonlyRunOutputDir={applyReadonlyRunOutputDir}
             onClose={() => setShowSettings(false)}
           />
@@ -74,6 +88,7 @@ const AtomReasonXRoot: React.FC = () => {
       onOpenSettings={() => setShowSettings(true)}
       onCloseSettings={() => setShowSettings(false)}
       readonlyRunConfig={readonlyRunConfig}
+      readonlyRecentOutputDirs={readonlyRecentOutputDirEntries}
       onApplyReadonlyRunOutputDir={applyReadonlyRunOutputDir}
       commandDispatcher={commandDispatcher}
     />

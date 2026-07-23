@@ -25,8 +25,10 @@ import {
   createRuntimeWorkbenchReadAdapter,
 } from "../adapters/readonly-run-workbench-adapter";
 import {
+  buildReadonlyRunRecentOutputDirs,
   buildReadonlyRunOperatorConfig,
   normalizeReadonlyRunOutputDir,
+  resolveConfiguredReadonlyRecentOutputDirs,
 } from "../adapters/readonly-run-operator-config";
 import {
   createTauriReadonlyRunSession,
@@ -369,9 +371,19 @@ describe("AtomReasonX contract fixtures", () => {
   it("models operator readonly run configuration as a read-side output directory only", () => {
     const readonlyConfig = buildReadonlyRunOperatorConfig("  D:\\runs\\readonly-v35  ");
     const fixtureConfig = buildReadonlyRunOperatorConfig("   ");
+    const recent = buildReadonlyRunRecentOutputDirs([
+      " D:\\runs\\readonly-v35 ",
+      "D:\\runs\\readonly-v35",
+      "",
+      "C:\\bin\\spiroctl.exe",
+      "readonly_token=secret",
+      "api_key=secret",
+    ], "D:\\runs\\active-run");
 
     expect(normalizeReadonlyRunOutputDir("  D:\\runs\\readonly-v35  ")).toBe("D:\\runs\\readonly-v35");
     expect(normalizeReadonlyRunOutputDir("   ")).toBeNull();
+    expect(normalizeReadonlyRunOutputDir("C:\\bin\\spiroctl.exe")).toBeNull();
+    expect(normalizeReadonlyRunOutputDir("readonly_token=secret")).toBeNull();
     expect(readonlyConfig).toEqual({
       mode: "readonly_run",
       outputDir: "D:\\runs\\readonly-v35",
@@ -382,9 +394,37 @@ describe("AtomReasonX contract fixtures", () => {
       outputDir: null,
       readOnly: false,
     });
+    expect(recent).toEqual([
+      { outputDir: "D:\\runs\\active-run", label: "active-run", source: "active" },
+      { outputDir: "D:\\runs\\readonly-v35", label: "readonly-v35", source: "recent" },
+    ]);
     expect(JSON.stringify(readonlyConfig)).not.toContain("api_key");
     expect(JSON.stringify(readonlyConfig)).not.toContain("readonly_token");
     expect(JSON.stringify(readonlyConfig)).not.toContain("spiroctl");
+    expect(JSON.stringify(recent)).not.toContain("api_key");
+    expect(JSON.stringify(recent)).not.toContain("readonly_token");
+    expect(JSON.stringify(recent)).not.toContain("spiroctl");
+  });
+
+  it("resolves recent readonly run directories without browser persistence or command paths", () => {
+    const previousRecent = (globalThis as {
+      __ATOMREASONX_READONLY_RECENT_OUTPUT_DIRS__?: unknown;
+    }).__ATOMREASONX_READONLY_RECENT_OUTPUT_DIRS__;
+    (globalThis as {
+      __ATOMREASONX_READONLY_RECENT_OUTPUT_DIRS__?: unknown;
+    }).__ATOMREASONX_READONLY_RECENT_OUTPUT_DIRS__ = [
+      "D:\\runs\\one",
+      "D:\\runs\\one",
+      "C:\\tools\\spiroctl.exe",
+      "readonly_token=secret",
+    ];
+    try {
+      expect(resolveConfiguredReadonlyRecentOutputDirs()).toEqual(["D:\\runs\\one"]);
+    } finally {
+      (globalThis as {
+        __ATOMREASONX_READONLY_RECENT_OUTPUT_DIRS__?: unknown;
+      }).__ATOMREASONX_READONLY_RECENT_OUTPUT_DIRS__ = previousRecent;
+    }
   });
 
   it("wires operator readonly run configuration through runtime read adapter state only", () => {
@@ -392,6 +432,8 @@ describe("AtomReasonX contract fixtures", () => {
 
     expect(mainSource).toContain("readonlyOutputDir");
     expect(mainSource).toContain("setReadonlyOutputDir");
+    expect(mainSource).toContain("readonlyRecentOutputDirs");
+    expect(mainSource).toContain("buildReadonlyRunRecentOutputDirs");
     expect(mainSource).toContain("createRuntimeWorkbenchReadAdapter");
     expect(mainSource).toContain("readonlyRunConfig");
     expect(mainSource).toContain("onApplyReadonlyRunOutputDir");
@@ -401,6 +443,21 @@ describe("AtomReasonX contract fixtures", () => {
     expect(mainSource).toContain("? undefined");
     expect(mainSource).not.toContain("spiroctlPath");
     expect(mainSource).not.toContain("localStorage");
+    expect(mainSource).not.toContain("readonly_token");
+  });
+
+  it("wires SettingsModal recent readonly run selection without command or picker side effects", () => {
+    const settingsSource = Object.entries(COMMAND_CONTROL_MODULES)
+      .find(([path]) => path.includes("SettingsModal"))?.[1] ?? "";
+
+    expect(settingsSource).toContain("readonlyRecentOutputDirs");
+    expect(settingsSource).toContain("Recent readonly run output directories");
+    expect(settingsSource).toContain("setReadonlyOutputDirDraft(event.currentTarget.value)");
+    expect(settingsSource).toContain("onApplyReadonlyRunOutputDir");
+    expect(settingsSource).not.toContain("showDirectoryPicker");
+    expect(settingsSource).not.toContain("open(");
+    expect(settingsSource).not.toContain("readonly_token");
+    expect(settingsSource).not.toContain("spiroctlPath");
   });
 
   it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {

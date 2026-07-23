@@ -2,6 +2,7 @@ import React from "react";
 import type { WorkbenchCommandDispatcher } from "../adapters/command-adapter";
 import {
   normalizeReadonlyRunOutputDir,
+  type ReadonlyRunRecentOutputDir,
   type ReadonlyRunOperatorConfig,
 } from "../adapters/readonly-run-operator-config";
 import type { AtomReasonXSourceSettingsState, SourceConfigStatusEntry } from "../contracts/types";
@@ -29,6 +30,7 @@ export const SettingsModal: React.FC<{
   categories: string[];
   sourceSettings?: AtomReasonXSourceSettingsState;
   readonlyRunConfig?: ReadonlyRunOperatorConfig;
+  readonlyRecentOutputDirs?: ReadonlyRunRecentOutputDir[];
   onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
   commandDispatcher?: WorkbenchCommandDispatcher;
   onClose?: () => void;
@@ -36,6 +38,7 @@ export const SettingsModal: React.FC<{
   categories,
   sourceSettings,
   readonlyRunConfig,
+  readonlyRecentOutputDirs = [],
   onApplyReadonlyRunOutputDir,
   commandDispatcher,
   onClose,
@@ -88,7 +91,7 @@ export const SettingsModal: React.FC<{
                   aria-label="Readonly run output directory"
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "minmax(140px, 0.8fr) minmax(220px, 1.4fr) 72px 72px",
+                    gridTemplateColumns: "minmax(140px, 0.8fr) minmax(220px, 1.3fr) minmax(160px, 0.9fr) 72px 72px",
                     gap: "8px",
                     alignItems: "center",
                     padding: "8px",
@@ -111,6 +114,24 @@ export const SettingsModal: React.FC<{
                     onChange={(event) => setReadonlyOutputDirDraft(event.currentTarget.value)}
                     style={{ minWidth: 0, width: "100%" }}
                   />
+                  <select
+                    aria-label="Recent readonly run output directories"
+                    value=""
+                    disabled={!canConfigureReadonlyRun || readonlyRecentOutputDirs.length === 0}
+                    onChange={(event) => {
+                      if (event.currentTarget.value) {
+                        setReadonlyOutputDirDraft(event.currentTarget.value);
+                      }
+                    }}
+                    style={{ minWidth: 0, width: "100%" }}
+                  >
+                    <option value="">Recent</option>
+                    {readonlyRecentOutputDirs.map(item => (
+                      <option key={`${item.source}:${item.outputDir}`} value={item.outputDir}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     disabled={!canConfigureReadonlyRun || !readonlyOutputDirChanged}
