@@ -144,7 +144,7 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertEqual(nomad_schema.data_library_path, "data/lib/nomad_perovskite_schema")
 
         nomad_psc = registry.get("nomad_perla_psc")
-        self.assertEqual(nomad_psc.go_migration_state, "python_oracle_p0")
+        self.assertEqual(nomad_psc.go_migration_state, "go_shadow_ready")
         self.assertTrue(nomad_psc.python_bridge_required)
         self.assertIn("missing_htl_stack", nomad_psc.review_triggers)
         self.assertIn("archive_schema_unrecognized", nomad_psc.review_triggers)

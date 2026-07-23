@@ -530,7 +530,7 @@
       "unit_conversion_uncertain",
       "license_scope_unknown"
     ],
-    "go_migration_state": "python_oracle_p0",
+    "go_migration_state": "go_shadow_ready",
     "python_bridge_required": true,
     "typescript_surface": "source_coverage_settings_and_commands",
     "disambiguation_required": true,
@@ -544,12 +544,12 @@
       "direct",
       "enrichment"
     ],
-    "last_verified_at": "2026-07-19",
+    "last_verified_at": "2026-07-23",
     "data_library_path": "data/lib/nomad_perla_psc",
     "v35_slice": "p0_live_provider",
     "acquisition_mode": "api_sync",
     "distribution_policy": "derived_facts_with_source_pointers",
-    "probe_notes": "Metadata queries verified (40 entries, 4 HTLs). Archive endpoint has rate-limiting issues. hole_transport_layer is list type; efficiency in percent; device_stack is list."
+    "probe_notes": "Metadata queries verified (40 entries, 4 HTLs). Go shadow query/archive client has Python oracle parity for search body, archive required tree, V35 fallback, review markers, and search-only archive degradation. Archive endpoint has rate-limiting issues. hole_transport_layer is list type; efficiency in percent; device_stack is list."
   },
   {
     "schema_version": "v35.data_source_profile.v1",

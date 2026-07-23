@@ -50,9 +50,14 @@ class SourceCoverageMatrixTests(unittest.TestCase):
         matrix = build_htl_source_coverage_matrix(SOURCE_REGISTRY)
         nomad = {row["provider_id"]: row for row in matrix["sources"]}["nomad_perla_psc"]
         self.assertIn("pce_percent", nomad["expected_fields"])
+        self.assertIn("archive_required_tree_hash", nomad["expected_fields"])
+        self.assertIn("match_type", nomad["expected_fields"])
+        self.assertIn("devices", nomad["expected_fields"])
         self.assertIn("source_url", nomad["provenance_fields"])
         self.assertIn("archive_unavailable", nomad["review_blockers"])
-        self.assertEqual(nomad["blocking_review_count"], 6)
+        self.assertIn("archive_rate_limited", nomad["review_blockers"])
+        self.assertIn("archive_schema_unrecognized", nomad["review_blockers"])
+        self.assertEqual(nomad["blocking_review_count"], 8)
         pubchem = {row["provider_id"]: row for row in matrix["sources"]}["pubchem"]
         self.assertIn("inchi", pubchem["expected_fields"])
         self.assertIn("source_attribution", pubchem["expected_fields"])

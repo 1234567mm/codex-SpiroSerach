@@ -184,6 +184,36 @@ describe("AtomReasonX contract fixtures", () => {
     expect(materialsProjectSettings?.key_fingerprint).toBeNull();
   });
 
+  it("keeps NOMAD PERLA PSC source coverage aligned with P6 Go shadow query/archive parity", () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const nomad = workspace.source_coverage.sources.find(source => source.provider_id === "nomad_perla_psc");
+    const nomadProfile = workspace.source_profiles.profiles.find(profile => profile.provider_id === "nomad_perla_psc");
+
+    expect(nomad?.expected_fields).toEqual(expect.arrayContaining([
+      "upload_id",
+      "device_architecture",
+      "chemical_formula",
+      "query_hash",
+      "archive_required_tree_hash",
+      "review_required",
+      "review_reasons",
+      "match_type",
+      "device_count",
+      "devices",
+    ]));
+    expect(nomad?.review_blockers).toEqual(expect.arrayContaining([
+      "missing_source_doi",
+      "missing_device_stack",
+      "missing_htl_stack",
+      "missing_core_metrics",
+      "archive_rate_limited",
+      "archive_schema_unrecognized",
+    ]));
+    expect(nomadProfile?.go_migration_state).toBe("go_shadow_ready");
+    expect(nomadProfile?.python_bridge_required).toBe(true);
+    expect(nomadProfile?.operational_status).toBe("experimental");
+  });
+
   it("gates workflow commands that require form input", async () => {
     const workspace = fixture as unknown as AtomReasonXWorkspaceState;
     const action = workspace.command_actions.find(item => item.action_type === "import_materials_cloud_archive_record");

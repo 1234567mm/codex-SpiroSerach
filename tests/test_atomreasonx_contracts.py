@@ -109,6 +109,32 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertEqual(profiles["materials_project"]["requires_api_key"], True)
         self.assertEqual(profiles["materials_project"]["api_key_env"], "MATERIALS_PROJECT_API_KEY")
         self.assertEqual(profiles["materials_project"]["go_migration_state"], "go_shadow_ready")
+        self.assertEqual(profiles["nomad_perla_psc"]["go_migration_state"], "go_shadow_ready")
+        self.assertTrue(profiles["nomad_perla_psc"]["python_bridge_required"])
+        self.assertTrue(
+            {
+                "upload_id",
+                "device_architecture",
+                "chemical_formula",
+                "query_hash",
+                "archive_required_tree_hash",
+                "review_required",
+                "review_reasons",
+                "match_type",
+                "device_count",
+                "devices",
+            }.issubset(set(coverage["nomad_perla_psc"]["expected_fields"]))
+        )
+        self.assertTrue(
+            {
+                "missing_source_doi",
+                "missing_device_stack",
+                "missing_htl_stack",
+                "missing_core_metrics",
+                "archive_rate_limited",
+                "archive_schema_unrecognized",
+            }.issubset(set(coverage["nomad_perla_psc"]["review_blockers"]))
+        )
         self.assertTrue(
             {
                 "resolution_status",

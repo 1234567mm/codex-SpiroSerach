@@ -71,8 +71,8 @@ func TestLoadRepositoryRegistry(t *testing.T) {
 	if !contains(nomad.ReviewTriggers, "archive_schema_unrecognized") {
 		t.Fatalf("nomad_perla_psc missing archive_schema_unrecognized trigger")
 	}
-	if !nomad.PythonBridgeRequired || nomad.GoMigrationState != "python_oracle_p0" {
-		t.Fatalf("nomad_perla_psc must remain Python oracle in P0")
+	if !nomad.PythonBridgeRequired || nomad.GoMigrationState != "go_shadow_ready" {
+		t.Fatalf("nomad_perla_psc should be Go shadow ready while retaining the Python bridge")
 	}
 
 	materialsCloud := index["materials_cloud"]
