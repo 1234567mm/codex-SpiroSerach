@@ -17,6 +17,7 @@ from referencing import Registry, Resource
 from spirosearch.artifact_validation import validate_artifact_run
 from spirosearch.cli import _main_enrich
 from spirosearch.enrichment_runtime import LiveProviderSource, run_enrichment
+from spirosearch.local_config import FileSecretStore, LocalConfigStore
 from spirosearch.providers.base import ProviderResponse
 from spirosearch.providers.cache import JSONLProviderCache
 from spirosearch.readonly_api import ReadOnlyRunAPI
@@ -159,9 +160,11 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                     "crossref",
                     "custom_htl_dft",
                     "hopv15",
+                    "materials_cloud",
                     "materials_project",
                     "nomad",
                     "nomad_perla_psc",
+                    "nomad_perovskite_schema",
                     "openalex",
                     "opv_db",
                     "pubchem",
@@ -1545,7 +1548,53 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertIn("provider_api_key_missing", review_text)
             self.assertIn("MATERIALS_PROJECT_API_KEY", review_text)
 
-    def test_live_cache_first_pubchemqc_completes_missing_energy_levels(self):
+    def test_cli_enrich_passes_local_config_store_for_materials_project_key(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_path = root / "candidates.json"
+            output_dir = root / "enrich"
+            config_path = root / "local-config.json"
+            secrets_path = root / "secrets.env"
+            candidates_path.write_text(json.dumps([candidate_record()]), encoding="utf-8")
+            store = LocalConfigStore(
+                config_path=config_path,
+                secret_store=FileSecretStore(secrets_path),
+            )
+            store.set_api_key("materials_project", "mp-local-cli-secret")
+            observed = {}
+
+            def fake_run_enrichment(**kwargs):
+                observed.update(kwargs)
+                return {"run_id": "fixture-run", "candidate_count": 1}
+
+            with patch("spirosearch.cli.run_enrichment", side_effect=fake_run_enrichment):
+                exit_code = _main_enrich(
+                    [
+                        "--candidates",
+                        str(candidates_path),
+                        "--output-dir",
+                        str(output_dir),
+                        "--source-registry",
+                        "data/source_registry.json",
+                        "--mode",
+                        "live-cache-first",
+                        "--providers",
+                        "materials_project",
+                        "--local-config",
+                        str(config_path),
+                        "--secrets-file",
+                        str(secrets_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertIsNotNone(observed["config_store"])
+            self.assertEqual(
+                observed["config_store"].get_api_key("materials_project"),
+                "mp-local-cli-secret",
+            )
+
+    def test_live_cache_first_pubchemqc_routes_to_snapshot_required_review(self):
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             candidates_path = root / "candidates.json"
@@ -1565,36 +1614,21 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch(
-                "spirosearch.providers.electronic._urllib_json_transport",
-                return_value={
-                    "results": [
-                        {
-                            "cid": 2244,
-                            "homo": -5.42,
-                            "lumo": -2.18,
-                            "gap": 3.24,
-                            "method": "B3LYP",
-                            "basis_set": "6-31G*",
-                        }
-                    ]
-                },
-            ):
-                run_enrichment(
-                    candidates_path=candidates_path,
-                    output_dir=output_dir,
-                    source_registry_path="data/source_registry.json",
-                    live=True,
-                    providers=["pubchemqc"],
-                )
+            run_enrichment(
+                candidates_path=candidates_path,
+                output_dir=output_dir,
+                source_registry_path="data/source_registry.json",
+                live=True,
+                providers=["pubchemqc"],
+            )
 
             results = json.loads((output_dir / "enrichment-results.json").read_text(encoding="utf-8"))
+            review_text = (output_dir / "review-queue.jsonl").read_text(encoding="utf-8")
             record = results["records"][0]
-            self.assertEqual(record["facts"]["homo_ev"], -5.42)
-            self.assertEqual(record["facts"]["lumo_ev"], -2.18)
-            self.assertEqual(record["facts"]["band_gap_ev"], 3.24)
-            self.assertEqual(record["trust"]["homo_ev"], "T2_computed_db")
-            self.assertEqual(record["status"], "complete")
+            self.assertNotIn("homo_ev", record["facts"])
+            self.assertNotIn("lumo_ev", record["facts"])
+            self.assertIn("provider_quarantined_snapshot_required", review_text)
+            self.assertIn("pubchemqc", review_text)
 
     def test_artifacts_do_not_leak_secret_shapes_or_absolute_paths(self):
         with TemporaryDirectory() as temp_dir:

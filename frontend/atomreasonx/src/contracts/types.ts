@@ -65,6 +65,27 @@ export interface ProviderConfigStatusEntry {
   workspace_id: string | null;
 }
 
+export type ConfigProviderScope = "model" | "source";
+
+export interface SourceConfigStatusEntry {
+  provider_id: string;
+  provider_scope: "source";
+  provider_kind: string;
+  status: "active" | "experimental" | "quarantined" | "disabled";
+  v35_slice: string;
+  acquisition_mode: string;
+  distribution_policy: string;
+  requires_api_key: boolean;
+  key_requirement: "none" | "optional" | "required";
+  api_key_env: string | null;
+  has_api_key: boolean;
+  key_fingerprint: string | null;
+  validation_state: "missing" | "configured" | "validation_failed" | "validated";
+  data_library_path: string | null;
+  execution_modes: string[];
+  capabilities: string[];
+}
+
 export interface AtomReasonXProviderStatus {
   schema_version: string;
   producer_version: string;
@@ -78,13 +99,22 @@ export interface AtomReasonXSettingsState {
   providers: ProviderConfigStatusEntry[];
 }
 
+export interface AtomReasonXSourceSettingsState {
+  schema_version: string;
+  producer_version: string;
+  config_version: number;
+  sources: SourceConfigStatusEntry[];
+}
+
 export interface AtomReasonXCommandEffectArtifact {
   kind: "config_command_effect";
   schema_version: string;
   action_type: string;
   provider: string | null;
+  provider_scope: "model" | "source";
   changed_fields: string[];
   validation_state: string;
+  validation_mode?: "configuration_only" | "live_probe";
   config_version: number;
 }
 
@@ -170,6 +200,9 @@ export interface HtlWorkbenchCommandAction {
   label: string;
   declared_effects: string[];
   enabled: boolean;
+  provider_scope?: ConfigProviderScope;
+  provider?: string;
+  input_fields?: string[];
 }
 
 export interface AtomReasonXWorkspaceState {
@@ -185,6 +218,7 @@ export interface AtomReasonXWorkspaceState {
   telemetry: AtomReasonXTelemetryState;
   provider_status: AtomReasonXProviderStatus;
   settings: AtomReasonXSettingsState;
+  source_settings: AtomReasonXSourceSettingsState;
   source_coverage: HtlSourceCoverageMatrix;
   sync_jobs: HtlSyncJobSummary[];
   workflow: HtlWorkflowPreview;

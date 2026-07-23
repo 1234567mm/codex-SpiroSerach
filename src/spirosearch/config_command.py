@@ -27,6 +27,7 @@ from spirosearch.model_provider_registry import (
 )
 from spirosearch.model_providers import ModelAdapter, FakeTransport
 from spirosearch.orchestrator_contracts import stable_hash
+from spirosearch.source_registry import ApiKeyManager, SourceRegistry
 from spirosearch.v23_command import (
     ActionRequest,
     ActionResult,
@@ -48,6 +49,7 @@ class ConfigCommandPlane:
 
     config_store: LocalConfigStore
     registry: ModelProviderRegistry
+    source_registry: SourceRegistry | None = None
     evaluator: CommandPreconditionEvaluator | None = None
 
     def _ensure_evaluator(self) -> CommandPreconditionEvaluator:
@@ -77,19 +79,28 @@ class ConfigCommandPlane:
         request: ActionRequest,
         changed_fields: list[str],
         validation_state: str,
+        provider_scope: str | None = None,
+        validation_mode: str | None = None,
     ) -> ActionResult:
         if result.status != "accepted":
             return result
         provider = request.payload.get("provider")
+        if provider_scope is None and provider is not None:
+            provider_scope = self._provider_scope(str(provider))
+        if provider_scope is None:
+            provider_scope = "model"
         effect = {
             "kind": "config_command_effect",
             "schema_version": CONFIG_COMMAND_SCHEMA_VERSION,
             "action_type": request.action_type,
             "provider": str(provider) if provider is not None else None,
+            "provider_scope": provider_scope,
             "changed_fields": list(changed_fields),
             "validation_state": validation_state,
             "config_version": self.config_store.config_version,
         }
+        if validation_mode is not None:
+            effect["validation_mode"] = validation_mode
         return ActionResult(
             request_id=result.request_id,
             action_type=result.action_type,
@@ -117,12 +128,80 @@ class ConfigCommandPlane:
                 f"unknown model provider: {provider}",
             )
 
+    def _provider_scope(self, provider: str) -> str | None:
+        try:
+            self.registry.get(provider)
+            return "model"
+        except KeyError:
+            pass
+        if self.source_registry is not None:
+            try:
+                self.source_registry.get(provider)
+                return "source"
+            except KeyError:
+                pass
+        return None
+
+    def _get_key_provider_or_reject(
+        self,
+        request: ActionRequest,
+        provider: str,
+    ) -> dict[str, Any] | tuple[ActionResult, dict[str, Any]]:
+        if not provider:
+            return self._reject(request, "invalid_payload", "provider is required")
+        declared_scope = request.payload.get("provider_scope")
+        if declared_scope is not None:
+            provider_scope = str(declared_scope)
+            if provider_scope not in {"model", "source"}:
+                return self._reject(
+                    request,
+                    "invalid_provider_scope",
+                    "provider_scope must be model or source",
+                )
+            if provider_scope == "model":
+                try:
+                    return {"entry": self.registry.get(provider), "provider_scope": "model"}
+                except KeyError:
+                    return self._reject(
+                        request,
+                        "provider_scope_mismatch",
+                        f"provider is not configured as a model provider: {provider}",
+                    )
+            if self.source_registry is None:
+                return self._reject(
+                    request,
+                    "provider_scope_mismatch",
+                    "source provider registry is not configured",
+                )
+            try:
+                return {"entry": self.source_registry.get(provider), "provider_scope": "source"}
+            except KeyError:
+                return self._reject(
+                    request,
+                    "provider_scope_mismatch",
+                    f"provider is not configured as a source provider: {provider}",
+                )
+        try:
+            return {"entry": self.registry.get(provider), "provider_scope": "model"}
+        except KeyError:
+            pass
+        if self.source_registry is not None:
+            try:
+                return {"entry": self.source_registry.get(provider), "provider_scope": "source"}
+            except KeyError:
+                pass
+        return self._reject(
+            request,
+            "unknown_provider",
+            f"unknown provider: {provider}",
+        )
+
     def _mutation_replay(
         self,
         evaluator: CommandPreconditionEvaluator,
         request: ActionRequest,
     ) -> tuple[ActionResult, dict[str, Any]] | None:
-        if request.action_type not in ("config_write", "key_rotate"):
+        if request.action_type not in ("config_write", "key_rotate", "key_remove"):
             return None
         request_hash = stable_hash(request.to_dict(include_request_id=False))
         existing = evaluator.idempotency_records.get(request.idempotency_key)
@@ -191,50 +270,65 @@ class ConfigCommandPlane:
                 return self._reject(request, "invalid_payload", "provider is required")
             if not isinstance(new_key, str) or not new_key.strip():
                 return self._reject(request, "invalid_payload", "api_key is required")
-            provider_entry = self._get_provider_or_reject(request, provider)
-            if isinstance(provider_entry, tuple):
-                return provider_entry
+            resolved = self._get_key_provider_or_reject(request, provider)
+            if isinstance(resolved, tuple):
+                return resolved
+            provider_scope = str(resolved["provider_scope"])
             self.config_store.set_api_key(provider, new_key)
+            changed_fields = ["api_key"]
+
+        elif request.action_type == "key_remove":
+            provider = str(request.payload.get("provider", ""))
+            if not provider:
+                return self._reject(request, "invalid_payload", "provider is required")
+            resolved = self._get_key_provider_or_reject(request, provider)
+            if isinstance(resolved, tuple):
+                return resolved
+            provider_scope = str(resolved["provider_scope"])
+            self.config_store.remove_api_key(provider)
             changed_fields = ["api_key"]
 
         elif request.action_type == "test_connection":
             provider = str(request.payload.get("provider", ""))
-            # Use fake transport — never live network in tests
-            provider_entry = self._get_provider_or_reject(request, provider)
-            if isinstance(provider_entry, tuple):
-                return provider_entry
-            cfg = self.config_store.get_provider_config(provider)
-            missing = missing_provider_config_fields(
-                provider_entry,
-                cfg,
-                has_api_key=bool(self.config_store.get_api_key(provider)),
-                require_enabled=False,
-            )
-            if missing:
-                validation_state = "validation_failed"
-                changed_fields = []
-                result = self._with_config_effect(result, request, changed_fields, validation_state)
-                request_hash = stable_hash(request.to_dict(include_request_id=False))
-                evaluator.idempotency_records[request.idempotency_key] = IdempotencyRecord(
-                    request_hash,
-                    result,
+            resolved = self._get_key_provider_or_reject(request, provider)
+            if isinstance(resolved, tuple):
+                return resolved
+            provider_entry = resolved["entry"]
+            provider_scope = str(resolved["provider_scope"])
+            if provider_scope == "source":
+                api_keys = ApiKeyManager(self.source_registry, config_store=self.config_store)
+                if provider_entry.requires_api_key and not api_keys.optional_key(provider):
+                    validation_state = "validation_failed"
+                elif provider_entry.operational_status in {"disabled", "quarantined"}:
+                    validation_state = "validation_failed"
+                else:
+                    validation_state = "configured"
+            else:
+                # Use fake transport - never live network in tests
+                cfg = self.config_store.get_provider_config(provider)
+                missing = missing_provider_config_fields(
+                    provider_entry,
+                    cfg,
+                    has_api_key=bool(self.config_store.get_api_key(provider)),
+                    require_enabled=False,
                 )
-                audit = self._build_audit_fields(request, changed_fields, validation_state)
-                return result, audit
-            transport = FakeTransport()
-            adapter = ModelAdapter(
-                registry=self.registry,
-                config=self.config_store,
-                transport=transport,
-            )
-            try:
-                adapter.chat_completion(
-                    provider=provider,
-                    messages=[{"role": "user", "content": "test"}],
-                )
-                validation_state = "validated"
-            except Exception:
-                validation_state = "validation_failed"
+                if missing:
+                    validation_state = "validation_failed"
+                else:
+                    transport = FakeTransport()
+                    adapter = ModelAdapter(
+                        registry=self.registry,
+                        config=self.config_store,
+                        transport=transport,
+                    )
+                    try:
+                        adapter.chat_completion(
+                            provider=provider,
+                            messages=[{"role": "user", "content": "test"}],
+                        )
+                        validation_state = "validated"
+                    except Exception:
+                        validation_state = "validation_failed"
             changed_fields = []
 
         elif request.action_type == "model_list_refresh":
@@ -249,7 +343,19 @@ class ConfigCommandPlane:
         else:
             return self._reject(request, "unknown_action", f"unknown action_type: {request.action_type}")
 
-        result = self._with_config_effect(result, request, changed_fields, validation_state)
+        result = self._with_config_effect(
+            result,
+            request,
+            changed_fields,
+            validation_state,
+            locals().get("provider_scope"),
+            validation_mode=(
+                "configuration_only"
+                if request.action_type == "test_connection"
+                and locals().get("provider_scope") == "source"
+                else None
+            ),
+        )
         request_hash = stable_hash(request.to_dict(include_request_id=False))
         evaluator.idempotency_records[request.idempotency_key] = IdempotencyRecord(
             request_hash,

@@ -19,6 +19,7 @@ from spirosearch.contracts import (
     EXIT_VALIDATION_ERROR,
 )
 from spirosearch.enrichment_runtime import run_enrichment
+from spirosearch.local_config import FileSecretStore, LocalConfigStore
 from spirosearch.paper_ingest import run_paper_ingest
 from spirosearch.pipeline import load_candidates, run_screening, write_report, write_report_directory
 from spirosearch.public_device_baseline import build_public_device_snapshot
@@ -172,10 +173,19 @@ def _main_enrich(argv: list[str]) -> int:
         "--review-events",
         help="Optional review events JSONL fixture path.",
     )
+    parser.add_argument(
+        "--local-config",
+        help="Optional local config JSON path. Defaults to .spirosearch/local-config.json when present.",
+    )
+    parser.add_argument(
+        "--secrets-file",
+        help="Optional local secrets env-file path. Defaults to .spirosearch/secrets.env when present.",
+    )
     args = parser.parse_args(argv)
 
     try:
         selected_providers = [item.strip() for item in args.providers.split(",") if item.strip()]
+        config_store = _local_config_store_for_cli(args.local_config, args.secrets_file)
         manifest = run_enrichment(
             candidates_path=args.candidates,
             output_dir=args.output_dir,
@@ -183,6 +193,7 @@ def _main_enrich(argv: list[str]) -> int:
             provider_cache_path=args.provider_cache,
             live=args.mode == "live-cache-first",
             providers=selected_providers,
+            config_store=config_store,
             review_events_path=args.review_events,
         )
         display_mode = args.mode if args.mode == "live-cache-first" else "local-first"
@@ -202,6 +213,23 @@ def _main_enrich(argv: list[str]) -> int:
     except Exception:
         print("internal error", file=sys.stderr)
         return EXIT_INTERNAL_ERROR
+
+
+def _local_config_store_for_cli(
+    config_path: str | None,
+    secrets_path: str | None,
+) -> LocalConfigStore | None:
+    default_config = Path(".spirosearch/local-config.json")
+    default_secrets = Path(".spirosearch/secrets.env")
+    resolved_config = Path(config_path) if config_path else default_config
+    resolved_secrets = Path(secrets_path) if secrets_path else default_secrets
+    explicit = config_path is not None or secrets_path is not None
+    if not explicit and not (resolved_config.exists() or resolved_secrets.exists()):
+        return None
+    return LocalConfigStore(
+        config_path=resolved_config,
+        secret_store=FileSecretStore(resolved_secrets),
+    )
 
 
 def _main_validate_artifacts(argv: list[str]) -> int:

@@ -1,4 +1,4 @@
-"""NOMAD HTL Sync Job — C2 of the V33C workbench spec.
+"""NOMAD HTL Sync Job - C2 of the V33C workbench spec.
 
 Resumable, idempotent sync that pages through NOMAD PERLA PSC entries,
 caches raw provider snapshots, normalizes HTL device records, optionally
@@ -13,12 +13,18 @@ import datetime as _dt
 import hashlib
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from spirosearch.local_backend import LocalBackendDatabase, ObjectStore
 from spirosearch.providers.nomad_perla_psc import (
     JSONPostTransport,
     _apply_review_markers,
+    _archive_entry_status,
+    _archive_required_tree,
+    _archive_required_tree_hash,
+    _archive_status_from_exception,
+    _build_htl_search_body,
     _expand_htl_synonyms,
     _normalize_psc_device,
     _query_hash,
@@ -54,6 +60,8 @@ class NomadSyncConfig:
     max_records: int = 1000
     fetch_archive: bool = True
     rate_limit_seconds: float = 1.0
+    device_architectures: tuple[str, ...] = ("nip",)
+    data_library_root: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -64,6 +72,8 @@ class NomadSyncConfig:
             "max_records": self.max_records,
             "fetch_archive": self.fetch_archive,
             "rate_limit_seconds": self.rate_limit_seconds,
+            "device_architectures": list(self.device_architectures),
+            "data_library_root": self.data_library_root,
         }
 
 
@@ -155,18 +165,22 @@ class ProviderSnapshotStore:
         entry_id: str,
         payload: Mapping[str, Any],
         source_url: str,
+        archive_required_tree_hash: str | None = None,
         retrieved_at: str | None = None,
     ) -> str:
         """Persist a raw archive response. Returns snapshot_id."""
         now = retrieved_at or _utc_now()
-        key = hashlib.sha256(entry_id.encode("utf-8")).hexdigest()[:12]
+        qhash = _archive_query_hash(
+            entry_id,
+            archive_required_tree_hash or _archive_required_tree_hash(),
+        )
+        key = qhash[:12]
         rel_path, raw_sha = self._object_store.write_json(
             "nomad_perla_psc",
             f"archive_{key}",
             dict(payload),
             retrieved_at=now,
         )
-        qhash = hashlib.sha256(entry_id.encode("utf-8")).hexdigest()
         snapshot_id = self._db.snapshots.save_snapshot(
             provider="nomad_perla_psc_archive",
             query_hash=qhash,
@@ -191,7 +205,7 @@ class NomadArchiveCache:
 
     def get(self, entry_id: str) -> str | None:
         """Return snapshot_id if archive for entry_id is cached, else None."""
-        qhash = hashlib.sha256(entry_id.encode("utf-8")).hexdigest()
+        qhash = _archive_query_hash(entry_id, _archive_required_tree_hash())
         existing = self._db.snapshots.find_by_query_hash("nomad_perla_psc_archive", qhash)
         return existing["snapshot_id"] if existing else None
 
@@ -201,12 +215,14 @@ class NomadArchiveCache:
         entry_id: str,
         payload: Mapping[str, Any],
         source_url: str,
+        archive_required_tree_hash: str | None = None,
         retrieved_at: str | None = None,
     ) -> str:
         return ProviderSnapshotStore(self._db).save_archive_snapshot(
             entry_id=entry_id,
             payload=payload,
             source_url=source_url,
+            archive_required_tree_hash=archive_required_tree_hash,
             retrieved_at=retrieved_at,
         )
 
@@ -262,7 +278,7 @@ class ProviderFieldCoverageAudit:
             1 for d in devices if d.get("archive_status") in {"unavailable", "empty"}
         )
         ambiguous_htl = sum(
-            1 for d in devices if d.get("htl_match_missing_or_ambiguous", False)
+            1 for d in devices if d.get("ambiguous_htl_match", False)
         )
         return {
             "total": total,
@@ -346,6 +362,7 @@ class NomadHtlSyncJob:
         total_devices = 0
         total_review_items = 0
         all_devices: list[dict[str, Any]] = []
+        snapshot_ids: list[str] = []
 
         for htl_name in config.htl_names:
             htl_page = 0
@@ -357,17 +374,12 @@ class NomadHtlSyncJob:
                     break
 
                 # Build query
-                search_terms = _expand_htl_synonyms(htl_name)
-                search_body: dict[str, Any] = {
-                    "owner": "public",
-                    "query": {
-                        "sections:all": ["nomad.datamodel.results.SolarCell"],
-                        "results.properties.optoelectronic.solar_cell.hole_transport_layer:any": search_terms,
-                    },
-                    "pagination": {"page_size": config.page_size},
-                }
-                if htl_after:
-                    search_body["pagination"]["page_after_value"] = htl_after
+                search_body = _build_htl_search_body(
+                    htl_name,
+                    page_size=config.page_size,
+                    page_after_value=htl_after,
+                    device_architectures=config.device_architectures,
+                )
 
                 # Fetch
                 source_url = f"{config.base_url}/entries/query"
@@ -398,6 +410,7 @@ class NomadHtlSyncJob:
                     payload=payload,
                     source_url=source_url,
                 )
+                snapshot_ids.append(snapshot_id)
                 total_snapshots += 1
 
                 # Extract entries
@@ -415,6 +428,7 @@ class NomadHtlSyncJob:
 
                     # Optional archive fetch
                     archive_status = "not_requested"
+                    archive_required_hash = _archive_required_tree_hash()
                     if config.fetch_archive and entry.get("entry_id"):
                         entry_id = str(entry["entry_id"])
                         cached = self._archive_cache.get(entry_id)
@@ -423,24 +437,24 @@ class NomadHtlSyncJob:
                             archive_entry = self._db.object_store.read_json(
                                 self._db.snapshots.get_snapshot(cached)["raw_path"]
                             )
+                            snapshot_ids.append(cached)
                             archive_status = "available"
                         else:
                             try:
-                                archive_entry = self._fetch_archive(
+                                archive_entry, archive_status = self._fetch_archive(
                                     config.base_url, [entry_id]
                                 )
-                                if archive_entry is not None:
-                                    self._archive_cache.put(
+                                if archive_entry is not None and archive_status == "available":
+                                    archive_snapshot_id = self._archive_cache.put(
                                         entry_id=entry_id,
                                         payload=archive_entry,
                                         source_url=f"{config.base_url}/entries/archive/query",
+                                        archive_required_tree_hash=archive_required_hash,
                                     )
-                                    archive_status = "available"
-                                else:
-                                    archive_status = "empty"
-                            except Exception:
+                                    snapshot_ids.append(archive_snapshot_id)
+                            except Exception as exc:
                                 archive_entry = None
-                                archive_status = "unavailable"
+                                archive_status = _archive_status_from_exception(exc)
 
                         if archive_entry is not None:
                             normalized, confidence = self._normalizer.normalize(
@@ -519,6 +533,14 @@ class NomadHtlSyncJob:
             "completed",
             finished_at=_utc_now(),
         )
+        if config.data_library_root:
+            _export_nomad_data_library_snapshot(
+                self._db,
+                job_id=job_id,
+                config=config,
+                snapshot_ids=snapshot_ids,
+                total_devices=total_devices,
+            )
 
         return NomadSyncResult(
             job_id=job_id,
@@ -551,24 +573,20 @@ class NomadHtlSyncJob:
 
     def _fetch_archive(
         self, base_url: str, entry_ids: list[str]
-    ) -> Mapping[str, Any] | None:
+    ) -> tuple[Mapping[str, Any] | None, str]:
         url = f"{base_url.rstrip('/')}/entries/archive/query"
         body = {
             "entry_id": entry_ids[:1],
-            "required": {"metadata": "*", "data": "*"},
+            "required": _archive_required_tree(),
         }
         body_bytes = json.dumps(body).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         if self._transport is None:
-            return None
+            return None, "unavailable"
         result = self._transport(url, body_bytes, headers)
         if not isinstance(result, Mapping):
-            return None
-        data_list = result.get("data", [])
-        if isinstance(data_list, list) and data_list:
-            if isinstance(data_list[0], Mapping):
-                return dict(data_list[0])
-        return None
+            return None, "schema_unrecognized"
+        return _archive_entry_status(result)
 
 
 # ======================================================================
@@ -581,6 +599,96 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:16]}"
 
 
+def _archive_query_hash(entry_id: str, archive_required_tree_hash: str) -> str:
+    body = {
+        "entry_id": entry_id,
+        "archive_required_tree_hash": archive_required_tree_hash,
+    }
+    raw = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _export_nomad_data_library_snapshot(
+    db: LocalBackendDatabase,
+    *,
+    job_id: str,
+    config: NomadSyncConfig,
+    snapshot_ids: Sequence[str],
+    total_devices: int,
+) -> Path:
+    export_root = (
+        Path(config.data_library_root or "data/lib")
+        / "nomad_perla_psc"
+        / "snapshots"
+        / _safe_segment(job_id)
+    )
+    export_root.mkdir(parents=True, exist_ok=True)
+    files: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for snapshot_id in snapshot_ids:
+        if snapshot_id in seen:
+            continue
+        seen.add(snapshot_id)
+        snapshot = db.snapshots.get_snapshot(snapshot_id)
+        if snapshot is None:
+            continue
+        source_path = db.object_store.resolve(snapshot["raw_path"])
+        if not source_path.is_file():
+            continue
+        is_archive = str(snapshot["provider"]).endswith("_archive")
+        role_dir = "archive" if is_archive else "search"
+        relative_path = f"{role_dir}/{_safe_segment(snapshot_id)}.json"
+        target_path = export_root / relative_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = source_path.read_bytes()
+        target_path.write_bytes(payload)
+        files.append(
+            {
+                "relative_path": relative_path,
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "role": "raw_archive" if is_archive else "raw_search",
+            }
+        )
+    if not files:
+        placeholder = export_root / "search" / "empty.json"
+        placeholder.parent.mkdir(parents=True, exist_ok=True)
+        payload = b"{}"
+        placeholder.write_bytes(payload)
+        files.append(
+            {
+                "relative_path": "search/empty.json",
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "role": "raw_search",
+            }
+        )
+    manifest = {
+        "schema_version": "v35.source_snapshot_manifest.v1",
+        "source_id": "nomad_perla_psc",
+        "dataset_doi": "nomad-public-api",
+        "dataset_version": f"api-sync-{job_id}",
+        "retrieved_at": _utc_now(),
+        "source_url": f"{config.base_url.rstrip('/')}/entries/query",
+        "license_hint": "NOMAD public data terms; preserve entry-level license and DOI metadata.",
+        "required_citation": "Cite NOMAD and the original source DOI for each exported PSC record.",
+        "files": files,
+        "importer": {
+            "name": "spirosearch-nomad-htl-sync",
+            "version": "v35.p0",
+            "normalizer_version": "nomad-perla-psc-v35",
+        },
+        "normalized_record_count": total_devices,
+        "quarantine_status": "local_only",
+        "notes": "Runtime export from NOMAD public API sync; raw files stay local under data/lib and are not redistributed by default.",
+    }
+    (export_root / "source-manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return export_root
+
+
 def _default_clock() -> float:
     import time
     return time.monotonic()
@@ -589,6 +697,11 @@ def _default_clock() -> float:
 def _default_sleeper(seconds: float) -> None:
     import time
     time.sleep(seconds)
+
+
+def _safe_segment(value: str) -> str:
+    cleaned = "".join(c if c.isalnum() or c in "-_." else "_" for c in value)
+    return cleaned.strip("._") or "unnamed"
 
 
 def _extract_next_cursor(payload: Mapping[str, Any]) -> str | None:

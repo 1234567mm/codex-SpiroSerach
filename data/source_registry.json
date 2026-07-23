@@ -1,9 +1,14 @@
 [
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "pubchem",
+    "display_name": "PubChem",
+    "source_family": "molecule_identity",
     "base_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug",
     "license_hint": "PubChem data terms; cite NCBI PubChem",
+    "license_scope": "source_record",
     "trust_level": "T3_literature_machine",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 5,
       "backoff_strategy": "exponential"
@@ -25,6 +30,16 @@
       "ambiguous_cids",
       "resolution_status"
     ],
+    "review_triggers": [
+      "ambiguous_identity",
+      "name_only_match",
+      "missing_inchi_key",
+      "conflicting_source_identity",
+      "license_scope_uncertain"
+    ],
+    "go_migration_state": "parity_required",
+    "python_bridge_required": false,
+    "typescript_surface": "source_coverage_and_settings_only",
     "disambiguation_required": true,
     "operational_status": "active",
     "capabilities": [
@@ -34,13 +49,22 @@
       "direct",
       "enrichment"
     ],
-    "last_verified_at": "2026-07-10"
+    "last_verified_at": "2026-07-10",
+    "data_library_path": "data/lib/pubchem",
+    "v35_slice": "p0_live_provider",
+    "acquisition_mode": "api_lookup",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "nomad",
+    "display_name": "NOMAD Materials",
+    "source_family": "computed_materials",
     "base_url": "https://nomad-lab.eu/prod/v1/api/v1",
     "license_hint": "NOMAD public data terms",
+    "license_scope": "source_record",
     "trust_level": "T2_computed_db",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 2,
       "backoff_strategy": "exponential"
@@ -56,6 +80,15 @@
       "xc_functional",
       "computed"
     ],
+    "review_triggers": [
+      "missing_license",
+      "missing_source_url",
+      "computed_schema_unrecognized",
+      "unit_conversion_uncertain"
+    ],
+    "go_migration_state": "deferred",
+    "python_bridge_required": false,
+    "typescript_surface": "source_coverage_and_settings_only",
     "disambiguation_required": false,
     "operational_status": "experimental",
     "capabilities": [
@@ -65,13 +98,22 @@
     "execution_modes": [
       "direct"
     ],
-    "last_verified_at": "2026-07-19"
+    "last_verified_at": "2026-07-19",
+    "data_library_path": null,
+    "v35_slice": "out_of_current_slice",
+    "acquisition_mode": "api_lookup",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "pubchemqc",
+    "display_name": "PubChemQC",
+    "source_family": "computed_molecule",
     "base_url": "https://pubchemqc.riken.jp/api",
     "license_hint": "PubChemQC public dataset terms; cite PubChemQC and original quantum chemistry calculations",
+    "license_scope": "dataset_snapshot",
     "trust_level": "T2_computed_db",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 2,
       "backoff_strategy": "exponential"
@@ -87,6 +129,16 @@
       "basis_set",
       "computed"
     ],
+    "review_triggers": [
+      "snapshot_missing",
+      "method_basis_missing",
+      "identity_join_missing",
+      "unit_conversion_uncertain",
+      "license_scope_uncertain"
+    ],
+    "go_migration_state": "python_bridge_retained",
+    "python_bridge_required": true,
+    "typescript_surface": "settings_and_import_commands",
     "disambiguation_required": false,
     "operational_status": "quarantined",
     "capabilities": [
@@ -95,13 +147,22 @@
     "execution_modes": [
       "direct"
     ],
-    "last_verified_at": null
+    "last_verified_at": null,
+    "data_library_path": "data/lib/pubchemqc",
+    "v35_slice": "p0_local_snapshot",
+    "acquisition_mode": "local_snapshot",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "crossref",
+    "display_name": "Crossref",
+    "source_family": "literature_metadata",
     "base_url": "https://api.crossref.org",
     "license_hint": "Crossref REST API terms",
+    "license_scope": "source_record",
     "trust_level": "T3_literature_machine",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 10,
       "backoff_strategy": "exponential"
@@ -117,6 +178,14 @@
       "license",
       "retraction_flag"
     ],
+    "review_triggers": [
+      "missing_license",
+      "doi_ambiguous",
+      "retraction_flag"
+    ],
+    "go_migration_state": "deferred",
+    "python_bridge_required": false,
+    "typescript_surface": "source_coverage_and_settings_only",
     "disambiguation_required": false,
     "operational_status": "active",
     "capabilities": [
@@ -125,13 +194,22 @@
     "execution_modes": [
       "direct"
     ],
-    "last_verified_at": "2026-07-10"
+    "last_verified_at": "2026-07-10",
+    "data_library_path": null,
+    "v35_slice": "out_of_current_slice",
+    "acquisition_mode": "api_lookup",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "openalex",
+    "display_name": "OpenAlex",
+    "source_family": "literature_metadata",
     "base_url": "https://api.openalex.org",
     "license_hint": "OpenAlex CC0 data",
+    "license_scope": "source_record",
     "trust_level": "T3_literature_machine",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 10,
       "backoff_strategy": "exponential"
@@ -147,6 +225,14 @@
       "oa_status",
       "cited_by_count"
     ],
+    "review_triggers": [
+      "doi_ambiguous",
+      "missing_open_access_status",
+      "license_scope_uncertain"
+    ],
+    "go_migration_state": "deferred",
+    "python_bridge_required": false,
+    "typescript_surface": "source_coverage_and_settings_only",
     "disambiguation_required": false,
     "operational_status": "experimental",
     "capabilities": [
@@ -155,13 +241,22 @@
     "execution_modes": [
       "direct"
     ],
-    "last_verified_at": null
+    "last_verified_at": null,
+    "data_library_path": null,
+    "v35_slice": "out_of_current_slice",
+    "acquisition_mode": "api_lookup",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "custom_htl_dft",
+    "display_name": "Custom HTL DFT",
+    "source_family": "project_generated",
     "base_url": "file://data/custom_htl_pilot/",
     "license_hint": "Project-generated calculations; source structures retain their own provenance",
+    "license_scope": "project_generated",
     "trust_level": "T1_calculated",
+    "default_curation_status": "calculated",
     "rate_limit": {
       "requests_per_second": 1,
       "backoff_strategy": "none"
@@ -173,6 +268,14 @@
       "lumo_ev",
       "band_gap_ev"
     ],
+    "review_triggers": [
+      "structure_provenance_missing",
+      "method_basis_missing",
+      "source_license_missing"
+    ],
+    "go_migration_state": "deferred",
+    "python_bridge_required": true,
+    "typescript_surface": "source_coverage_and_settings_only",
     "disambiguation_required": false,
     "operational_status": "experimental",
     "capabilities": [
@@ -181,13 +284,22 @@
     "execution_modes": [
       "local_dataset"
     ],
-    "last_verified_at": null
+    "last_verified_at": null,
+    "data_library_path": null,
+    "v35_slice": "out_of_current_slice",
+    "acquisition_mode": "local_dataset",
+    "distribution_policy": "project_generated"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "materials_project",
+    "display_name": "Materials Project",
+    "source_family": "computed_materials",
     "base_url": "https://api.materialsproject.org",
     "license_hint": "Materials Project API terms",
+    "license_scope": "api_terms_record",
     "trust_level": "T2_computed_db",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 2,
       "backoff_strategy": "exponential"
@@ -205,6 +317,15 @@
       "space_group",
       "computed"
     ],
+    "review_triggers": [
+      "missing_api_key",
+      "license_scope_uncertain",
+      "database_version_missing",
+      "structure_identity_ambiguous"
+    ],
+    "go_migration_state": "parity_required",
+    "python_bridge_required": false,
+    "typescript_surface": "source_coverage_settings_and_commands",
     "disambiguation_required": false,
     "operational_status": "active",
     "capabilities": [
@@ -215,13 +336,22 @@
       "direct",
       "enrichment"
     ],
-    "last_verified_at": "2026-07-10"
+    "last_verified_at": "2026-07-10",
+    "data_library_path": "data/lib/materials_project",
+    "v35_slice": "p0_live_provider",
+    "acquisition_mode": "api_lookup",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "opv_db",
+    "display_name": "OPV-DB",
+    "source_family": "opv_benchmark",
     "base_url": "file://data/public_baselines/opv_db/",
     "license_hint": "CC BY 4.0; preserve third-party attribution tables",
+    "license_scope": "dataset_snapshot",
     "trust_level": "T3_literature_machine",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 1,
       "backoff_strategy": "none"
@@ -241,6 +371,18 @@
       "license",
       "computed"
     ],
+    "review_triggers": [
+      "missing_source_doi",
+      "missing_license",
+      "missing_donor_acceptor_identity",
+      "missing_core_metrics",
+      "pce_recompute_mismatch",
+      "attribution_file_missing",
+      "opv_metric_used_as_psc_evidence"
+    ],
+    "go_migration_state": "parity_required",
+    "python_bridge_required": false,
+    "typescript_surface": "settings_and_import_commands",
     "disambiguation_required": false,
     "operational_status": "experimental",
     "capabilities": [
@@ -250,13 +392,22 @@
     "execution_modes": [
       "local_dataset"
     ],
-    "last_verified_at": "2026-07-17"
+    "last_verified_at": "2026-07-17",
+    "data_library_path": "data/lib/opv_db",
+    "v35_slice": "p0_local_snapshot",
+    "acquisition_mode": "local_snapshot",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "hopv15",
+    "display_name": "HOPV15",
+    "source_family": "opv_benchmark",
     "base_url": "file://data/public_baselines/hopv15/",
     "license_hint": "CC BY 4.0 Scientific Data / Figshare HOPV15",
+    "license_scope": "dataset_snapshot",
     "trust_level": "T2_computed_db",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 1,
       "backoff_strategy": "none"
@@ -275,6 +426,17 @@
       "license",
       "computed"
     ],
+    "review_triggers": [
+      "missing_source_doi",
+      "ambiguous_molecule_identity",
+      "missing_license",
+      "homo_lumo_sign_uncertain",
+      "method_basis_missing",
+      "opv_metric_used_as_psc_evidence"
+    ],
+    "go_migration_state": "parity_required",
+    "python_bridge_required": true,
+    "typescript_surface": "settings_and_import_commands",
     "disambiguation_required": false,
     "operational_status": "experimental",
     "capabilities": [
@@ -284,13 +446,22 @@
     "execution_modes": [
       "local_dataset"
     ],
-    "last_verified_at": "2026-07-17"
+    "last_verified_at": "2026-07-17",
+    "data_library_path": "data/lib/hopv15",
+    "v35_slice": "p0_local_snapshot",
+    "acquisition_mode": "local_snapshot",
+    "distribution_policy": "derived_facts_with_source_pointers"
   },
   {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "nomad_perla_psc",
+    "display_name": "NOMAD PERLA PSC",
+    "source_family": "psc_device_performance",
     "base_url": "https://nomad-lab.eu/prod/v1/api/v1",
     "license_hint": "NOMAD PERLA PSC CC-BY-4.0; preserve original dataset attribution",
+    "license_scope": "source_record",
     "trust_level": "T3_literature_machine",
+    "default_curation_status": "machine_extracted",
     "rate_limit": {
       "requests_per_second": 2,
       "backoff_strategy": "exponential"
@@ -298,18 +469,159 @@
     "requires_api_key": false,
     "cache_ttl_hours": 168,
     "allowed_output_fields": [
-      "entry_id", "upload_id", "htl_name", "device_stack",
-      "pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor",
-      "perovskite_composition", "chemical_formula",
-      "source_doi", "license", "query_hash", "archive_status",
-      "review_required", "review_reasons",
-      "match_type", "device_count", "devices"
+      "entry_id",
+      "upload_id",
+      "htl_name",
+      "device_stack",
+      "device_architecture",
+      "pce_percent",
+      "voc_v",
+      "jsc_ma_cm2",
+      "fill_factor",
+      "perovskite_composition",
+      "chemical_formula",
+      "source_doi",
+      "license",
+      "query_hash",
+      "archive_required_tree_hash",
+      "archive_status",
+      "review_required",
+      "review_reasons",
+      "match_type",
+      "device_count",
+      "devices"
     ],
+    "review_triggers": [
+      "missing_source_doi",
+      "missing_license",
+      "missing_device_stack",
+      "missing_htl_stack",
+      "missing_core_metrics",
+      "ambiguous_htl_match",
+      "archive_unavailable",
+      "archive_rate_limited",
+      "archive_schema_unrecognized",
+      "search_archive_conflict",
+      "llm_extracted_without_span_provenance",
+      "unit_conversion_uncertain",
+      "license_scope_unknown"
+    ],
+    "go_migration_state": "python_oracle_p0",
+    "python_bridge_required": true,
+    "typescript_surface": "source_coverage_settings_and_commands",
     "disambiguation_required": true,
     "operational_status": "experimental",
-    "capabilities": ["device_performance", "htl_lookup", "perovskite_device_summary"],
-    "execution_modes": ["direct", "enrichment"],
+    "capabilities": [
+      "device_performance",
+      "htl_lookup",
+      "perovskite_device_summary"
+    ],
+    "execution_modes": [
+      "direct",
+      "enrichment"
+    ],
     "last_verified_at": "2026-07-19",
+    "data_library_path": "data/lib/nomad_perla_psc",
+    "v35_slice": "p0_live_provider",
+    "acquisition_mode": "api_sync",
+    "distribution_policy": "derived_facts_with_source_pointers",
     "probe_notes": "Metadata queries verified (40 entries, 4 HTLs). Archive endpoint has rate-limiting issues. hole_transport_layer is list type; efficiency in percent; device_stack is list."
+  },
+  {
+    "schema_version": "v35.data_source_profile.v1",
+    "provider": "nomad_perovskite_schema",
+    "display_name": "NOMAD Perovskite Schema Package",
+    "source_family": "schema_reference",
+    "base_url": "file://data/lib/nomad_perovskite_schema/",
+    "license_hint": "NOMAD perovskite solar cells database schema/plugin source; preserve repository license and FAIRmat attribution",
+    "license_scope": "schema_software_only",
+    "trust_level": "T3_literature_machine",
+    "default_curation_status": "schema_reference",
+    "rate_limit": {
+      "requests_per_second": 1,
+      "backoff_strategy": "none"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 8760,
+    "allowed_output_fields": [
+      "schema_name",
+      "schema_version",
+      "search_app",
+      "field_aliases",
+      "normalizer_version"
+    ],
+    "review_triggers": [
+      "external_snapshot_missing",
+      "schema_version_missing",
+      "synonym_source_missing"
+    ],
+    "go_migration_state": "parity_required",
+    "python_bridge_required": false,
+    "typescript_surface": "read_only_reference",
+    "disambiguation_required": false,
+    "operational_status": "experimental",
+    "capabilities": [
+      "schema_fixture",
+      "perovskite_device_summary"
+    ],
+    "execution_modes": [
+      "local_dataset"
+    ],
+    "last_verified_at": "2026-07-23",
+    "data_library_path": "data/lib/nomad_perovskite_schema",
+    "v35_slice": "p0_schema_module",
+    "acquisition_mode": "schema_fixture",
+    "distribution_policy": "schema_only"
+  },
+  {
+    "schema_version": "v35.data_source_profile.v1",
+    "provider": "materials_cloud",
+    "display_name": "Materials Cloud",
+    "source_family": "archive_metadata",
+    "base_url": "https://archive.materialscloud.org",
+    "license_hint": "Materials Cloud archive record terms vary by record; import manifest must preserve DOI, license, and citation",
+    "license_scope": "record_specific",
+    "trust_level": "T2_computed_db",
+    "default_curation_status": "user_import_required",
+    "rate_limit": {
+      "requests_per_second": 1,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 720,
+    "allowed_output_fields": [
+      "archive_record_id",
+      "dataset_doi",
+      "dataset_version",
+      "title",
+      "download_url",
+      "license",
+      "computed"
+    ],
+    "review_triggers": [
+      "record_license_missing",
+      "checksum_missing",
+      "parser_not_defined",
+      "units_missing",
+      "identity_ambiguous",
+      "metadata_only_not_scientific_fact"
+    ],
+    "go_migration_state": "parity_required",
+    "python_bridge_required": true,
+    "typescript_surface": "settings_and_import_commands",
+    "disambiguation_required": false,
+    "operational_status": "experimental",
+    "capabilities": [
+      "computed_material_summary",
+      "archive_snapshot"
+    ],
+    "execution_modes": [
+      "local_dataset"
+    ],
+    "last_verified_at": null,
+    "data_library_path": "data/lib/materials_cloud",
+    "v35_slice": "p0_manual_import",
+    "acquisition_mode": "manual_archive_import",
+    "distribution_policy": "derived_facts_with_source_pointers"
   }
 ]

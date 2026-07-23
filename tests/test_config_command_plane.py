@@ -7,6 +7,7 @@ declared effects. Read-only APIs must not write config.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 import unittest
@@ -18,9 +19,11 @@ from spirosearch.v23_command import (
 from spirosearch.config_command import ConfigCommandPlane
 from spirosearch.local_config import LocalConfigStore, FileSecretStore
 from spirosearch.model_provider_registry import load_model_provider_registry
+from spirosearch.source_registry import load_source_registry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / "data" / "model_provider_registry.json"
+SOURCE_REGISTRY_PATH = REPO_ROOT / "data" / "source_registry.json"
 
 
 def _make_plane(tmpdir: Path) -> ConfigCommandPlane:
@@ -29,7 +32,12 @@ def _make_plane(tmpdir: Path) -> ConfigCommandPlane:
         secret_store=FileSecretStore(tmpdir / "secrets.env"),
     )
     registry = load_model_provider_registry(REGISTRY_PATH)
-    return ConfigCommandPlane(config_store=store, registry=registry)
+    source_registry = load_source_registry(SOURCE_REGISTRY_PATH)
+    return ConfigCommandPlane(
+        config_store=store,
+        registry=registry,
+        source_registry=source_registry,
+    )
 
 
 def _make_request(
@@ -185,6 +193,56 @@ class TestKeyRotateCommand(unittest.TestCase):
         self.assertEqual(result.reason_code, "invalid_payload")
         self.assertIsNone(self.plane.config_store.get_api_key("deepseek"))
 
+    def test_key_rotate_accepts_materials_project_source_provider(self) -> None:
+        request = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-new-key",
+            },
+        )
+        result, audit = self.plane.execute(request)
+        sanitized = self.plane.build_sanitized_result(result, audit)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "validated")
+        self.assertEqual(self.plane.config_store.get_api_key("materials_project"), "mp-new-key")
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+        self.assertNotIn("mp-new-key", json.dumps(sanitized))
+
+    def test_key_remove_accepts_materials_project_source_provider(self) -> None:
+        self.plane.config_store.set_api_key("materials_project", "mp-to-remove")
+        request = _make_request(
+            action_type="key_remove",
+            expected_target_version=str(self.plane.config_store.config_version),
+            payload={"provider": "materials_project", "provider_scope": "source"},
+        )
+        result, audit = self.plane.execute(request)
+        sanitized = self.plane.build_sanitized_result(result, audit)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "validated")
+        self.assertIsNone(self.plane.config_store.get_api_key("materials_project"))
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+        self.assertNotIn("mp-to-remove", json.dumps(sanitized))
+
+    def test_key_rotate_rejects_declared_source_scope_for_model_provider(self) -> None:
+        request = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "deepseek",
+                "provider_scope": "source",
+                "api_key": "sk-wrong-scope",
+            },
+        )
+        result, audit = self.plane.execute(request)
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.reason_code, "provider_scope_mismatch")
+        self.assertEqual(audit["validation_state"], "rejected")
+        self.assertIsNone(self.plane.config_store.get_api_key("deepseek"))
+
 
 class TestConnectionCommand(unittest.TestCase):
     def setUp(self) -> None:
@@ -219,11 +277,71 @@ class TestConnectionCommand(unittest.TestCase):
         self.plane.config_store.set_api_key("deepseek", "sk-test")
         request = _make_request(
             action_type="test_connection",
+            expected_target_version=str(self.plane.config_store.config_version),
             payload={"provider": "deepseek"},
         )
         result, audit = self.plane.execute(request)
         self.assertEqual(result.status, "accepted")
         self.assertEqual(audit["validation_state"], "validated")
+
+    def test_source_connection_without_required_key_is_validation_failed(self) -> None:
+        request = _make_request(
+            action_type="test_connection",
+            payload={"provider": "materials_project", "provider_scope": "source"},
+        )
+        result, audit = self.plane.execute(request)
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "validation_failed")
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+
+    def test_source_connection_configures_materials_project_without_leaking_key(self) -> None:
+        self.plane.config_store.set_api_key("materials_project", "mp-secret-for-test")
+        request = _make_request(
+            action_type="test_connection",
+            expected_target_version=str(self.plane.config_store.config_version),
+            payload={"provider": "materials_project", "provider_scope": "source"},
+        )
+        result, audit = self.plane.execute(request)
+        sanitized = self.plane.build_sanitized_result(result, audit)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "configured")
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+        self.assertEqual(result.output_artifacts[0]["validation_mode"], "configuration_only")
+        self.assertNotIn("mp-secret-for-test", json.dumps(sanitized))
+
+    def test_source_connection_uses_materials_project_env_key_fallback(self) -> None:
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-env-secret-for-test"
+        try:
+            request = _make_request(
+                action_type="test_connection",
+                payload={"provider": "materials_project", "provider_scope": "source"},
+            )
+            result, audit = self.plane.execute(request)
+            sanitized = self.plane.build_sanitized_result(result, audit)
+
+            self.assertEqual(result.status, "accepted")
+            self.assertEqual(audit["validation_state"], "configured")
+            self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+            self.assertEqual(result.output_artifacts[0]["validation_mode"], "configuration_only")
+            self.assertNotIn("mp-env-secret-for-test", json.dumps(sanitized))
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+    def test_source_connection_rejects_declared_model_scope_for_source_provider(self) -> None:
+        request = _make_request(
+            action_type="test_connection",
+            payload={"provider": "materials_project", "provider_scope": "model"},
+        )
+        result, audit = self.plane.execute(request)
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.reason_code, "provider_scope_mismatch")
+        self.assertEqual(audit["validation_state"], "rejected")
 
 
 class TestRoleAuthorization(unittest.TestCase):

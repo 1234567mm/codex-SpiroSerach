@@ -16,6 +16,7 @@ ACTION_TYPES = (
     "recompute_request",
     "config_write",
     "key_rotate",
+    "key_remove",
     "test_connection",
     "model_list_refresh",
 )
@@ -40,6 +41,7 @@ DEFAULT_ACTION_ROLE_POLICY = {
     "recompute_request": ("operator", "admin"),
     "config_write": ("operator", "admin"),
     "key_rotate": ("operator", "admin"),
+    "key_remove": ("operator", "admin"),
     "test_connection": ("operator", "admin"),
     "model_list_refresh": ("operator", "admin"),
 }

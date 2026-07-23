@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -60,6 +61,34 @@ def _fake_archive_payload(entry_id: str) -> dict[str, Any]:
                 },
                 "metadata": {
                     "datasets": [{"doi": "10.1234/test", "license": "CC-BY-4.0"}],
+                },
+            },
+        }],
+    }
+
+
+def _fake_archive_payload_v35_sections(entry_id: str) -> dict[str, Any]:
+    return {
+        "data": [{
+            "entry_id": entry_id,
+            "archive": {
+                "data": {
+                    "htl": {
+                        "name": "Spiro-OMeTAD",
+                        "stack_sequence": ["SLG", "ITO", "SnO2", "FAPbI3", "Spiro-OMeTAD", "Au"],
+                    },
+                    "cell": {
+                        "stack_sequence": ["SLG", "ITO", "SnO2", "FAPbI3", "Spiro-OMeTAD", "Au"],
+                    },
+                    "jv": {
+                        "default_PCE": 22.4,
+                        "default_Voc": 1.14,
+                        "default_Jsc": 24.1,
+                        "default_FF": 0.82,
+                    },
+                },
+                "metadata": {
+                    "datasets": [{"doi": "10.1234/v35-sections", "license": "CC-BY-4.0"}],
                 },
             },
         }],
@@ -145,6 +174,33 @@ class NomadHtlSyncJobTests(unittest.TestCase):
             self.assertEqual(devices[0]["entry_id"], "entry-001")
             self.assertEqual(devices[0]["pce_percent"], 21.0)
 
+    def test_sync_can_export_runtime_snapshot_manifest_to_data_lib(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            entries = [_fake_search_entry("entry-001")]
+            payload = _fake_search_payload(entries)
+            transport = FakeTransport([payload])
+            data_lib = Path(td) / "data_lib"
+
+            result = NomadHtlSyncJob(db, transport=transport).run(NomadSyncConfig(
+                htl_names=("Spiro-OMeTAD",),
+                max_pages=1,
+                fetch_archive=False,
+                data_library_root=str(data_lib),
+            ))
+
+            manifest_path = data_lib / "nomad_perla_psc" / "snapshots" / result.job_id / "source-manifest.json"
+            self.assertTrue(manifest_path.is_file())
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["schema_version"], "v35.source_snapshot_manifest.v1")
+            self.assertEqual(manifest["source_id"], "nomad_perla_psc")
+            self.assertEqual(manifest["normalized_record_count"], 1)
+            file_record = manifest["files"][0]
+            exported = manifest_path.parent / file_record["relative_path"]
+            payload_bytes = exported.read_bytes()
+            self.assertEqual(file_record["bytes"], len(payload_bytes))
+            self.assertEqual(file_record["sha256"], hashlib.sha256(payload_bytes).hexdigest())
+
     def test_sync_cursor_persistence_and_resume(self) -> None:
         with TemporaryDirectory() as td:
             db = _make_db(td)
@@ -211,8 +267,10 @@ class NomadHtlSyncJobTests(unittest.TestCase):
             class FailingArchiveTransport:
                 def __init__(self) -> None:
                     self.call_count = 0
+                    self.calls: list[tuple[str, bytes, Mapping[str, str]]] = []
 
                 def __call__(self, url: str, body: bytes, headers: Mapping[str, str]) -> Mapping[str, Any]:
+                    self.calls.append((url, body, headers))
                     self.call_count += 1
                     if "archive" in url:
                         raise RuntimeError("archive unavailable (429)")
@@ -228,8 +286,99 @@ class NomadHtlSyncJobTests(unittest.TestCase):
             # Should still succeed with search-only data
             self.assertEqual(result.status, "completed")
             self.assertEqual(result.total_devices, 1)
+            search_body = json.loads(transport.calls[0][1])
+            self.assertEqual(
+                search_body["query"]["results.properties.optoelectronic.solar_cell.device_architecture:any"],
+                ["nip"],
+            )
             devices = db.devices.list_devices("Spiro-OMeTAD")
-            self.assertIn(devices[0]["archive_status"], ("unavailable", "not_requested"))
+            self.assertEqual(devices[0]["archive_status"], "rate_limited")
+
+    def test_archive_schema_unrecognized_routes_to_specific_review_reason(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            entry = _fake_search_entry("entry-001")
+            search_payload = _fake_search_payload([entry])
+            unrecognized_archive = {
+                "data": [{
+                    "entry_id": "entry-001",
+                    "archive": {"data": {"unknown_section": {"value": 1}}},
+                }]
+            }
+            transport = FakeTransport([search_payload, unrecognized_archive])
+
+            result = NomadHtlSyncJob(db, transport=transport).run(NomadSyncConfig(
+                htl_names=("Spiro-OMeTAD",),
+                max_pages=1,
+                fetch_archive=True,
+            ))
+
+            self.assertEqual(result.status, "completed")
+            devices = db.devices.list_devices("Spiro-OMeTAD")
+            self.assertEqual(devices[0]["archive_status"], "schema_unrecognized")
+            reasons = [item["reason"] for item in db.review_items.list_open_items()]
+            self.assertIn("archive_schema_unrecognized", reasons)
+
+    def test_archive_rate_limit_routes_to_specific_review_reason(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            entry = _fake_search_entry("entry-001")
+            search_payload = _fake_search_payload([entry])
+            transport = FakeTransport([search_payload], rate_limit_at=1)
+
+            result = NomadHtlSyncJob(db, transport=transport).run(NomadSyncConfig(
+                htl_names=("Spiro-OMeTAD",),
+                max_pages=1,
+                fetch_archive=True,
+            ))
+
+            self.assertEqual(result.status, "completed")
+            devices = db.devices.list_devices("Spiro-OMeTAD")
+            self.assertEqual(devices[0]["archive_status"], "rate_limited")
+            reasons = [item["reason"] for item in db.review_items.list_open_items()]
+            self.assertIn("archive_rate_limited", reasons)
+
+    def test_sync_uses_archive_data_htl_cell_jv_fallback(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            entry = _fake_search_entry(
+                "entry-001",
+                pce=None,
+                voc=None,
+                jsc=None,
+                ff=None,
+                stack=None,
+                doi=None,
+            )
+            search_payload = _fake_search_payload([entry])
+            archive_payload = _fake_archive_payload_v35_sections("entry-001")
+            transport = FakeTransport([search_payload, archive_payload])
+
+            job = NomadHtlSyncJob(db, transport=transport)
+            result = job.run(NomadSyncConfig(
+                htl_names=("Spiro-OMeTAD",),
+                max_pages=1,
+                fetch_archive=True,
+            ))
+
+            self.assertEqual(result.status, "completed")
+            devices = db.devices.list_devices("Spiro-OMeTAD")
+            self.assertEqual(len(devices), 1)
+            self.assertEqual(devices[0]["device_stack"], "SLG/ITO/SnO2/FAPbI3/Spiro-OMeTAD/Au")
+            self.assertEqual(devices[0]["pce_percent"], 22.4)
+            self.assertEqual(devices[0]["voc_v"], 1.14)
+            self.assertEqual(devices[0]["jsc_ma_cm2"], 24.1)
+            self.assertEqual(devices[0]["fill_factor"], 0.82)
+            self.assertEqual(devices[0]["doi"], "10.1234/v35-sections")
+            self.assertEqual(devices[0]["archive_status"], "available")
+
+            archive_body = json.loads(transport.calls[1][1])
+            required = archive_body["required"]
+            self.assertIsInstance(required["data"], dict)
+            self.assertIn("htl", required["data"])
+            self.assertIn("cell", required["data"])
+            self.assertIn("jv", required["data"])
+            self.assertNotEqual(required["data"], "*")
 
     def test_coverage_audit_produces_review_items(self) -> None:
         with TemporaryDirectory() as td:
@@ -250,7 +399,7 @@ class NomadHtlSyncJobTests(unittest.TestCase):
             self.assertGreater(result.total_review_items, 0)
             open_items = db.review_items.list_open_items()
             reasons = [item["reason"] for item in open_items]
-            self.assertIn("source_doi_missing", reasons)
+            self.assertIn("missing_source_doi", reasons)
 
     def test_sync_is_idempotent_on_rerun(self) -> None:
         with TemporaryDirectory() as td:
@@ -338,6 +487,21 @@ class NomadHtlSyncJobTests(unittest.TestCase):
                 source_url="https://example.com/archive",
             )
             self.assertEqual(cache.get("entry-001"), sid)
+
+    def test_archive_cache_ignores_legacy_entry_only_query_hash(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            legacy_qhash = hashlib.sha256("entry-001".encode("utf-8")).hexdigest()
+            db.snapshots.save_snapshot(
+                provider="nomad_perla_psc_archive",
+                query_hash=legacy_qhash,
+                source_url="https://example.com/archive",
+                retrieved_at="2026-07-22T00:00:00+00:00",
+                raw_path="nomad_perla_psc/archive_legacy.json",
+                raw_sha256="0" * 64,
+            )
+
+            self.assertIsNone(NomadArchiveCache(db).get("entry-001"))
 
     def test_coverage_audit_summary(self) -> None:
         audit = ProviderFieldCoverageAudit()

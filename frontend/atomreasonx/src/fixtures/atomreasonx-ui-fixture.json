@@ -52,6 +52,7 @@
     "Retrieval",
     "File Parsing",
     "Knowledge Library",
+    "Data Sources",
     "Citation",
     "Cost Guardrails",
     "Telemetry source policy"
@@ -109,6 +110,30 @@
           "incomplete_metrics",
           "archive_unavailable",
           "ambiguous_htl_match"
+        ]
+      },
+      {
+        "provider_id": "nomad_perovskite_schema",
+        "provider_kind": "schema_module",
+        "status": "experimental",
+        "phase_status": "useful",
+        "key_requirement": "none",
+        "htl_capability": "NOMAD perovskite schema aliases and search-app field mapping",
+        "automatic_acquisition": "schema_fixture",
+        "local_dataset": true,
+        "expected_fields": [
+          "schema_name",
+          "schema_version",
+          "field_aliases"
+        ],
+        "provenance_fields": [
+          "source_url",
+          "sha256",
+          "repository_ref"
+        ],
+        "cache_ttl_hours": 8760,
+        "review_blockers": [
+          "schema_version_unpinned"
         ]
       },
       {
@@ -196,6 +221,66 @@
         ]
       },
       {
+        "provider_id": "hopv15",
+        "provider_kind": "local_dataset",
+        "status": "experimental",
+        "phase_status": "useful",
+        "key_requirement": "none",
+        "htl_capability": "organic PV molecular benchmark",
+        "automatic_acquisition": "local_snapshot",
+        "local_dataset": true,
+        "expected_fields": [
+          "molecule_id",
+          "smiles",
+          "inchi_key",
+          "homo_ev",
+          "lumo_ev",
+          "band_gap_ev",
+          "pce_percent",
+          "source_doi",
+          "license"
+        ],
+        "provenance_fields": [
+          "source_url",
+          "source_doi",
+          "sha256"
+        ],
+        "cache_ttl_hours": 720,
+        "review_blockers": [
+          "snapshot_manifest_missing"
+        ]
+      },
+      {
+        "provider_id": "opv_db",
+        "provider_kind": "local_dataset",
+        "status": "experimental",
+        "phase_status": "useful",
+        "key_requirement": "none",
+        "htl_capability": "device-performance baseline",
+        "automatic_acquisition": "local_snapshot",
+        "local_dataset": true,
+        "expected_fields": [
+          "record_id",
+          "donor_identity",
+          "acceptor_identity",
+          "pce_percent",
+          "voc_v",
+          "jsc_ma_cm2",
+          "fill_factor",
+          "source_doi",
+          "license"
+        ],
+        "provenance_fields": [
+          "source_url",
+          "source_doi",
+          "sha256"
+        ],
+        "cache_ttl_hours": 720,
+        "review_blockers": [
+          "third_party_attribution_missing"
+        ]
+      },
+      {
         "provider_id": "openalex",
         "provider_kind": "provider_api",
         "status": "experimental",
@@ -241,6 +326,34 @@
         ],
         "cache_ttl_hours": 168,
         "review_blockers": []
+      },
+      {
+        "provider_id": "materials_cloud",
+        "provider_kind": "archive_import",
+        "status": "experimental",
+        "phase_status": "optional_for_htl",
+        "key_requirement": "none",
+        "htl_capability": "record-level computed datasets imported by DOI/archive record",
+        "automatic_acquisition": "manual_archive_import",
+        "local_dataset": true,
+        "expected_fields": [
+          "archive_record_id",
+          "dataset_doi",
+          "dataset_version",
+          "title",
+          "download_url",
+          "license"
+        ],
+        "provenance_fields": [
+          "dataset_doi",
+          "source_url",
+          "sha256"
+        ],
+        "cache_ttl_hours": 720,
+        "review_blockers": [
+          "record_license_unverified",
+          "archive_manifest_missing"
+        ]
       },
       {
         "provider_id": "pubchemqc",
@@ -431,6 +544,72 @@
         "paper_assets"
       ],
       "enabled": true
+    },
+    {
+      "action_type": "import_hopv15_snapshot",
+      "label": "Import HOPV15",
+      "declared_effects": [
+        "source_import_tasks"
+      ],
+      "enabled": true,
+      "provider_scope": "source",
+      "provider": "hopv15",
+      "input_fields": [
+        "manifest_path"
+      ]
+    },
+    {
+      "action_type": "import_opv_db_snapshot",
+      "label": "Import OPV-DB",
+      "declared_effects": [
+        "source_import_tasks"
+      ],
+      "enabled": true,
+      "provider_scope": "source",
+      "provider": "opv_db",
+      "input_fields": [
+        "manifest_path"
+      ]
+    },
+    {
+      "action_type": "import_pubchemqc_snapshot",
+      "label": "Import PubChemQC",
+      "declared_effects": [
+        "source_import_tasks"
+      ],
+      "enabled": true,
+      "provider_scope": "source",
+      "provider": "pubchemqc",
+      "input_fields": [
+        "manifest_path"
+      ]
+    },
+    {
+      "action_type": "import_materials_cloud_archive_record",
+      "label": "Import Materials Cloud",
+      "declared_effects": [
+        "source_import_tasks"
+      ],
+      "enabled": true,
+      "provider_scope": "source",
+      "provider": "materials_cloud",
+      "input_fields": [
+        "archive_record_id",
+        "dataset_doi"
+      ]
+    },
+    {
+      "action_type": "refresh_pubchem_identity_cache",
+      "label": "Refresh PubChem",
+      "declared_effects": [
+        "provider_cache"
+      ],
+      "enabled": true,
+      "provider_scope": "source",
+      "provider": "pubchem",
+      "input_fields": [
+        "candidate_ids"
+      ]
     },
     {
       "action_type": "run_parsing_job",
@@ -772,6 +951,288 @@
         "base_url": null,
         "default_model": null,
         "workspace_id": null
+      }
+    ]
+  },
+  "source_settings": {
+    "schema_version": "v35.sanitized_source_config_status.v1",
+    "producer_version": "v35",
+    "config_version": 0,
+    "sources": [
+      {
+        "provider_id": "crossref",
+        "provider_scope": "source",
+        "provider_kind": "provider_api",
+        "status": "active",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": null,
+        "execution_modes": [
+          "direct"
+        ],
+        "capabilities": [
+          "literature_metadata"
+        ]
+      },
+      {
+        "provider_id": "custom_htl_dft",
+        "provider_scope": "source",
+        "provider_kind": "local_dataset",
+        "status": "experimental",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "local_dataset",
+        "distribution_policy": "project_generated",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": null,
+        "execution_modes": [
+          "local_dataset"
+        ],
+        "capabilities": [
+          "electronic_structure"
+        ]
+      },
+      {
+        "provider_id": "nomad",
+        "provider_scope": "source",
+        "provider_kind": "provider_api",
+        "status": "experimental",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": null,
+        "execution_modes": [
+          "direct"
+        ],
+        "capabilities": [
+          "electronic_structure",
+          "computed_material_summary"
+        ]
+      },
+      {
+        "provider_id": "openalex",
+        "provider_scope": "source",
+        "provider_kind": "provider_api",
+        "status": "experimental",
+        "v35_slice": "out_of_current_slice",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": true,
+        "key_requirement": "required",
+        "api_key_env": "OPENALEX_API_KEY",
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "missing",
+        "data_library_path": null,
+        "execution_modes": [
+          "direct"
+        ],
+        "capabilities": [
+          "literature_metadata"
+        ]
+      },
+      {
+        "provider_id": "pubchem",
+        "provider_scope": "source",
+        "provider_kind": "provider_api",
+        "status": "active",
+        "v35_slice": "p0_live_provider",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": "data/lib/pubchem",
+        "execution_modes": [
+          "direct",
+          "enrichment"
+        ],
+        "capabilities": [
+          "identity"
+        ]
+      },
+      {
+        "provider_id": "pubchemqc",
+        "provider_scope": "source",
+        "provider_kind": "local_dataset",
+        "status": "quarantined",
+        "v35_slice": "p0_local_snapshot",
+        "acquisition_mode": "local_snapshot",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": "data/lib/pubchemqc",
+        "execution_modes": [
+          "direct"
+        ],
+        "capabilities": [
+          "electronic_structure"
+        ]
+      },
+      {
+        "provider_id": "materials_project",
+        "provider_scope": "source",
+        "provider_kind": "provider_api",
+        "status": "active",
+        "v35_slice": "p0_live_provider",
+        "acquisition_mode": "api_lookup",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": true,
+        "key_requirement": "required",
+        "api_key_env": "MATERIALS_PROJECT_API_KEY",
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "missing",
+        "data_library_path": "data/lib/materials_project",
+        "execution_modes": [
+          "direct",
+          "enrichment"
+        ],
+        "capabilities": [
+          "electronic_structure",
+          "computed_material_summary"
+        ]
+      },
+      {
+        "provider_id": "nomad_perla_psc",
+        "provider_scope": "source",
+        "provider_kind": "provider_api",
+        "status": "experimental",
+        "v35_slice": "p0_live_provider",
+        "acquisition_mode": "api_sync",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": "data/lib/nomad_perla_psc",
+        "execution_modes": [
+          "direct",
+          "enrichment"
+        ],
+        "capabilities": [
+          "device_performance",
+          "htl_lookup",
+          "perovskite_device_summary"
+        ]
+      },
+      {
+        "provider_id": "nomad_perovskite_schema",
+        "provider_scope": "source",
+        "provider_kind": "schema_module",
+        "status": "experimental",
+        "v35_slice": "p0_schema_module",
+        "acquisition_mode": "schema_fixture",
+        "distribution_policy": "schema_only",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": "data/lib/nomad_perovskite_schema",
+        "execution_modes": [
+          "local_dataset"
+        ],
+        "capabilities": [
+          "schema_fixture",
+          "perovskite_device_summary"
+        ]
+      },
+      {
+        "provider_id": "hopv15",
+        "provider_scope": "source",
+        "provider_kind": "local_dataset",
+        "status": "experimental",
+        "v35_slice": "p0_local_snapshot",
+        "acquisition_mode": "local_snapshot",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": "data/lib/hopv15",
+        "execution_modes": [
+          "local_dataset"
+        ],
+        "capabilities": [
+          "electronic_structure",
+          "molecular_benchmark"
+        ]
+      },
+      {
+        "provider_id": "opv_db",
+        "provider_scope": "source",
+        "provider_kind": "local_dataset",
+        "status": "experimental",
+        "v35_slice": "p0_local_snapshot",
+        "acquisition_mode": "local_snapshot",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": "data/lib/opv_db",
+        "execution_modes": [
+          "local_dataset"
+        ],
+        "capabilities": [
+          "device_performance",
+          "molecular_benchmark"
+        ]
+      },
+      {
+        "provider_id": "materials_cloud",
+        "provider_scope": "source",
+        "provider_kind": "archive_import",
+        "status": "experimental",
+        "v35_slice": "p0_manual_import",
+        "acquisition_mode": "manual_archive_import",
+        "distribution_policy": "derived_facts_with_source_pointers",
+        "requires_api_key": false,
+        "key_requirement": "none",
+        "api_key_env": null,
+        "has_api_key": false,
+        "key_fingerprint": null,
+        "validation_state": "configured",
+        "data_library_path": "data/lib/materials_cloud",
+        "execution_modes": [
+          "local_dataset"
+        ],
+        "capabilities": [
+          "computed_material_summary",
+          "archive_snapshot"
+        ]
       }
     ]
   },

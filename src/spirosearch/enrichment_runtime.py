@@ -16,6 +16,7 @@ from spirosearch.artifacts import (
 )
 from spirosearch.canonical_artifacts import CanonicalEvidenceEmitter
 from spirosearch.data_workflow import EnergyLevelCompletenessAgent, StructureDisambiguationAgent
+from spirosearch.local_config import LocalConfigStore
 from spirosearch.models import CandidateMaterial
 from spirosearch.orchestrator_contracts import stable_hash, stable_json
 from spirosearch.pipeline import load_candidates
@@ -51,6 +52,7 @@ def run_enrichment(
     live: bool = False,
     providers: Iterable[str] | None = None,
     provider_sources: Iterable[LiveProviderSource] | None = None,
+    config_store: LocalConfigStore | None = None,
     review_events_path: str | Path | None = None,
 ) -> dict[str, Any]:
     output = Path(output_dir).resolve()
@@ -70,6 +72,7 @@ def run_enrichment(
             selected_providers=selected_providers,
             registry=registry,
             generated_at=generated_at,
+            config_store=config_store,
         )
 
     cache_path = Path(provider_cache_path) if provider_cache_path else output / "provider-cache.jsonl"
@@ -1059,6 +1062,11 @@ def _sanitize_error(message: str) -> str:
         scrubbed,
     ):
         return scrubbed
+    if re.fullmatch(
+        r"Provider '[a-z0-9_]+' requires API key in local config or environment variable [A-Z0-9_]+",
+        scrubbed,
+    ):
+        return scrubbed
     for marker in (
         "api_key",
         "api-key",
@@ -1086,6 +1094,7 @@ def _default_live_provider_sources(
     selected_providers: tuple[str, ...],
     registry: Any,
     generated_at: str,
+    config_store: LocalConfigStore | None = None,
 ) -> tuple[LiveProviderSource, ...]:
     provider_names = selected_providers or ("pubchem",)
     sources: list[LiveProviderSource] = []
@@ -1123,19 +1132,35 @@ def _default_live_provider_sources(
             )
         )
     if "pubchemqc" in provider_names:
-        pubchemqc = PubChemQCProvider.from_registry(registry, retrieved_at=generated_at)
-        sources.append(
-            LiveProviderSource(
-                provider="pubchemqc",
-                query_for_candidate=lambda candidate: f"name:{candidate.name.casefold()}",
-                fetch=lambda candidate, provider=pubchemqc: provider.lookup_name(candidate.name),
+        entry = registry.get("pubchemqc")
+        if not entry.live_enabled:
+            sources.append(
+                LiveProviderSource(
+                    provider="pubchemqc",
+                    query_for_candidate=lambda candidate: f"name:{candidate.name.casefold()}",
+                    fetch=lambda candidate, provider=entry.provider: _raise(
+                        RuntimeError(
+                            f"Provider '{provider}' is quarantined for live API use; "
+                            "import a versioned local PubChemQC snapshot."
+                        )
+                    ),
+                    failure_reason="provider_quarantined_snapshot_required",
+                )
             )
-        )
+        else:
+            pubchemqc = PubChemQCProvider.from_registry(registry, retrieved_at=generated_at)
+            sources.append(
+                LiveProviderSource(
+                    provider="pubchemqc",
+                    query_for_candidate=lambda candidate: f"name:{candidate.name.casefold()}",
+                    fetch=lambda candidate, provider=pubchemqc: provider.lookup_name(candidate.name),
+                )
+            )
     if "materials_project" in provider_names:
         try:
             mp = MaterialsProjectProvider.from_registry(
                 registry,
-                api_keys=ApiKeyManager(registry),
+                api_keys=ApiKeyManager(registry, config_store=config_store),
                 retrieved_at=generated_at,
             )
         except RuntimeError as exc:

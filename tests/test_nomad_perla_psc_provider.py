@@ -186,6 +186,20 @@ class TestHTLSynonymExpansion(unittest.TestCase):
         self.assertIn("NiO_x", terms)
         self.assertIn("NiO", terms)
 
+    def test_v35_schema_synonym_aliases_expand_to_canonical_htl(self):
+        spiro_terms = _expand_htl_synonyms("Spiro-MeOTAD")
+        self.assertIn("Spiro-OMeTAD", spiro_terms)
+
+        pedot_terms = _expand_htl_synonyms("PEDOT")
+        self.assertIn("PEDOT:PSS", pedot_terms)
+
+        nio_terms = _expand_htl_synonyms("NiO")
+        self.assertIn("NiOx", nio_terms)
+
+        pacz_terms = _expand_htl_synonyms("PACz")
+        for expected in ("2PACz", "MeO-2PACz", "Me-4PACz", "Br-2PACz"):
+            self.assertIn(expected, pacz_terms)
+
 
 class TestHTLListContains(unittest.TestCase):
     """Test _htl_list_contains for exact and synonym match detection."""
@@ -236,6 +250,15 @@ class TestHTLListContains(unittest.TestCase):
         self.assertFalse(exact)
         self.assertFalse(synonym)
 
+    def test_v35_alias_matches_canonical_as_synonym_without_masking_exact(self):
+        exact, synonym = _htl_list_contains("PEDOT", ["PEDOT:PSS"])
+        self.assertFalse(exact)
+        self.assertTrue(synonym)
+
+        exact, synonym = _htl_list_contains("PEDOT:PSS", ["PEDOT:PSS"])
+        self.assertTrue(exact)
+        self.assertFalse(synonym)
+
 
 class TestConfidenceStrategy(unittest.TestCase):
     """Test confidence values for search_by_htl with review markers."""
@@ -251,7 +274,7 @@ class TestConfidenceStrategy(unittest.TestCase):
         response = provider.search_by_htl("Spiro-OMeTAD")
         self.assertEqual(response.normalized_result["match_type"], "exact")
         self.assertTrue(response.normalized_result["review_required"])
-        self.assertIn("license_missing", response.normalized_result["review_reasons"])
+        self.assertIn("missing_license", response.normalized_result["review_reasons"])
         self.assertAlmostEqual(response.confidence, 0.55)
 
     def test_synonym_match_confidence(self):
@@ -511,6 +534,10 @@ class TestSearchByHtlValidation(unittest.TestCase):
         provider.search_by_htl("Spiro-OMeTAD", max_results=10)
         search_body = json.loads(calls[0]["body"])
         self.assertEqual(search_body["pagination"]["page_size"], 10)
+        self.assertEqual(
+            search_body["query"]["results.properties.optoelectronic.solar_cell.device_architecture:any"],
+            ["nip"],
+        )
 
 
 class TestJscUnitConversion(unittest.TestCase):

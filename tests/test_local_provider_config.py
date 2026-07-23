@@ -18,10 +18,12 @@ from spirosearch.local_config import (
     FileSecretStore,
     key_fingerprint,
     build_sanitized_config_status,
+    build_sanitized_source_config_status,
     CONFIG_SCHEMA_VERSION,
     ALLOWED_PROVIDER_CONFIG_FIELDS,
 )
 from spirosearch.model_provider_registry import load_model_provider_registry
+from spirosearch.source_registry import load_source_registry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / "data" / "model_provider_registry.json"
@@ -85,6 +87,16 @@ class TestLocalConfigStore(unittest.TestCase):
         self.store.set_provider_config("deepseek", {"enabled": False})
         v2 = self.store.config_version
         self.assertGreater(v2, v1)
+
+    def test_config_version_increments_on_secret_write_and_remove(self) -> None:
+        initial = self.store.config_version
+        self.store.set_api_key("materials_project", "mp-secret")
+        after_set = self.store.config_version
+        self.store.remove_api_key("materials_project")
+        after_remove = self.store.config_version
+
+        self.assertGreater(after_set, initial)
+        self.assertGreater(after_remove, after_set)
 
     def test_aliyun_workspace_id_stored_locally(self) -> None:
         self.store.set_provider_config("aliyun_dashscope", {
@@ -204,6 +216,67 @@ class TestSanitizedConfigStatus(unittest.TestCase):
         blob = json.dumps(status)
         self.assertNotIn("sk-leak-test-12345", blob)
         self.assertNotIn("sk-another-secret", blob)
+
+
+class TestSanitizedSourceConfigStatus(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source_registry = load_source_registry(REPO_ROOT / "data" / "source_registry.json")
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmpdir = Path(self._tmp.name)
+        self.store = _make_store(self.tmpdir)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_materials_project_status_uses_fingerprint_not_raw_key(self) -> None:
+        self.store.set_api_key("materials_project", "mp-super-secret-key")
+        status = build_sanitized_source_config_status(self.store, self.source_registry)
+        blob = json.dumps(status)
+        sources = {source["provider_id"]: source for source in status["sources"]}
+
+        self.assertEqual(status["schema_version"], "v35.sanitized_source_config_status.v1")
+        self.assertNotIn("mp-super-secret-key", blob)
+        self.assertTrue(sources["materials_project"]["has_api_key"])
+        self.assertEqual(len(sources["materials_project"]["key_fingerprint"]), 16)
+        self.assertEqual(sources["materials_project"]["validation_state"], "configured")
+        self.assertEqual(sources["materials_project"]["api_key_env"], "MATERIALS_PROJECT_API_KEY")
+        self.assertEqual(sources["materials_project"]["data_library_path"], "data/lib/materials_project")
+
+    def test_materials_project_status_uses_env_key_fallback_without_leaking_value(self) -> None:
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-env-secret-key"
+        try:
+            status = build_sanitized_source_config_status(self.store, self.source_registry)
+            blob = json.dumps(status)
+            sources = {source["provider_id"]: source for source in status["sources"]}
+
+            self.assertNotIn("mp-env-secret-key", blob)
+            self.assertTrue(sources["materials_project"]["has_api_key"])
+            self.assertEqual(len(sources["materials_project"]["key_fingerprint"]), 16)
+            self.assertEqual(sources["materials_project"]["validation_state"], "configured")
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+    def test_source_status_preserves_specialized_provider_kind(self) -> None:
+        status = build_sanitized_source_config_status(self.store, self.source_registry)
+        sources = {source["provider_id"]: source for source in status["sources"]}
+
+        self.assertEqual(sources["nomad_perovskite_schema"]["provider_kind"], "schema_module")
+        self.assertEqual(sources["materials_cloud"]["provider_kind"], "archive_import")
+
+    def test_source_status_keeps_no_key_required_sources_configured(self) -> None:
+        status = build_sanitized_source_config_status(self.store, self.source_registry)
+        sources = {source["provider_id"]: source for source in status["sources"]}
+
+        self.assertFalse(sources["hopv15"]["requires_api_key"])
+        self.assertEqual(sources["hopv15"]["validation_state"], "configured")
+        self.assertEqual(sources["materials_project"]["validation_state"], "missing")
 
 
 class TestSecretStoreInterface(unittest.TestCase):

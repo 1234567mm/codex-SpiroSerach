@@ -14,7 +14,7 @@ const SETTINGS_CATEGORIES = [
   "General", "Models", "Agents", "MCP And Tools", "Remote SSH", "Skills",
   "Subagents", "Plugins", "Memory", "Hooks", "Diagnostics", "Shortcuts",
   "Permissions", "Sandbox", "Network", "Retrieval", "File Parsing",
-  "Knowledge Library", "Citation", "Cost Guardrails", "Telemetry source policy",
+  "Knowledge Library", "Data Sources", "Citation", "Cost Guardrails", "Telemetry source policy",
 ];
 
 export const AppShell: React.FC<{
@@ -22,7 +22,8 @@ export const AppShell: React.FC<{
   onOpenSettings?: () => void;
   showSettings?: boolean;
   onCloseSettings?: () => void;
-}> = ({ workspace, onOpenSettings, showSettings, onCloseSettings }) => {
+  onCommand?: (actionType: string, payload: Record<string, unknown>) => void;
+}> = ({ workspace, onOpenSettings, showSettings, onCloseSettings, onCommand }) => {
   return (
     <div className="app-shell" style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
       <LeftSidebar
@@ -52,7 +53,12 @@ export const AppShell: React.FC<{
         workflow={workspace.workflow}
       />
       {showSettings && (
-        <SettingsModal categories={SETTINGS_CATEGORIES} onClose={onCloseSettings} />
+        <SettingsModal
+          categories={SETTINGS_CATEGORIES}
+          sourceSettings={workspace.source_settings}
+          onCommand={onCommand}
+          onClose={onCloseSettings}
+        />
       )}
     </div>
   );

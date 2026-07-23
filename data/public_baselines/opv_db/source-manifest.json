@@ -1,8 +1,26 @@
 {
-  "dataset_id": "opv-db-v28-fixture",
-  "source_url": "https://zenodo.org/records/20841543",
-  "license": "CC-BY-4.0",
+  "schema_version": "v35.source_snapshot_manifest.v1",
+  "source_id": "opv_db",
+  "dataset_doi": "10.5281/zenodo.20841543",
+  "dataset_version": "zenodo-fixture",
   "retrieved_at": "2026-07-17T00:00:00+00:00",
-  "record_count": 1,
-  "note": "Minimal local fixture for offline provider tests; not the full OPV-DB dump."
+  "source_url": "https://zenodo.org/records/20841543",
+  "license_hint": "CC-BY-4.0",
+  "required_citation": "OPV-DB Zenodo record; preserve OPV-DB citation and third-party attribution tables for full imports.",
+  "files": [
+    {
+      "relative_path": "records.json",
+      "bytes": 317,
+      "sha256": "7f15c413792310f5144ddb7c06f1dc90a3eb009ef5afd9739e449f1c249f7165",
+      "role": "normalized_records"
+    }
+  ],
+  "importer": {
+    "name": "opv_db_fixture_importer",
+    "version": "v35.p0",
+    "normalizer_version": "opv-db-normalizer-v1"
+  },
+  "normalized_record_count": 1,
+  "quarantine_status": "fixture_only",
+  "notes": "Minimal local fixture for offline provider tests; not the full OPV-DB dump."
 }

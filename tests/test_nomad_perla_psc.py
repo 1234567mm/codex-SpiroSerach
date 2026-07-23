@@ -155,6 +155,89 @@ _ARCHIVE_FIXTURE = {
     ],
 }
 
+_ARCHIVE_FIXTURE_V35_SECTIONS = {
+    "data": [
+        {
+            "archive": {
+                "data": {
+                    "htl": {
+                        "name": "Spiro-OMeTAD",
+                        "stack_sequence": ["SLG", "ITO", "SnO2", "FAPbI3", "Spiro-OMeTAD", "Au"],
+                    },
+                    "cell": {
+                        "architecture": "nip",
+                        "stack_sequence": ["SLG", "ITO", "SnO2", "FAPbI3", "Spiro-OMeTAD", "Au"],
+                    },
+                    "jv": {
+                        "default_PCE": 22.4,
+                        "default_Voc": 1.14,
+                        "default_Jsc": 24.1,
+                        "default_FF": 0.82,
+                    },
+                },
+                "metadata": {
+                    "datasets": [
+                        {
+                            "doi": "10.1234/v35-sections",
+                            "license": "CC-BY-4.0",
+                        }
+                    ],
+                },
+            }
+        }
+    ],
+}
+
+_SEARCH_FIXTURE_ENTRY_ONLY = {
+    "pagination": {"total": 1},
+    "data": [
+        {
+            "entry_id": "mock_entry_layers_001",
+            "upload_id": "mock_upload_layers",
+            "results": {},
+        }
+    ],
+}
+
+_ARCHIVE_FIXTURE_LAYERS = {
+    "data": [
+        {
+            "archive": {
+                "data": {
+                    "layers": [
+                        {"function": "ETL", "material": "SnO2"},
+                        {"function": "HTL", "material": "MeO-2PACz"},
+                        {"function": "electrode", "material": "Au"},
+                    ],
+                },
+                "metadata": {
+                    "datasets": [
+                        {
+                            "doi": "10.1234/layers",
+                            "license": "CC-BY-4.0",
+                        }
+                    ],
+                },
+            }
+        }
+    ],
+}
+
+_ARCHIVE_FIXTURE_UNRECOGNIZED_SCHEMA = {
+    "data": [
+        {
+            "archive": {
+                "data": {
+                    "unexpected_section": {
+                        "value": "present-but-not-a-psc-device-section"
+                    }
+                },
+                "metadata": {"entry_id": "mock_entry_spiro_001"},
+            }
+        }
+    ],
+}
+
 _RETRIEVED_AT = "2026-07-19T00:00:00+00:00"
 
 
@@ -217,13 +300,26 @@ class TestNomadPerlaPscProvider(unittest.TestCase):
         self.assertAlmostEqual(result["fill_factor"], 0.81)
 
         self.assertEqual(result["chemical_formula"], "CH3NH3PbI3")
-        self.assertEqual(result["source_doi"], "https://doi.org/10.1038/s41560-021-00941-3")
+        self.assertEqual(result["source_doi"], "10.1038/s41560-021-00941-3")
         self.assertEqual(result["license"], "CC-BY-4.0")
         self.assertNotIn("computed", result)
         self.assertEqual(len(result["query_hash"]), 64)
         self.assertEqual(result["archive_status"], "available")
         self.assertFalse(result["review_required"])
         self.assertEqual(result["review_reasons"], [])
+        self.assertEqual(len(result["archive_required_tree_hash"]), 64)
+
+        archive_body = json.loads(calls[1]["body"])
+        required = archive_body["required"]
+        self.assertIsInstance(required["data"], dict)
+        self.assertIn("htl", required["data"])
+        self.assertIn("cell", required["data"])
+        self.assertIn("jv", required["data"])
+        self.assertEqual(
+            required["results"]["properties"]["optoelectronic"]["solar_cell"],
+            "*",
+        )
+        self.assertNotEqual(required["data"], "*")
 
         # Confidence: exact HTL hit + all 4 metrics = 0.85
         self.assertAlmostEqual(response.confidence, 0.85)
@@ -258,8 +354,9 @@ class TestNomadPerlaPscProvider(unittest.TestCase):
         result = response.normalized_result
         self.assertEqual(result["htl_name"], "Spiro-OMeTAD")
         self.assertTrue(result["review_required"])
-        self.assertIn("archive_unavailable", result["review_reasons"])
-        self.assertIn("device_metrics_incomplete", result["review_reasons"])
+        self.assertIn("archive_rate_limited", result["review_reasons"])
+        self.assertIn("missing_core_metrics", result["review_reasons"])
+        self.assertIn("missing_htl_stack", result["review_reasons"])
         self.assertNotIn("pce_percent", result)
         self.assertNotIn("voc_v", result)
         self.assertAlmostEqual(response.confidence, 0.35)
@@ -410,10 +507,63 @@ class TestNomadPerlaPscProvider(unittest.TestCase):
         self.assertEqual(result["htl_name"], "Spiro-OMeTAD")
         self.assertAlmostEqual(result["pce_percent"], 21.3)
         self.assertAlmostEqual(result["voc_v"], 1.12)
-        self.assertEqual(result["archive_status"], "unavailable")
+        self.assertEqual(result["archive_status"], "rate_limited")
         self.assertTrue(result["review_required"])
-        self.assertIn("archive_unavailable", result["review_reasons"])
+        self.assertIn("archive_rate_limited", result["review_reasons"])
         self.assertAlmostEqual(response.confidence, 0.55)
+
+    def test_archive_unrecognized_schema_routes_to_specific_review_reason(self):
+        registry = load_source_registry("data/source_registry.json")
+        transport, _ = _make_dual_transport(
+            _SEARCH_FIXTURE_FULL,
+            _ARCHIVE_FIXTURE_UNRECOGNIZED_SCHEMA,
+        )
+
+        provider = _provider_from_registry(
+            registry, transport=transport, retrieved_at=_RETRIEVED_AT,
+        )
+        response = provider.lookup_htl("Spiro-OMeTAD")
+        result = response.normalized_result
+
+        self.assertEqual(result["archive_status"], "schema_unrecognized")
+        self.assertTrue(result["review_required"])
+        self.assertIn("archive_schema_unrecognized", result["review_reasons"])
+        self.assertAlmostEqual(response.confidence, 0.55)
+
+    def test_archive_data_htl_cell_jv_fallback_fields(self):
+        registry = load_source_registry("data/source_registry.json")
+        transport, _ = _make_dual_transport(_SEARCH_FIXTURE_HTL_ONLY, _ARCHIVE_FIXTURE_V35_SECTIONS)
+
+        provider = _provider_from_registry(
+            registry, transport=transport, retrieved_at=_RETRIEVED_AT,
+        )
+        response = provider.lookup_htl("Spiro-OMeTAD")
+        result = response.normalized_result
+
+        self.assertEqual(result["device_stack"], "SLG/ITO/SnO2/FAPbI3/Spiro-OMeTAD/Au")
+        self.assertEqual(result["device_architecture"], "nip")
+        self.assertAlmostEqual(result["pce_percent"], 22.4)
+        self.assertAlmostEqual(result["voc_v"], 1.14)
+        self.assertAlmostEqual(result["jsc_ma_cm2"], 24.1)
+        self.assertAlmostEqual(result["fill_factor"], 0.82)
+        self.assertEqual(result["source_doi"], "10.1234/v35-sections")
+        self.assertEqual(result["archive_status"], "available")
+        self.assertNotIn("missing_core_metrics", result["review_reasons"])
+
+    def test_archive_layers_fallback_extracts_htl_and_stack(self):
+        registry = load_source_registry("data/source_registry.json")
+        transport, _ = _make_dual_transport(_SEARCH_FIXTURE_ENTRY_ONLY, _ARCHIVE_FIXTURE_LAYERS)
+
+        provider = _provider_from_registry(
+            registry, transport=transport, retrieved_at=_RETRIEVED_AT,
+        )
+        response = provider.lookup_htl("PACz")
+        result = response.normalized_result
+
+        self.assertEqual(result["device_stack"], "SnO2/MeO-2PACz/Au")
+        self.assertEqual(result["source_doi"], "10.1234/layers")
+        self.assertEqual(result["archive_status"], "available")
+        self.assertNotIn("ambiguous_htl_match", result["review_reasons"])
 
     def test_query_path_in_search_body(self):
         """Test 14: Verify the correct API query path is used."""
@@ -429,6 +579,10 @@ class TestNomadPerlaPscProvider(unittest.TestCase):
         query_keys = search_body.get("query", {})
         # Must use the verified query path from probe
         self.assertIn("results.properties.optoelectronic.solar_cell.hole_transport_layer:any", query_keys)
+        self.assertEqual(
+            query_keys["results.properties.optoelectronic.solar_cell.device_architecture:any"],
+            ["nip"],
+        )
         # Must NOT contain the old PSC plugin path
         self.assertNotIn("data.hole_transport_layer_name#perovskite_solar_cell_database.device.SolarCell:any", query_keys)
 

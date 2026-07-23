@@ -40,6 +40,7 @@ class TestFixtureStructure(unittest.TestCase):
 
     def test_settings_categories_include_telemetry_policy(self) -> None:
         cats = self.fixture["settings_categories"]
+        self.assertIn("Data Sources", cats)
         self.assertIn("Telemetry source policy", cats)
         self.assertIn("Cost Guardrails", cats)
 
@@ -54,8 +55,20 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertEqual(self.fixture["source_coverage"]["lane"], "htl_only")
         self.assertEqual(self.fixture["workflow"]["lane"], "htl_only")
         actions = {action["action_type"]: action for action in self.fixture["command_actions"]}
-        for action in ["start_nomad_sync", "import_doi_list", "import_paper_group", "run_parsing_job", "run_extraction_job"]:
+        for action in [
+            "start_nomad_sync",
+            "import_doi_list",
+            "import_paper_group",
+            "import_hopv15_snapshot",
+            "import_opv_db_snapshot",
+            "import_pubchemqc_snapshot",
+            "import_materials_cloud_archive_record",
+            "refresh_pubchem_identity_cache",
+            "run_parsing_job",
+            "run_extraction_job",
+        ]:
             self.assertIn(action, actions)
+        self.assertEqual(actions["import_pubchemqc_snapshot"]["provider_scope"], "source")
         self.assertIn("EvidenceQualityPolicy", self.fixture["workflow"]["gates"])
 
     def test_command_adapter_does_not_import_readonly_run_api(self) -> None:
@@ -63,6 +76,16 @@ class TestFixtureStructure(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertNotIn("ReadOnlyRunAPI", adapter)
+
+    def test_settings_modal_wires_source_key_commands(self) -> None:
+        modal = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "SettingsModal.tsx").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn('onCommand?.("key_rotate"', modal)
+        self.assertIn('onCommand?.("key_remove"', modal)
+        self.assertIn('onCommand?.("test_connection"', modal)
+        self.assertNotIn("key_fingerprint}", modal)
 
 
 class TestFixtureTelemetrySources(unittest.TestCase):
@@ -126,6 +149,33 @@ class TestProviderStatusShape(unittest.TestCase):
         settings_ids = {p["provider"] for p in self.fixture["settings"]["providers"]}
         self.assertEqual(provider_status_ids, settings_ids)
         self.assertNotIn("local_llm", settings_ids)
+        self.assertNotIn("materials_project", settings_ids)
+
+    def test_fixture_exposes_materials_project_source_settings_without_model_provider_pollution(self) -> None:
+        provider_status_ids = {
+            p["provider"] for p in self.fixture["provider_status"]["providers"]
+        }
+        source_settings = {
+            p["provider_id"]: p for p in self.fixture["source_settings"]["sources"]
+        }
+
+        self.assertIn("materials_project", source_settings)
+        self.assertNotIn("materials_project", provider_status_ids)
+        self.assertEqual(source_settings["materials_project"]["provider_scope"], "source")
+        self.assertEqual(source_settings["materials_project"]["key_requirement"], "required")
+        self.assertFalse(source_settings["materials_project"]["has_api_key"])
+        self.assertIsNone(source_settings["materials_project"]["key_fingerprint"])
+        self.assertEqual(source_settings["nomad_perovskite_schema"]["provider_kind"], "schema_module")
+        self.assertEqual(source_settings["materials_cloud"]["provider_kind"], "archive_import")
+
+    def test_source_settings_cover_registry_provider_set(self) -> None:
+        registry_rows = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
+        registry_ids = {row["provider"] for row in registry_rows}
+        source_settings_ids = {
+            p["provider_id"] for p in self.fixture["source_settings"]["sources"]
+        }
+
+        self.assertEqual(source_settings_ids, registry_ids)
 
     def test_provider_status_has_fingerprint_not_key(self) -> None:
         blob = json.dumps(self.fixture["provider_status"])
@@ -142,6 +192,9 @@ class TestCommandResultTypes(unittest.TestCase):
         )
         self.assertIn("output_artifacts: AtomReasonXCommandEffectArtifact[];", types)
         self.assertIn("kind: \"config_command_effect\";", types)
+        self.assertIn("source_settings: AtomReasonXSourceSettingsState;", types)
+        self.assertIn("provider_scope: \"model\" | \"source\";", types)
+        self.assertIn("validation_mode?: \"configuration_only\" | \"live_probe\";", types)
 
 
 if __name__ == "__main__":
