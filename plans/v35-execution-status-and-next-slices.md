@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `092192b`
+Latest implementation HEAD before this status update: `588c9b9`
 Date: 2026-07-24
 
 ## Goal
@@ -37,6 +37,8 @@ The current branch contains these V35 execution commits:
 | `c33727b` | V35 read validation regression gate | Adds `scripts/check-v35-read-validation.ps1` to run Go read/validation packages plus CLI fixture checks for source registry, V35 source snapshots, provider cache/index, run artifacts, and readonly run envelopes. |
 | `4d417ce` | AtomReasonX readonly run operator config | Adds a Data Sources settings entry for operator-controlled readonly run output directories, moves readonly output-dir normalization into a side-effect-free TypeScript config module, rebuilds the runtime read adapter from React state, keeps command dispatch unavailable in readonly mode, and preserves an error-state settings path so a bad directory can be cleared without command or credential exposure. |
 | `092192b` | AtomReasonX sidecar packaging preflight | Adds an executable packaging preflight for readonly sidecar release boundaries: current `dev_path_only` mode is explicit, future bundled mode must use `bundle.externalBin = ["binaries/spiroctl"]`, `spiroctl` must not be hidden in resources, and WebView/Rust bridges must not expose executable paths or credential-shaped state. |
+| `3b58535` | NOMAD perovskite schema reference module | Records the downloaded FAIRmat/NFDI NOMAD perovskite package as a `nomad_perovskite_schema` schema/reference module under `data/lib`, validates its checksum through the Go source snapshot gate, and asserts it is not a data mirror or provider-fact source. |
+| `588c9b9` | AtomReasonX readonly run recent directory selector | Adds a read-side recent readonly run output-dir selector for operator workflow, deduplicates and filters recent paths, rejects credential-shaped and executable-looking values, and keeps the setting free of command, token, localStorage, and sidecar executable-path state. |
 
 ## Current Data Source Status
 
@@ -94,6 +96,13 @@ Recent gates run during this checkpoint:
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-atomreasonx-sidecar-packaging.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the sidecar packaging preflight slice with `mode=dev_path_only`.
 - `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_sidecar_packaging -v` passed outside sandbox with 2 tests after the sidecar packaging preflight slice.
 - `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed outside sandbox with 930 tests and 9 skipped after the sidecar packaging preflight slice; generated root `uv.lock` was removed again.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after the NOMAD perovskite schema reference module; the source snapshot validator now covers `data/lib/nomad_perovskite_schema/source-manifest.json`.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest discover tests -v` passed outside sandbox with 931 tests and 9 skipped after the NOMAD perovskite schema reference module and again after the readonly run recent directory selector; sandboxed `.venv` Python remained blocked by local trampoline permissions.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 32 Vitest tests after the readonly run recent directory selector.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the readonly run recent directory selector.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts tests.test_atomreasonx_frontend -v` passed outside sandbox with 41 tests after the readonly run recent directory selector.
+- `git diff --check`, `git diff --cached --check`, and `scripts/check-agent-hygiene.ps1` passed before the readonly run recent directory selector commit.
+- `Test-Path uv.lock` was `False` before the readonly run recent directory selector commit.
 
 ## Remaining Work
 
@@ -113,9 +122,9 @@ Recent gates run during this checkpoint:
 ### P4 Transport And Packaging
 
 1. AtomReasonX now has a controlled operator settings path for configuring a
-   readonly run output directory. A more polished desktop directory picker or
-   recent-run selector remains open, but must keep the same read-adapter-only
-   boundary.
+   readonly run output directory and a read-side recent directory selector.
+   A native desktop directory picker remains optional, but must keep the same
+   read-adapter-only boundary and must not expose executable paths or tokens.
 2. Packaging preflight is now executable and documents the current
    `dev_path_only` state. Full production bundling still needs a release-owned
    `spiroctl` binary build/output policy before enabling
@@ -148,10 +157,10 @@ Recommended next large stage:
 
 Alternative if prioritizing operator workflow:
 
-1. Add a desktop directory picker or recent-run selector for the existing
-   readonly output-dir settings entry, without adding any command credentials,
-   executable-path input, provider sync, scoring rebuild, cache write, SQLite
-   write, or experiment write surface.
+1. Add a native desktop directory picker for the existing readonly output-dir
+   settings entry, without adding any command credentials, executable-path
+   input, provider sync, scoring rebuild, cache write, SQLite write, or
+   experiment write surface.
 2. Enable actual Tauri `bundle.externalBin = ["binaries/spiroctl"]` only after
    the release process owns deterministic Go sidecar binary names for each
    target platform and the packaging preflight is run with
