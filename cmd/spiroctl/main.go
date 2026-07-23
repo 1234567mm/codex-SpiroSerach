@@ -8,6 +8,7 @@ import (
 
 	"spirosearch/internal/localbackend"
 	"spirosearch/internal/providercache"
+	"spirosearch/internal/runartifact"
 	"spirosearch/internal/sourceregistry"
 	"spirosearch/internal/sourcesnapshot"
 )
@@ -21,7 +22,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) != 3 || args[1] != "validate" {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path>")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir>")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -70,6 +71,23 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Printf("ok local-backend schema_version=%s tables=%d\n", summary.SchemaVersion, len(summary.TableCounts))
+		return nil
+	case "run-artifacts":
+		repository, err := runartifact.Open(args[2])
+		if err != nil {
+			return err
+		}
+		if result := repository.ManifestStatus(); !result.Available {
+			return fmt.Errorf("run-manifest unavailable: %s", result.Unavailable.Code)
+		}
+		artifacts := repository.ListArtifacts()
+		for _, artifact := range artifacts {
+			result := repository.ReadArtifact(artifact.Kind)
+			if !result.Available {
+				return fmt.Errorf("%s unavailable: %s", artifact.Kind, result.Unavailable.Code)
+			}
+		}
+		fmt.Printf("ok run-artifacts artifacts=%d\n", len(artifacts))
 		return nil
 	default:
 		return fmt.Errorf("unknown target: %s", args[0])
