@@ -11,7 +11,9 @@ import (
 func TestRepositoryManifestsValidateAndMatchFiles(t *testing.T) {
 	paths := []string{
 		"../../data/lib/hopv15/source-manifest.json",
+		"../../data/lib/materials_cloud/source-manifest.json",
 		"../../data/lib/opv_db/source-manifest.json",
+		"../../data/lib/pubchemqc/source-manifest.json",
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
@@ -54,6 +56,12 @@ func TestGoSnapshotContractMatchesJSONSchema(t *testing.T) {
 			t.Fatalf("schema missing file role from Go contract: %s", role)
 		}
 	}
+	quarantineStatusesFromSchema := stringSetFromAnySlice(properties["quarantine_status"].(map[string]any)["enum"].([]any))
+	for status := range quarantineStatuses {
+		if !quarantineStatusesFromSchema[status] {
+			t.Fatalf("schema missing quarantine_status from Go contract: %s", status)
+		}
+	}
 }
 
 func TestRejectsUnsafeRelativePaths(t *testing.T) {
@@ -86,6 +94,28 @@ func TestRejectsUnknownSnapshotRole(t *testing.T) {
 	err := file.Validate()
 	if err == nil || !strings.Contains(err.Error(), "unknown role") {
 		t.Fatalf("expected unknown role error, got %v", err)
+	}
+}
+
+func TestRejectsUnknownQuarantineStatus(t *testing.T) {
+	manifest := Manifest{
+		SchemaVersion:         SchemaVersion,
+		SourceID:              "fixture",
+		DatasetDOI:            "10.1000/fixture",
+		DatasetVersion:        "fixture-v1",
+		RetrievedAt:           "2026-07-23T00:00:00+00:00",
+		SourceURL:             "https://example.invalid/source",
+		LicenseHint:           "fixture",
+		RequiredCitation:      "fixture citation",
+		Files:                 []File{{RelativePath: "records.json", Bytes: 2, SHA256: strings.Repeat("0", 64), Role: "normalized_records"}},
+		Importer:              Importer{Name: "fixture", Version: "v35", NormalizerVersion: "fixture-v1"},
+		NormalizedRecordCount: 0,
+		QuarantineStatus:      "not-a-status",
+	}
+
+	err := manifest.Validate()
+	if err == nil || !strings.Contains(err.Error(), "quarantine_status") {
+		t.Fatalf("expected quarantine_status error, got %v", err)
 	}
 }
 

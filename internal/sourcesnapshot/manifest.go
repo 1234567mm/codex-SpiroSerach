@@ -41,6 +41,13 @@ var (
 		"attribution",
 		"validation_summary",
 	)
+	quarantineStatuses = setOf(
+		"ready",
+		"fixture_only",
+		"pending_import",
+		"quarantined",
+		"local_only",
+	)
 )
 
 type File struct {
@@ -116,6 +123,9 @@ func (m Manifest) Validate() error {
 	}
 	if m.NormalizedRecordCount < 0 {
 		return errors.New("normalized_record_count must be non-negative")
+	}
+	if !quarantineStatuses[m.QuarantineStatus] {
+		return fmt.Errorf("unknown quarantine_status: %s", m.QuarantineStatus)
 	}
 	if len(m.Files) == 0 {
 		return errors.New("files must contain at least one artifact")

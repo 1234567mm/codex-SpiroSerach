@@ -81,6 +81,20 @@ func TestSourceSnapshotValidateChecksKnownDatasetRecords(t *testing.T) {
 	}
 }
 
+func TestSourceSnapshotValidateAcceptsPubChemQCAndMaterialsCloudFixtures(t *testing.T) {
+	paths := []string{
+		filepath.Join("..", "..", "data", "lib", "pubchemqc", "source-manifest.json"),
+		filepath.Join("..", "..", "data", "lib", "materials_cloud", "source-manifest.json"),
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			if err := run([]string{"source-snapshot", "validate", path}); err != nil {
+				t.Fatalf("run() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestRunRejectsUnknownTarget(t *testing.T) {
 	err := run([]string{"unknown", "validate", "data/source_registry.json"})
 	if err == nil || !strings.Contains(err.Error(), "unknown target") {

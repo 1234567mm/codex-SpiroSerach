@@ -1,0 +1,13 @@
+[
+  {
+    "archive_record_id": "mc-archive-fixture-1",
+    "dataset_doi": "10.24435/materialscloud.fixture",
+    "dataset_version": "fixture-v1",
+    "title": "Materials Cloud archive metadata fixture",
+    "download_url": "https://archive.materialscloud.org/record/file?filename=fixture.json",
+    "license": "CC-BY-4.0",
+    "required_citation": "Materials Cloud archive record fixture; cite record DOI, version, license, and original citation.",
+    "computed": false,
+    "metadata_only": true
+  }
+]

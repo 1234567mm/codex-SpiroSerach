@@ -90,6 +90,18 @@ func validateKnownSourceSnapshot(dir string, manifest sourcesnapshot.Manifest) (
 			return 0, err
 		}
 		return len(dataset.Records), nil
+	case "pubchemqc":
+		dataset, err := sourcesnapshot.LoadPubChemQCDataset(dir)
+		if err != nil {
+			return 0, err
+		}
+		return len(dataset.Records), nil
+	case "materials_cloud":
+		dataset, err := sourcesnapshot.LoadMaterialsCloudDataset(dir)
+		if err != nil {
+			return 0, err
+		}
+		return len(dataset.Records), nil
 	default:
 		return manifest.NormalizedRecordCount, nil
 	}

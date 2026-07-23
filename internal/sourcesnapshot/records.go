@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,13 +17,19 @@ import (
 )
 
 const (
-	hopv15Provider        = "hopv15"
-	opvDbProvider         = "opv_db"
-	hopv15TrustLevel      = "T2_computed_db"
-	opvDbTrustLevel       = "T3_literature_machine"
-	defaultHOPVConfidence = 0.6
-	defaultOPVConfidence  = 0.55
-	notFoundConfidence    = 0.1
+	hopv15Provider                  = "hopv15"
+	opvDbProvider                   = "opv_db"
+	pubchemqcProvider               = "pubchemqc"
+	materialsCloudProvider          = "materials_cloud"
+	hopv15TrustLevel                = "T2_computed_db"
+	opvDbTrustLevel                 = "T3_literature_machine"
+	pubchemqcTrustLevel             = "T2_computed_db"
+	materialsCloudTrustLevel        = "T2_computed_db"
+	defaultHOPVConfidence           = 0.6
+	defaultOPVConfidence            = 0.55
+	defaultPubChemQCConfidence      = 0.5
+	defaultMaterialsCloudConfidence = 0.45
+	notFoundConfidence              = 0.1
 )
 
 var (
@@ -61,6 +68,47 @@ var (
 		"benchmark_split",
 		"quality_annotation",
 	)
+	pubchemqcAllowedFields = setOf(
+		"pubchem_cid",
+		"homo_ev",
+		"lumo_ev",
+		"band_gap_ev",
+		"method",
+		"basis_set",
+		"computed",
+		"source_doi",
+		"license",
+		"dataset_version",
+		"required_citation",
+		"review_required",
+		"review_reasons",
+		"resolution_status",
+	)
+	materialsCloudAllowedFields = setOf(
+		"archive_record_id",
+		"dataset_doi",
+		"dataset_version",
+		"title",
+		"download_url",
+		"license",
+		"required_citation",
+		"computed",
+		"metadata_only",
+		"review_required",
+		"review_reasons",
+		"resolution_status",
+	)
+	materialsCloudRawRecordFields = setOf(
+		"archive_record_id",
+		"dataset_doi",
+		"dataset_version",
+		"title",
+		"download_url",
+		"license",
+		"required_citation",
+		"computed",
+		"metadata_only",
+	)
 )
 
 type Hopv15Dataset struct {
@@ -69,6 +117,16 @@ type Hopv15Dataset struct {
 }
 
 type OpvDbDataset struct {
+	Manifest Manifest
+	Records  []map[string]any
+}
+
+type PubChemQCDataset struct {
+	Manifest Manifest
+	Records  []map[string]any
+}
+
+type MaterialsCloudDataset struct {
 	Manifest Manifest
 	Records  []map[string]any
 }
@@ -97,6 +155,32 @@ func LoadOpvDbDataset(dir string) (OpvDbDataset, error) {
 		}
 	}
 	return OpvDbDataset{Manifest: manifest, Records: records}, nil
+}
+
+func LoadPubChemQCDataset(dir string) (PubChemQCDataset, error) {
+	manifest, records, err := loadDatasetRecords(dir, pubchemqcProvider)
+	if err != nil {
+		return PubChemQCDataset{}, err
+	}
+	for index, record := range records {
+		if err := validatePubChemQCRecord(record); err != nil {
+			return PubChemQCDataset{}, fmt.Errorf("pubchemqc record %d: %w", index, err)
+		}
+	}
+	return PubChemQCDataset{Manifest: manifest, Records: records}, nil
+}
+
+func LoadMaterialsCloudDataset(dir string) (MaterialsCloudDataset, error) {
+	manifest, records, err := loadDatasetRecords(dir, materialsCloudProvider)
+	if err != nil {
+		return MaterialsCloudDataset{}, err
+	}
+	for index, record := range records {
+		if err := validateMaterialsCloudRecord(record); err != nil {
+			return MaterialsCloudDataset{}, fmt.Errorf("materials_cloud record %d: %w", index, err)
+		}
+	}
+	return MaterialsCloudDataset{Manifest: manifest, Records: records}, nil
 }
 
 func (d Hopv15Dataset) LookupInChIKey(
@@ -183,6 +267,97 @@ func (d OpvDbDataset) LookupRecordID(
 		notFoundConfidence,
 		opvDbTrustLevel,
 		opvDbAllowedFields,
+	)
+}
+
+func (d PubChemQCDataset) LookupCID(
+	ctx context.Context,
+	cid string,
+) (providercache.ProviderResponse, error) {
+	if err := contextError(ctx); err != nil {
+		return providercache.ProviderResponse{}, err
+	}
+	query := strings.TrimSpace(cid)
+	if query == "" {
+		return providercache.ProviderResponse{}, errors.New("pubchem_cid is required")
+	}
+	for _, record := range d.Records {
+		if stringField(record, "pubchem_cid") == query {
+			return providerResponseFromRecord(
+				pubchemqcProvider,
+				"pubchem_cid:"+query,
+				normalizePubChemQCRecord(record, d.Manifest),
+				d.Manifest,
+				record,
+				defaultPubChemQCConfidence,
+				pubchemqcTrustLevel,
+				pubchemqcAllowedFields,
+			)
+		}
+	}
+	raw := map[string]any{"pubchem_cid": query, "status": "not_found"}
+	return providerResponseFromRecord(
+		pubchemqcProvider,
+		"pubchem_cid:"+query,
+		map[string]any{
+			"pubchem_cid":       query,
+			"resolution_status": "not_found",
+			"license":           d.Manifest.LicenseHint,
+			"computed":          false,
+			"review_required":   true,
+			"review_reasons":    []string{"snapshot_missing"},
+		},
+		d.Manifest,
+		raw,
+		notFoundConfidence,
+		pubchemqcTrustLevel,
+		pubchemqcAllowedFields,
+	)
+}
+
+func (d MaterialsCloudDataset) LookupArchiveRecordID(
+	ctx context.Context,
+	archiveRecordID string,
+) (providercache.ProviderResponse, error) {
+	if err := contextError(ctx); err != nil {
+		return providercache.ProviderResponse{}, err
+	}
+	query := strings.TrimSpace(archiveRecordID)
+	if query == "" {
+		return providercache.ProviderResponse{}, errors.New("archive_record_id is required")
+	}
+	for _, record := range d.Records {
+		if stringField(record, "archive_record_id") == query {
+			return providerResponseFromRecord(
+				materialsCloudProvider,
+				"archive_record_id:"+query,
+				normalizeMaterialsCloudRecord(record),
+				d.Manifest,
+				record,
+				defaultMaterialsCloudConfidence,
+				materialsCloudTrustLevel,
+				materialsCloudAllowedFields,
+			)
+		}
+	}
+	raw := map[string]any{"archive_record_id": query, "status": "not_found"}
+	return providerResponseFromRecord(
+		materialsCloudProvider,
+		"archive_record_id:"+query,
+		map[string]any{
+			"archive_record_id": query,
+			"resolution_status": "not_found",
+			"license":           d.Manifest.LicenseHint,
+			"computed":          false,
+			"metadata_only":     true,
+			"review_required":   true,
+			"review_reasons":    []string{"parser_not_defined"},
+		},
+		d.Manifest,
+		raw,
+		notFoundConfidence,
+		materialsCloudTrustLevel,
+		materialsCloudAllowedFields,
 	)
 }
 
@@ -311,6 +486,71 @@ func validateOpvDbRecord(record map[string]any) error {
 	return nil
 }
 
+func validatePubChemQCRecord(record map[string]any) error {
+	for _, field := range []string{
+		"pubchem_cid",
+		"source_doi",
+		"license",
+		"method",
+		"basis_set",
+	} {
+		if stringField(record, field) == "" {
+			return fmt.Errorf("%s is required", field)
+		}
+	}
+	for _, field := range []string{"homo_ev", "lumo_ev", "band_gap_ev"} {
+		value, err := optionalFloatField(record, field)
+		if err != nil {
+			return err
+		}
+		if _, ok := record[field]; !ok || record[field] == nil {
+			return fmt.Errorf("%s is required", field)
+		}
+		if !isFinite(value) {
+			return fmt.Errorf("%s must be finite", field)
+		}
+	}
+	if value, ok := record["computed"]; !ok || value == nil {
+		return errors.New("computed must be true for PubChemQC electronic facts")
+	} else if parsed, ok := value.(bool); !ok || !parsed {
+		return errors.New("computed must be true for PubChemQC electronic facts")
+	}
+	return nil
+}
+
+func validateMaterialsCloudRecord(record map[string]any) error {
+	for field := range record {
+		if !materialsCloudRawRecordFields[field] {
+			return fmt.Errorf("parser_not_defined for Materials Cloud field: %s", field)
+		}
+	}
+	for _, field := range []string{
+		"archive_record_id",
+		"dataset_doi",
+		"dataset_version",
+		"title",
+		"download_url",
+		"license",
+		"required_citation",
+	} {
+		if stringField(record, field) == "" {
+			return fmt.Errorf("%s is required", field)
+		}
+	}
+	if value, ok := record["metadata_only"]; !ok || value == nil {
+		return errors.New("metadata_only must be true for Materials Cloud archive metadata records")
+	} else if parsed, ok := value.(bool); !ok || !parsed {
+		return errors.New("metadata_only must be true for Materials Cloud archive metadata records")
+	}
+	if value, ok := record["computed"]; ok && value != nil {
+		parsed, ok := value.(bool)
+		if !ok || parsed {
+			return errors.New("computed must be false for Materials Cloud archive metadata records")
+		}
+	}
+	return nil
+}
+
 func normalizeHopv15Record(record map[string]any) map[string]any {
 	normalized := map[string]any{
 		"molecule_id": stringField(record, "molecule_id"),
@@ -355,6 +595,41 @@ func normalizeOpvDbRecord(record map[string]any) map[string]any {
 		putOptionalFloat(normalized, record, field)
 	}
 	return normalized
+}
+
+func normalizePubChemQCRecord(record map[string]any, manifest Manifest) map[string]any {
+	normalized := map[string]any{
+		"pubchem_cid":       stringField(record, "pubchem_cid"),
+		"method":            stringField(record, "method"),
+		"basis_set":         stringField(record, "basis_set"),
+		"source_doi":        stringField(record, "source_doi"),
+		"license":           stringField(record, "license"),
+		"dataset_version":   defaultStringField(record, "dataset_version", manifest.DatasetVersion),
+		"required_citation": defaultStringField(record, "required_citation", manifest.RequiredCitation),
+		"computed":          boolField(record, "computed", true),
+		"review_required":   true,
+		"review_reasons":    []string{"provider_quarantined"},
+	}
+	for _, field := range []string{"homo_ev", "lumo_ev", "band_gap_ev"} {
+		putOptionalFloat(normalized, record, field)
+	}
+	return normalized
+}
+
+func normalizeMaterialsCloudRecord(record map[string]any) map[string]any {
+	return map[string]any{
+		"archive_record_id": stringField(record, "archive_record_id"),
+		"dataset_doi":       stringField(record, "dataset_doi"),
+		"dataset_version":   stringField(record, "dataset_version"),
+		"title":             stringField(record, "title"),
+		"download_url":      stringField(record, "download_url"),
+		"license":           stringField(record, "license"),
+		"required_citation": stringField(record, "required_citation"),
+		"computed":          false,
+		"metadata_only":     true,
+		"review_required":   true,
+		"review_reasons":    []string{"metadata_only_not_scientific_fact"},
+	}
 }
 
 func providerResponseFromRecord(
@@ -453,6 +728,10 @@ func optionalFloatField(record map[string]any, field string) (float64, error) {
 	default:
 		return 0, fmt.Errorf("%s must be numeric", field)
 	}
+}
+
+func isFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func putOptionalString(target map[string]any, record map[string]any, field string) {

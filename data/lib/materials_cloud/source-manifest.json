@@ -1,0 +1,26 @@
+{
+  "schema_version": "v35.source_snapshot_manifest.v1",
+  "source_id": "materials_cloud",
+  "dataset_doi": "10.24435/materialscloud.fixture",
+  "dataset_version": "fixture-v1",
+  "retrieved_at": "2026-07-23T00:00:00+00:00",
+  "source_url": "https://archive.materialscloud.org/",
+  "license_hint": "Materials Cloud archive record terms vary by record; import manifest must preserve DOI, license, and citation",
+  "required_citation": "Materials Cloud archive record; cite record DOI, version, license, and original citation.",
+  "files": [
+    {
+      "relative_path": "records.json",
+      "bytes": 504,
+      "sha256": "51ad63c7dc0e84170e4fa10ad11415245d92b3a0f6e5a5b852f6a480cc357cfe",
+      "role": "normalized_records"
+    }
+  ],
+  "importer": {
+    "name": "spirosearch-materials-cloud-archive-metadata-importer",
+    "version": "v35.p7",
+    "normalizer_version": "v35.materials_cloud.archive_metadata.v1"
+  },
+  "normalized_record_count": 1,
+  "quarantine_status": "pending_import",
+  "notes": "Metadata-only archive reference. Record-specific parser, unit, license, and checksum review must pass before scientific facts enter scoring."
+}

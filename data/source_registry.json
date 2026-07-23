@@ -130,7 +130,14 @@
       "band_gap_ev",
       "method",
       "basis_set",
-      "computed"
+      "computed",
+      "source_doi",
+      "license",
+      "dataset_version",
+      "required_citation",
+      "review_required",
+      "review_reasons",
+      "resolution_status"
     ],
     "review_triggers": [
       "snapshot_missing",
@@ -620,7 +627,12 @@
       "title",
       "download_url",
       "license",
-      "computed"
+      "required_citation",
+      "computed",
+      "metadata_only",
+      "review_required",
+      "review_reasons",
+      "resolution_status"
     ],
     "review_triggers": [
       "record_license_missing",
