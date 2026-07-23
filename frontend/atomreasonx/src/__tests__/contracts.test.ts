@@ -21,6 +21,14 @@ import {
   type ReadonlyRunEnvelope,
 } from "../adapters/go-readonly-run-transport";
 import {
+  createTauriReadonlyRunSession,
+  createTauriReadonlyRunTransport,
+  isReadonlySidecarLoopbackBaseUrl,
+  redactedReadonlySidecarLaunch,
+  stopTauriReadonlySidecar,
+  validateReadonlySidecarLaunch,
+} from "../adapters/tauri-readonly-sidecar";
+import {
   createLoadingWorkbenchWorkspaceState,
   loadWorkbenchWorkspace,
 } from "../stores/workspace-store";
@@ -194,6 +202,155 @@ describe("AtomReasonX contract fixtures", () => {
     expect(new URL(url).pathname).toBe("/runs/run%20id%2F1/artifacts/scoring%20view%2Funsafe");
   });
 
+  it("creates readonly HTTP transport from a private Tauri sidecar launch", async () => {
+    const invokeCalls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const fetchInits: Array<RequestInit | undefined> = [];
+    const launch = {
+      base_url: "http://127.0.0.1:49152",
+      run_id: "run-1",
+      read_only: true as const,
+      readonly_token: "0123456789abcdef",
+      process_id: 4242,
+    };
+    const envelope: ReadonlyRunEnvelope = {
+      schema_version: "v11.readonly_api.envelope.v1",
+      status: "available",
+      severity: "info",
+      surface: "manifest",
+      read_only: true,
+      run_id: "run-1",
+      artifact_kind: null,
+      source: {
+        backend: "json_artifact_repository",
+        manifest_path: "run-manifest.json",
+      },
+      payload: {},
+      unavailable: null,
+    };
+
+    const transport = await createTauriReadonlyRunTransport({
+      outputDir: "D:\\runs\\v11",
+      invoke: async (command, args) => {
+        invokeCalls.push({ command, args });
+        return launch as never;
+      },
+      fetchJson: async (url, init) => {
+        expect(new URL(url).pathname).toBe("/runs/run-1/manifest");
+        fetchInits.push(init);
+        return envelope;
+      },
+    });
+
+    await expect(transport.read("manifest")).resolves.toMatchObject({ surface: "manifest" });
+
+    expect(invokeCalls).toEqual([{
+      command: "start_readonly_sidecar",
+      args: {
+        outputDir: "D:\\runs\\v11",
+      },
+    }]);
+    expect(fetchInits).toEqual([{
+      method: "GET",
+      headers: {
+        Authorization: "Bearer 0123456789abcdef",
+      },
+    }]);
+    expect("submit" in transport).toBe(false);
+    expect("execute" in transport).toBe(false);
+    expect("sync" in transport).toBe(false);
+  });
+
+  it("redacts readonly sidecar tokens and stops sidecar by process id only", async () => {
+    const launch = validateReadonlySidecarLaunch({
+      base_url: "http://127.0.0.1:49152",
+      run_id: "run-1",
+      read_only: true,
+      readonly_token: "0123456789abcdef",
+      process_id: 4242,
+    });
+    const invokeCalls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+
+    await stopTauriReadonlySidecar(launch.process_id, async (command, args) => {
+      invokeCalls.push({ command, args });
+      return undefined as never;
+    });
+
+    expect(redactedReadonlySidecarLaunch(launch)).toEqual({
+      base_url: "http://127.0.0.1:49152",
+      run_id: "run-1",
+      read_only: true,
+      readonly_token: "REDACTED",
+      process_id: 4242,
+    });
+    expect(invokeCalls).toEqual([{
+      command: "stop_readonly_sidecar",
+      args: { processId: 4242 },
+    }]);
+  });
+
+  it("returns a managed Tauri readonly session without accepting executable paths from the WebView", async () => {
+    const invokeCalls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const session = await createTauriReadonlyRunSession({
+      outputDir: "D:\\runs\\v11",
+      invoke: async (command, args) => {
+        invokeCalls.push({ command, args });
+        return {
+          base_url: "http://127.0.0.1:49152",
+          run_id: "run-1",
+          read_only: true,
+          readonly_token: "0123456789abcdef",
+          process_id: 4242,
+        } as never;
+      },
+      fetchJson: async () => ({
+        schema_version: "v11.readonly_api.envelope.v1",
+        status: "available",
+        severity: "info",
+        surface: "manifest",
+        read_only: true,
+        run_id: "run-1",
+        artifact_kind: null,
+        source: {
+          backend: "json_artifact_repository",
+          manifest_path: "run-manifest.json",
+        },
+        payload: {},
+        unavailable: null,
+      }),
+    });
+
+    await expect(session.transport.read("manifest")).resolves.toMatchObject({ run_id: "run-1" });
+    await session.stop();
+
+    expect(session.launch.process_id).toBe(4242);
+    expect(invokeCalls).toEqual([
+      {
+        command: "start_readonly_sidecar",
+        args: {
+          outputDir: "D:\\runs\\v11",
+        },
+      },
+      {
+        command: "stop_readonly_sidecar",
+        args: { processId: 4242 },
+      },
+    ]);
+    expect(JSON.stringify(invokeCalls)).not.toContain("spiroctl");
+  });
+
+  it("fails closed for invalid Tauri readonly sidecar launches", () => {
+    for (const launch of [
+      null,
+      { base_url: "http://0.0.0.0:49152", run_id: "run-1", read_only: true, readonly_token: "0123456789abcdef", process_id: 1 },
+      { base_url: "http://127.0.0.1:49152", run_id: "", read_only: true, readonly_token: "0123456789abcdef", process_id: 1 },
+      { base_url: "http://127.0.0.1:49152", run_id: "run-1", read_only: false, readonly_token: "0123456789abcdef", process_id: 1 },
+      { base_url: "http://127.0.0.1:49152", run_id: "run-1", read_only: true, readonly_token: "short", process_id: 1 },
+      { base_url: "http://127.0.0.1:49152", run_id: "run-1", read_only: true, readonly_token: "0123456789abcdef", process_id: 0 },
+    ]) {
+      expect(() => validateReadonlySidecarLaunch(launch)).toThrow("readonly sidecar launch");
+    }
+  });
+
   it("fails closed for malformed Go readonly envelopes and missing artifact kind", async () => {
     const notReadOnly: ReadonlyRunEnvelope = {
       schema_version: "v11.readonly_api.envelope.v1",
@@ -218,6 +375,41 @@ describe("AtomReasonX contract fixtures", () => {
 
     await expect(transport.read("manifest")).rejects.toThrow("readonly envelope read_only");
     await expect(transport.read("artifact_by_kind")).rejects.toThrow("artifact_by_kind requires artifactKind");
+  });
+
+  it("fails closed when readonly envelopes return an unexpected run id", async () => {
+    const transport = createHttpReadonlyRunTransport({
+      baseUrl: "http://127.0.0.1:47311",
+      runId: "run-1",
+      fetchJson: async () => ({
+        schema_version: "v11.readonly_api.envelope.v1",
+        status: "available",
+        severity: "info",
+        surface: "manifest",
+        read_only: true,
+        run_id: "run-2",
+        artifact_kind: null,
+        source: {
+          backend: "json_artifact_repository",
+          manifest_path: "run-manifest.json",
+        },
+        payload: {},
+        unavailable: null,
+      }),
+    });
+
+    await expect(transport.read("manifest")).rejects.toThrow("readonly envelope run_id mismatch");
+  });
+
+  it("strictly validates Tauri sidecar loopback base URLs", () => {
+    expect(isReadonlySidecarLoopbackBaseUrl("http://127.0.0.1:49152")).toBe(true);
+    expect(isReadonlySidecarLoopbackBaseUrl("http://localhost:49152")).toBe(true);
+    expect(isReadonlySidecarLoopbackBaseUrl("http://[::1]:49152")).toBe(true);
+    expect(isReadonlySidecarLoopbackBaseUrl("http://user:pass@127.0.0.1:49152")).toBe(false);
+    expect(isReadonlySidecarLoopbackBaseUrl("http://127.0.0.1")).toBe(false);
+    expect(isReadonlySidecarLoopbackBaseUrl("https://127.0.0.1:49152")).toBe(false);
+    expect(isReadonlySidecarLoopbackBaseUrl("http://0.0.0.0:49152")).toBe(false);
+    expect(isReadonlySidecarLoopbackBaseUrl("not a url")).toBe(false);
   });
 
   it("keeps provider status and settings provider sets aligned", () => {

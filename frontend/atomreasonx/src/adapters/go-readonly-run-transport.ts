@@ -49,7 +49,7 @@ export const createHttpReadonlyRunTransport = ({
   async read(surface, options = {}) {
     const artifactKind = surface === "artifact_by_kind" ? requireArtifactKind(options) : undefined;
     const raw = await fetchJson(readonlyRunUrl(baseUrl, runId, surface, artifactKind), readonlyFetchInit(readonlyToken));
-    return validateReadonlyRunEnvelope(raw, surface, artifactKind);
+    return validateReadonlyRunEnvelope(raw, surface, artifactKind, runId);
   },
 });
 
@@ -57,6 +57,7 @@ export const validateReadonlyRunEnvelope = (
   value: unknown,
   expectedSurface: ReadonlyRunSurface,
   expectedArtifactKind?: string,
+  expectedRunId?: string,
 ): ReadonlyRunEnvelope => {
   if (!isRecord(value)) {
     throw new Error("readonly envelope must be an object");
@@ -69,6 +70,9 @@ export const validateReadonlyRunEnvelope = (
   }
   if (value.surface !== expectedSurface) {
     throw new Error(`readonly envelope surface mismatch: expected ${expectedSurface}`);
+  }
+  if (expectedRunId && value.run_id !== expectedRunId) {
+    throw new Error(`readonly envelope run_id mismatch: expected ${expectedRunId}`);
   }
   if (expectedArtifactKind && value.artifact_kind !== expectedArtifactKind) {
     throw new Error(`readonly envelope artifact_kind mismatch: expected ${expectedArtifactKind}`);
