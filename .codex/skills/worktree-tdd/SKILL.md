@@ -46,14 +46,17 @@ git rev-list --left-right --count main...origin/main
 git worktree add D:\tmp\<repo>-<topic> -b codex/<topic> main
 ```
 
-3. Run a baseline test in the worktree.
+3. Run a baseline check only for the owned surface. Prefer the existing focused
+   package, schema, CLI, frontend, or Python contract bundle that should fail
+   if the intended behavior is already broken. Use the full gate as a slice
+   milestone, not as a setup ritual.
 4. Read the governing contract before editing:
    provider boundary, scoring boundary, review path, artifact contract, or
    frontend fixture as applicable.
 5. Write or update the smallest failing test that captures the intended behavior.
 6. Run that targeted test and confirm it fails for the expected reason.
 7. Implement the smallest passing change.
-8. Run the targeted test again, then the full test gate.
+8. Run the targeted test again, then the milestone verification gate.
 
 ## Design Rules
 
@@ -65,6 +68,9 @@ git worktree add D:\tmp\<repo>-<topic> -b codex/<topic> main
   fallback logic.
 - If the change touches providers, scoring, review, or artifacts, verify the
   trust boundary explicitly before coding.
+- Split work for subagents by disjoint files or questions. Give reviewers the
+  diff scope and known gate evidence; ask them to inspect risks, not to repeat
+  every expensive command unless they find a concrete reason.
 
 ## Test Discipline
 
@@ -72,6 +78,29 @@ git worktree add D:\tmp\<repo>-<topic> -b codex/<topic> main
 - For bug fixes, add a regression test that reproduces the bug first.
 - For schema or artifact changes, add a contract test before changing emitters.
 - For frontend behavior, add or update the existing frontend-oriented test first.
+- Treat the full test gate as a milestone gate, not a reflex after every review
+  fix. If a reviewer finds a bounded issue after a fresh full gate, rerun the
+  smallest test set that proves the fix plus any directly affected contract
+  gate. Escalate back to the full gate only when the fix broadens scope,
+  touches shared runtime/serialization/scoring/provider boundaries, invalidates
+  earlier test evidence, or the previous full gate is stale for the final diff.
+
+## Targeted Reverification
+
+After review feedback, write down the verification slice before running it:
+
+- **Finding class:** bug, schema drift, artifact integrity, frontend contract,
+  provider boundary, scoring/review boundary, docs-only, or generated state.
+- **Touched files:** exact paths changed to address the finding.
+- **Required reruns:** the focused failing/regression test, the affected
+  package or frontend suite, and any repository script that owns that contract.
+- **Skip reason for broad gates:** prior full gate SHA/time, unchanged surfaces,
+  and why the fix cannot affect omitted suites.
+
+Use examples, not ceremony: a Go-only closure fix usually needs the focused Go
+package and V35 validation script; an AtomReasonX fixture fix usually needs
+Vitest and build; a Python command-plane fix usually needs the focused Python
+contract bundle. Run the full gate when the category is unclear.
 
 ## Generated Files
 

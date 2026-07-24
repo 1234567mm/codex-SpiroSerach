@@ -35,6 +35,22 @@ $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 - Frontend or downstream readers discover artifacts from indexes/manifests, not hard-coded assumptions.
 - Generated output directories remain ignored unless the task explicitly changes repository policy.
 
+## Validation Matrix
+
+Choose checks by impact instead of running every artifact suite:
+
+| Change | Minimum verification |
+| --- | --- |
+| Schema only | schema drift/unit test plus the emitter/reader contract test that names the schema |
+| Manifest or checksum logic | manifest fixture test plus one CLI validator over affected fixture |
+| JSONL/artifact payload writer | writer focused test plus schema validation for that artifact kind |
+| Read-only viewer/fixture projection | frontend contract test plus build if TypeScript types changed |
+| V35 source snapshot/closure contract | Go `internal/sourcesnapshot`/`cmd/spiroctl` focused test plus `scripts/check-v35-read-validation.ps1` |
+
+Escalate to broad Python, Go, or frontend gates only when the artifact shape is
+shared across multiple readers, a manifest discovery rule changes globally, or
+the minimum verification cannot name every affected reader.
+
 ## Useful Commands
 
 ```powershell

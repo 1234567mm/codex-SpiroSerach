@@ -30,6 +30,21 @@ Preserve the first failing signal. Do not replace a useful failure with a broad
 catch, silent fallback, or schema relaxation unless the contract actually
 requires it.
 
+## Failure Triage Budget
+
+After a broad command fails, do not immediately rerun the broad command.
+Collapse the failure first:
+
+- import/setup failure: run the single failing module or environment probe;
+- schema mismatch: validate the one payload/schema pair;
+- Go package failure: rerun the one package or test name with `-run`;
+- frontend failure: rerun the one Vitest file or test name before build;
+- integration script failure: rerun only the failed script section or owning CLI
+  command when possible.
+
+Return to the broad gate only after the narrow failure is fixed, or when the
+failure cannot be localized from the output.
+
 ## Contract Categories
 
 | Category | What to inspect |

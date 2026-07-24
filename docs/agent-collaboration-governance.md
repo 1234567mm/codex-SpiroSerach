@@ -30,7 +30,10 @@ at runtime; recorded values are context, not authority.
    editing. Run an appropriate baseline check when existing behavior is in
    scope.
 4. **Implement and verify.** Keep changes within scope, preserve unrelated
-   state, run focused checks, then run the required completion gate.
+   state, run focused checks, then run the required completion gate. Treat
+   broad gates as milestone evidence; after narrow review fixes, rerun the
+   smallest checks that cover the changed surface and record why earlier broad
+   evidence still applies.
 5. **Commit deliberately.** Review the full diff and stage only owned files.
    Commit on the assigned feature branch when the task authorizes a commit.
 6. **Integrate separately.** Merge and push are distinct operations requiring
@@ -58,6 +61,8 @@ Every agent return must include:
 - `scope`: completed work and deliberate exclusions.
 - `files`: every changed path, or `none`.
 - `tests`: exact commands and results, including checks not run and why.
+- `verification scope`: why the chosen checks are sufficient for the final
+  diff, especially when targeted reverification replaces a broad rerun.
 - `commit`: commit SHA, or `not committed`.
 - `no-op reason`: required only when the task produced no substantive result.
 - `not-committed reason`: required when substantive output exists but was not

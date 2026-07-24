@@ -29,11 +29,25 @@ If `uv.lock` exists and is not intentional:
 Remove-Item -LiteralPath uv.lock
 ```
 
-If code, schema, runtime, or artifact behavior changed, run the full test gate:
+If code, schema, runtime, or artifact behavior changed and this is the first
+completion gate for the slice, run the full test gate:
 
 ```powershell
 $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 ```
+
+If a fresh full gate already passed and the only later changes are fixes for
+specific review findings, use targeted reverification instead of reflexively
+rerunning every expensive suite. The targeted set must include:
+
+- the regression or focused test that proves the fixed finding;
+- the package/frontend/schema/artifact gate directly owning the changed files;
+- `git diff --check`, `Test-Path uv.lock`, and hygiene before commit.
+
+Rerun the full gate when the fix changes a shared boundary, modifies generated
+contract shape, touches scoring/provider/cache/SQLite writers, alters dependency
+or build configuration, invalidates the previous full-gate diff, or when the
+impact cannot be bounded in one sentence.
 
 If the change is documentation-only, verify the relevant markdown files and diff
 instead of forcing an unrelated unit-test run.
@@ -56,6 +70,18 @@ Check the diff for:
 Read the full relevant diff before commenting. Do not flag issues already addressed in the diff. Prefer fix-first handling: apply obvious mechanical fixes directly, but ask before risky, architectural, destructive, or judgment-heavy changes.
 
 For high-risk diffs, add an adversarial pass: look for edge cases, race conditions, security holes, resource leaks, failure modes, silent data corruption, swallowed errors, and trust-boundary violations.
+
+## Review-Fix Verification Record
+
+Before committing after a review fix, record the validation decision:
+
+- previous broad gate evidence: command, result, and commit/diff it covered;
+- review finding fixed: file paths and behavior touched;
+- targeted reruns: exact commands and results;
+- omitted broad gates: why they are still covered or irrelevant.
+
+Do not use targeted reverification to shrink the goal. It is only a scheduling
+optimization when prior broad evidence remains valid for unchanged surfaces.
 
 ## Merge Checklist
 
