@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `e410a4c`
+Latest implementation HEAD before this status update: `b81e48a`
 Date: 2026-07-24
 
 ## Goal
@@ -55,7 +55,7 @@ The current branch contains these V35 execution commits:
 | `e38687d` | Agent targeted verification guardrails | Adds hygiene sentinels and documents milestone-gate/targeted-reverification rules so review fixes rerun the affected checks without shrinking the V35 goal. |
 | `1ffa0c3` | P2 Materials Project operator command transport | Routes AtomReasonX source config commands through a fixed Tauri bridge to Python `ConfigCommandPlane`, while non-config workflow actions remain queued and read-only/runtime writer boundaries stay separate. |
 | `e410a4c` | P1 AtomReasonX source-settings command projection | Projects accepted source config command results into the UI-local workbench state, preserves readonly/no-command mode, ignores rejected/queued/non-source/stale results, and keeps source-setting projection secret-free. |
-| current slice | P1 AtomReasonX workflow operator task queue | Converts known NOMAD/import/workflow commands into explicit UI-local `workflow_command_task` artifacts with `writes_authorized=false` and `execution_started=false`; unknown commands remain `transport_pending`, and no provider cache, SQLite, scoring, experiment, download, or live provider write path is invoked. |
+| `b81e48a` | P1 AtomReasonX workflow operator task queue | Converts known NOMAD/import/workflow commands into explicit UI-local `workflow_command_task` artifacts with `writes_authorized=false` and `execution_started=false`; unknown commands remain `transport_pending`, and no provider cache, SQLite, scoring, experiment, download, or live provider write path is invoked. |
 
 ## Current Data Source Status
 
@@ -252,11 +252,13 @@ Recommended next large stage:
 
 Alternative if prioritizing operator workflow:
 
-1. Promote the UI-local workflow operator task queue into a backend-owned task
-   ledger with explicit write authorization, starting with positive HTL NOMAD
-   sync/import admission and data-library staging. The executor must still keep
-   provider sync, scoring rebuild, cache write, SQLite write, and experiment
-   write surfaces separate until their contracts are reviewed.
+1. Execute `plans/v35-operator-task-ledger-and-nomad-admission-plan.md` to
+   promote the UI-local workflow operator task queue into a backend-owned task
+   ledger, starting with positive HTL NOMAD sync/import admission and
+   data-library staging. The first ledger slice is admission-only: it may append
+   under `data/lib/operator_tasks/`, but provider sync, scoring rebuild, cache
+   write, SQLite write, experiment write, and live download execution remain
+   separate contracts until reviewed.
 2. Full installer verification for bundled sidecar packaging now requires the
    local Rust desktop toolchain closure: install `rustfmt` plus MSVC Build Tools
    with the C++ linker, then rerun `cargo fmt --check`, `cargo test`, and
