@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `909034a`
+Latest implementation HEAD before this status update: `314005d`
 Date: 2026-07-24
 
 ## Goal
@@ -43,14 +43,15 @@ The current branch contains these V35 execution commits:
 | `752a399` | AtomReasonX bundled spiroctl sidecar enablement | Enables Tauri `bundle.externalBin = ["binaries/spiroctl"]`, routes `tauri:build` through sidecar build and preflight first, adds Rust-side bundled sidecar path resolution without exposing a WebView executable-path surface or shell plugin, and commits a Tauri `Cargo.lock` for reproducible desktop packaging inputs. |
 | `53bb44f` | P3 source closure readiness gate | Adds `spiroctl source-closure validate <source-manifest>` with a stable JSON readiness report, separates fixture/integrity validation from production/scientific closure, and blocks current PubChemQC and Materials Cloud fixtures from being claimed as closure-ready. |
 | `909034a` | P3 source closure requirements backlog | Adds `spiroctl source-closure requirements <source-id>` as a machine-readable input checklist for PubChemQC and Materials Cloud real-data closure, without downloading data or widening provider/scoring write paths. |
-| current slice | P1 source closure requirements schema contract | Adds a versioned JSON schema for the requirements report, Go report validation, schema drift tests, and V35 gate coverage so TypeScript/agent readers have a stable contract. |
+| `314005d` | P1 source closure requirements schema contract | Adds a versioned JSON schema for the requirements report, Go report validation, schema drift tests, and V35 gate coverage so TypeScript/agent readers have a stable contract. |
+| current slice | P1 Materials Project source-provider probe contract | Adds a sanitized read-only `spiroctl source-provider test-connection materials_project` report over registry/key/live probe state, with missing-key no-network behavior and schema/gate coverage. |
 
 ## Current Data Source Status
 
 | Source | Current state | Next required closure |
 | --- | --- | --- |
 | PubChem | Go shadow ready; source settings remain separate from model provider settings. | Later live transport hardening and rate-limit telemetry. |
-| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs. | Live provider slice can move forward after operator key configuration and live probe policy. |
+| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` now exposes a sanitized read-only probe contract. | Live provider can move forward after operator key configuration is connected to the Go probe beyond the current environment seam. |
 | NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. | Keep archive fallback conservative; add live sync transport only behind explicit operator command. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
@@ -131,6 +132,8 @@ Recent gates run during this checkpoint:
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after adding JSON schema/source/status checks for the requirements reports.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after adding `schemas/source-closure-requirements.schema.json`, runtime report validation, and schema drift checks.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after adding explicit schema contract validation for `source-closure requirements`.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/materialsproject ./cmd/spiroctl -v` passed after adding the Materials Project source-provider probe contract.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after adding `source-provider test-connection materials_project` missing-key read-only coverage.
 
 ## Remaining Work
 

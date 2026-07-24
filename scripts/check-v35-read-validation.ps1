@@ -74,6 +74,18 @@ function Join-ProcessArguments {
     return (($Arguments | ForEach-Object { Convert-ToProcessArgument $_ }) -join ' ')
 }
 
+function Redact-ProviderProbeOutput {
+    param([string]$Value)
+
+    $redacted = [string]$Value
+    if (-not [string]::IsNullOrWhiteSpace($env:MATERIALS_PROJECT_API_KEY)) {
+        $redacted = $redacted.Replace($env:MATERIALS_PROJECT_API_KEY, '<redacted>')
+    }
+    $redacted = $redacted -replace 'MATERIALS_PROJECT_API_KEY=[^\s"]+', 'MATERIALS_PROJECT_API_KEY=<redacted>'
+    $redacted = $redacted -replace 'mp-[A-Za-z0-9._-]+', 'mp-<redacted>'
+    return $redacted
+}
+
 function Invoke-SpiroctlExpectClosureBlocked {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -135,14 +147,16 @@ function Invoke-SpiroctlExpectJson {
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
+    $safeStdout = Redact-ProviderProbeOutput $stdout
+    $safeStderr = Redact-ProviderProbeOutput $stderr
     if ($process.ExitCode -ne 0) {
-        throw "$Name failed with exit code $($process.ExitCode). Stdout: $stdout Stderr: $stderr"
+        throw "$Name failed with exit code $($process.ExitCode). Stdout: $safeStdout Stderr: $safeStderr"
     }
     try {
         $report = $stdout | ConvertFrom-Json
     }
     catch {
-        throw "$Name did not emit JSON on stdout. Stdout: $stdout Stderr: $stderr"
+        throw "$Name did not emit JSON on stdout. Stdout: $safeStdout Stderr: $safeStderr"
     }
     if ($report.schema_version -ne $ExpectedSchemaVersion) {
         throw "$Name emitted unexpected schema_version: $($report.schema_version)"
@@ -155,6 +169,61 @@ function Invoke-SpiroctlExpectJson {
     }
     if (@($report.requirements).Count -eq 0) {
         throw "$Name emitted no requirements. Report: $stdout"
+    }
+}
+
+function Invoke-SpiroctlExpectProviderProbe {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$ExpectedProvider,
+        [Parameter(Mandatory = $true)][string]$ExpectedStatus,
+        [Parameter(Mandatory = $true)][string]$ExpectedValidationState
+    )
+
+    Write-Output "==> $Name"
+    $processStart = New-Object System.Diagnostics.ProcessStartInfo
+    $processStart.FileName = 'go'
+    $processStart.Arguments = Join-ProcessArguments (@('run', './cmd/spiroctl') + $Arguments)
+    $processStart.WorkingDirectory = (Get-Location).Path
+    $processStart.UseShellExecute = $false
+    $processStart.RedirectStandardOutput = $true
+    $processStart.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($processStart)
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    $safeStdout = Redact-ProviderProbeOutput $stdout
+    $safeStderr = Redact-ProviderProbeOutput $stderr
+    if ($process.ExitCode -ne 0) {
+        throw "$Name failed with exit code $($process.ExitCode). Stdout: $safeStdout Stderr: $safeStderr"
+    }
+    try {
+        $report = $stdout | ConvertFrom-Json
+    }
+    catch {
+        throw "$Name did not emit JSON on stdout. Stdout: $safeStdout Stderr: $safeStderr"
+    }
+    if ($report.schema_version -ne 'v35.source_provider_connection_probe.v1') {
+        throw "$Name emitted unexpected schema_version: $($report.schema_version)"
+    }
+    if ($report.provider -ne $ExpectedProvider) {
+        throw "$Name emitted unexpected provider: $($report.provider)"
+    }
+    if ($report.status -ne $ExpectedStatus) {
+        throw "$Name emitted unexpected status: $($report.status)"
+    }
+    if ($report.validation_state -ne $ExpectedValidationState) {
+        throw "$Name emitted unexpected validation_state: $($report.validation_state)"
+    }
+    if ($report.read_only -ne $true) {
+        throw "$Name did not report read_only=true. Report: $safeStdout"
+    }
+    if ($stdout -match 'mp-secret|MATERIALS_PROJECT_API_KEY=.*') {
+        throw "$Name leaked credential-shaped output."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:MATERIALS_PROJECT_API_KEY) -and $stdout.Contains($env:MATERIALS_PROJECT_API_KEY)) {
+        throw "$Name leaked the configured Materials Project API key."
     }
 }
 
@@ -218,11 +287,15 @@ if ([string]::IsNullOrWhiteSpace($env:GOCACHE)) {
 Assert-SchemaConst 'schemas/source-closure-requirements.schema.json' `
     'schema_version' `
     'v35.source_closure_requirements.v1'
+Assert-SchemaConst 'schemas/source-provider-connection-probe.schema.json' `
+    'schema_version' `
+    'v35.source_provider_connection_probe.v1'
 
 Invoke-Go 'Go read/validation package tests' @(
     'test',
     '-count=1',
     './internal/sourceregistry',
+    './internal/materialsproject',
     './internal/sourcesnapshot',
     './internal/providercache',
     './internal/localbackend',
@@ -273,6 +346,21 @@ Invoke-SpiroctlExpectJson 'Materials Cloud closure requirements are machine-read
     'requirements',
     'materials_cloud'
 ) 'v35.source_closure_requirements.v1' 'materials_cloud' 'inputs_required'
+
+$previousMaterialsProjectKey = $env:MATERIALS_PROJECT_API_KEY
+try {
+    Remove-Item Env:MATERIALS_PROJECT_API_KEY -ErrorAction SilentlyContinue
+    Invoke-SpiroctlExpectProviderProbe 'Materials Project missing-key test connection is machine-readable and read-only' @(
+        'source-provider',
+        'test-connection',
+        'materials_project'
+    ) 'materials_project' 'missing_api_key' 'missing'
+}
+finally {
+    if ($null -ne $previousMaterialsProjectKey) {
+        $env:MATERIALS_PROJECT_API_KEY = $previousMaterialsProjectKey
+    }
+}
 
 Invoke-Spiroctl 'provider cache fixture validation' @(
     'provider-cache',

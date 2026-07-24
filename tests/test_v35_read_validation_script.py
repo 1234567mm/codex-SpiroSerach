@@ -27,6 +27,9 @@ class V35ReadValidationScriptTests(unittest.TestCase):
             "source-snapshot",
             "source-closure",
             "requirements",
+            "source-provider",
+            "test-connection",
+            "materials_project",
             "provider-cache",
             "provider-cache-index",
             "run-artifacts",
@@ -36,6 +39,7 @@ class V35ReadValidationScriptTests(unittest.TestCase):
 
         self.assertIn("v35.source_snapshot_manifest.v1", script)
         self.assertIn("v35.source_closure_requirements.v1", script)
+        self.assertIn("v35.source_provider_connection_probe.v1", script)
         self.assertIn("data\\lib", script)
         self.assertIn("data\\public_baselines", script)
         self.assertIn("PASS: V35 Go read/validation regression closure passed.", script)

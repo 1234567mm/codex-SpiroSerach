@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"spirosearch/internal/localbackend"
+	"spirosearch/internal/materialsproject"
 	"spirosearch/internal/providercache"
 	"spirosearch/internal/readonlyapi"
 	"spirosearch/internal/readonlyserver"
@@ -21,7 +22,10 @@ import (
 	"spirosearch/internal/sourcesnapshot"
 )
 
-const defaultReadonlyServeAddr = "127.0.0.1:0"
+const (
+	defaultReadonlyServeAddr = "127.0.0.1:0"
+	defaultSourceRegistry    = "data/source_registry.json"
+)
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -31,6 +35,7 @@ func main() {
 }
 
 type readonlyServeFunc func(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error
+type materialsProjectProbeFunc func(context.Context, sourceregistry.Entry, materialsproject.ProbeOptions) (materialsproject.ConnectionProbeReport, error)
 
 type readonlyServeAnnouncement struct {
 	BaseURL       string `json:"base_url"`
@@ -41,10 +46,18 @@ type readonlyServeAnnouncement struct {
 }
 
 func run(args []string) error {
-	return runWithReadonlyServer(args, serveReadonlyHTTP)
+	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection)
 }
 
 func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
+	return runWithDependencies(args, serve, materialsproject.ProbeConnection)
+}
+
+func runWithMaterialsProjectProbe(args []string, probe materialsProjectProbeFunc) error {
+	return runWithDependencies(args, serveReadonlyHTTP, probe)
+}
+
+func runWithDependencies(args []string, serve readonlyServeFunc, materialsProjectProbe materialsProjectProbeFunc) error {
 	if len(args) >= 3 && args[0] == "readonly-run" && args[1] == "serve" {
 		outputDir, addr, ok := parseReadonlyServeArgs(args)
 		if !ok {
@@ -60,8 +73,11 @@ func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
 		}
 		return serve(addr, outputDir, readonlyToken, handler)
 	}
+	if len(args) >= 3 && args[0] == "source-provider" && args[1] == "test-connection" {
+		return runSourceProviderTestConnection(args, materialsProjectProbe)
+	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -187,6 +203,75 @@ func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
 	default:
 		return fmt.Errorf("unknown target: %s", args[0])
 	}
+}
+
+func runSourceProviderTestConnection(args []string, materialsProjectProbe materialsProjectProbeFunc) error {
+	provider, formula, ok := parseSourceProviderTestConnectionArgs(args)
+	if !ok {
+		return sourceProviderTestConnectionUsageError()
+	}
+	if provider != materialsproject.ProviderName {
+		return fmt.Errorf("unsupported source-provider test-connection provider: %s", provider)
+	}
+	registryPath, err := defaultSourceRegistryPath()
+	if err != nil {
+		return err
+	}
+	entries, err := sourceregistry.LoadFile(registryPath)
+	if err != nil {
+		return err
+	}
+	entry, ok := sourceregistry.IndexByProvider(entries)[provider]
+	if !ok {
+		return fmt.Errorf("source provider is missing from registry: %s", provider)
+	}
+	apiKey := ""
+	keySource := ""
+	if entry.APIKeyEnv != nil {
+		apiKey = strings.TrimSpace(os.Getenv(*entry.APIKeyEnv))
+		if apiKey != "" {
+			keySource = "environment"
+		}
+	}
+	report, err := materialsProjectProbe(context.Background(), entry, materialsproject.ProbeOptions{
+		APIKey:       apiKey,
+		APIKeySource: keySource,
+		Formula:      formula,
+	})
+	if err != nil {
+		return err
+	}
+	if err := materialsproject.ValidateConnectionProbeReport(report); err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(report)
+}
+
+func parseSourceProviderTestConnectionArgs(args []string) (string, string, bool) {
+	if len(args) == 3 {
+		return args[2], "", true
+	}
+	if len(args) == 5 && args[3] == "--formula" {
+		return args[2], args[4], true
+	}
+	return "", "", false
+}
+
+func sourceProviderTestConnectionUsageError() error {
+	return fmt.Errorf("usage: spiroctl source-provider test-connection materials_project [--formula <formula>]")
+}
+
+func defaultSourceRegistryPath() (string, error) {
+	candidates := []string{
+		defaultSourceRegistry,
+		filepath.Join("..", "..", defaultSourceRegistry),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("source registry not found: %s", defaultSourceRegistry)
 }
 
 func parseReadonlyServeArgs(args []string) (string, string, bool) {

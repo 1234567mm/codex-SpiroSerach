@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -14,7 +15,9 @@ import (
 	"strings"
 	"testing"
 
+	"spirosearch/internal/materialsproject"
 	"spirosearch/internal/readonlyserver"
+	"spirosearch/internal/sourceregistry"
 
 	_ "modernc.org/sqlite"
 )
@@ -260,6 +263,96 @@ func TestSourceClosureRequirementsEmitsMachineReadableBacklog(t *testing.T) {
 				t.Fatalf("requirements report mismatch: %#v", report)
 			}
 		})
+	}
+}
+
+func TestSourceProviderTestConnectionMaterialsProjectMissingKeyIsMachineReadable(t *testing.T) {
+	t.Setenv("MATERIALS_PROJECT_API_KEY", "")
+
+	output, err := captureStdout(func() error {
+		return run([]string{"source-provider", "test-connection", "materials_project"})
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	var report struct {
+		SchemaVersion    string `json:"schema_version"`
+		Provider         string `json:"provider"`
+		Status           string `json:"status"`
+		ValidationState  string `json:"validation_state"`
+		ReadOnly         bool   `json:"read_only"`
+		APIKeyConfigured bool   `json:"api_key_configured"`
+		APIKeyEnv        string `json:"api_key_env"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("connection probe output is not JSON: %v\n%s", err, output)
+	}
+	if report.SchemaVersion != materialsproject.ConnectionProbeSchemaVersion ||
+		report.Provider != materialsproject.ProviderName ||
+		report.Status != "missing_api_key" ||
+		report.ValidationState != "missing" ||
+		!report.ReadOnly ||
+		report.APIKeyConfigured ||
+		report.APIKeyEnv != "MATERIALS_PROJECT_API_KEY" {
+		t.Fatalf("missing key probe mismatch: %#v", report)
+	}
+}
+
+func TestSourceProviderTestConnectionMaterialsProjectUsesInjectedProbeWithoutSecretLeak(t *testing.T) {
+	secret := "mp-secret-do-not-log"
+	t.Setenv("MATERIALS_PROJECT_API_KEY", secret)
+	var observedFormula string
+	var observedKey string
+
+	output, err := captureStdout(func() error {
+		return runWithMaterialsProjectProbe(
+			[]string{"source-provider", "test-connection", "materials_project", "--formula", "CsPbI3"},
+			func(_ context.Context, entry sourceregistry.Entry, options materialsproject.ProbeOptions) (materialsproject.ConnectionProbeReport, error) {
+				observedFormula = options.Formula
+				observedKey = options.APIKey
+				return materialsproject.ConnectionProbeReport{
+					SchemaVersion:        materialsproject.ConnectionProbeSchemaVersion,
+					Provider:             materialsproject.ProviderName,
+					Status:               "validated",
+					ValidationState:      "validated",
+					ReadOnly:             true,
+					LiveEnabled:          true,
+					RequiresAPIKey:       true,
+					APIKeyEnv:            "MATERIALS_PROJECT_API_KEY",
+					APIKeyConfigured:     true,
+					KeySource:            "environment",
+					Formula:              options.Formula,
+					SourceURL:            "https://api.materialsproject.org/materials/summary?formula=CsPbI3",
+					ResponseID:           "response-test",
+					ResolutionStatus:     "resolved",
+					NormalizedFieldCount: 3,
+					AllowedOutputFields:  entry.AllowedOutputFields,
+					ReviewTriggers:       entry.ReviewTriggers,
+				}, nil
+			},
+		)
+	})
+	if err != nil {
+		t.Fatalf("runWithMaterialsProjectProbe() error = %v", err)
+	}
+	if observedFormula != "CsPbI3" {
+		t.Fatalf("probe formula = %q", observedFormula)
+	}
+	if observedKey != secret {
+		t.Fatalf("probe did not receive the configured API key")
+	}
+	if strings.Contains(output, secret) {
+		t.Fatalf("connection probe output leaked the configured API key")
+	}
+	if !strings.Contains(output, `"status":"validated"`) {
+		t.Fatalf("validated probe output mismatch: %s", output)
+	}
+}
+
+func TestSourceProviderTestConnectionRejectsUnsupportedProvider(t *testing.T) {
+	err := run([]string{"source-provider", "test-connection", "pubchem"})
+	if err == nil || !strings.Contains(err.Error(), "unsupported source-provider test-connection provider: pubchem") {
+		t.Fatalf("unsupported provider error mismatch: %v", err)
 	}
 }
 

@@ -808,6 +808,18 @@ providers, write caches, or rebuild scoring. Its machine-readable contract is
 schema version, supported sources, status values, and requirement categories in
 sync with the runtime report.
 
+`source-provider test-connection materials_project [--formula <formula>]` is
+the first controlled Materials Project live/provider operator probe. It emits
+`schema_version = "v35.source_provider_connection_probe.v1"` and a sanitized
+read-only report over registry status, key requirement, optional live lookup
+result, allowed output fields, and review triggers. Missing keys are reported
+as `status = "missing_api_key"` without touching the network. Successful probes
+may use the Materials Project API key from a backend-owned secret path or the
+environment seam, but the report never includes raw key values and does not
+write provider cache, SQLite, run artifacts, scoring outputs, or experiment
+state. Its contract is pinned by
+`schemas/source-provider-connection-probe.schema.json`.
+
 Optional `closure_evidence` fields may be added to a manifest when a real
 snapshot is ready for closure review:
 
