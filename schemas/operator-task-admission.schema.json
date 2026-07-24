@@ -96,7 +96,96 @@
       "pattern": "^data/lib/([a-z0-9_-]+/operator_tasks|operator_tasks)/task-[a-z0-9_-]+-[a-z0-9]{1,16}$"
     },
     "nomad_query_plan": {
-      "type": ["object", "null"]
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "provider",
+            "endpoint",
+            "owner",
+            "device_architecture",
+            "htl_aliases",
+            "search_body",
+            "search_query_hash",
+            "archive_required_tree_hash",
+            "max_page_size",
+            "max_pages",
+            "live_calls_authorized"
+          ],
+          "properties": {
+            "schema_version": { "const": "v35.nomad_admission_plan.v1" },
+            "provider": { "const": "nomad_perla_psc" },
+            "endpoint": { "const": "/entries/query" },
+            "owner": { "const": "public" },
+            "device_architecture": { "enum": ["nip", "pin"] },
+            "htl_aliases": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "search_body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["owner", "query", "pagination"],
+              "properties": {
+                "owner": { "const": "public" },
+                "query": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sections:all",
+                    "results.properties.optoelectronic.solar_cell.hole_transport_layer:any",
+                    "results.properties.optoelectronic.solar_cell.device_architecture:any"
+                  ],
+                  "properties": {
+                    "sections:all": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "items": {
+                        "const": "nomad.datamodel.results.SolarCell"
+                      }
+                    },
+                    "results.properties.optoelectronic.solar_cell.hole_transport_layer:any": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "string", "minLength": 1 }
+                    },
+                    "results.properties.optoelectronic.solar_cell.device_architecture:any": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "items": { "enum": ["nip", "pin"] }
+                    }
+                  }
+                },
+                "pagination": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["page_size"],
+                  "properties": {
+                    "page_size": { "const": 25 }
+                  }
+                }
+              }
+            },
+            "search_query_hash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "archive_required_tree_hash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "max_page_size": { "const": 25 },
+            "max_pages": { "const": 1 },
+            "live_calls_authorized": { "const": false }
+          }
+        }
+      ]
     }
   }
 }

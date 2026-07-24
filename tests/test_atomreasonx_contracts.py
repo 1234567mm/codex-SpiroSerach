@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import unittest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -463,6 +464,51 @@ class TestCommandResultTypes(unittest.TestCase):
         self.assertIn("interface SourceProviderConnectionProbeReport", types)
         self.assertIn("provider_probe?: SourceProviderConnectionProbeReport;", types)
         self.assertIn("schema_version: \"v35.source_provider_connection_probe.v1\";", types)
+
+
+class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):
+    def test_workflow_task_action_allowlists_match_typescript_and_go(self) -> None:
+        ts_contract = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-contract.ts"
+        ).read_text(encoding="utf-8")
+        go_definitions = (REPO_ROOT / "internal" / "workflowtask" / "definitions.go").read_text(
+            encoding="utf-8",
+        )
+
+        ts_block = ts_contract.split("WORKFLOW_COMMAND_TASK_DEFINITIONS", 1)[1].split(
+            "export const WORKFLOW_COMMAND_ACTION_TYPES",
+            1,
+        )[0]
+        ts_actions = set(re.findall(r"^\s+([a-z0-9_]+):\s*\{", ts_block, flags=re.MULTILINE))
+        go_actions = set(re.findall(r'^\s+"([a-z0-9_]+)":\s+\{', go_definitions, flags=re.MULTILINE))
+
+        self.assertEqual(ts_actions, go_actions)
+        self.assertIn("start_nomad_sync", go_actions)
+        self.assertIn("import_materials_cloud_archive_record", go_actions)
+
+    def test_workflow_task_schema_versions_and_cli_are_pinned(self) -> None:
+        ts_contract = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-contract.ts"
+        ).read_text(encoding="utf-8")
+        go_task = (REPO_ROOT / "internal" / "workflowtask" / "task.go").read_text(encoding="utf-8")
+        go_ledger = (REPO_ROOT / "internal" / "workflowtask" / "ledger.go").read_text(encoding="utf-8")
+        schema = (REPO_ROOT / "schemas" / "operator-task-admission.schema.json").read_text(
+            encoding="utf-8",
+        )
+        cli = (REPO_ROOT / "cmd" / "spiroctl" / "main.go").read_text(encoding="utf-8")
+        nomad_admission = (REPO_ROOT / "internal" / "nomadperla" / "admission.go").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("v35.operator_task.v1", ts_contract)
+        self.assertIn("v35.operator_task.v1", go_task)
+        self.assertIn("v35.operator_task_admission.v1", go_ledger)
+        self.assertIn("v35.operator_task_admission.v1", schema)
+        self.assertIn("workflow-task", cli)
+        self.assertIn("admit", cli)
+        self.assertIn("v35.nomad_admission_plan.v1", nomad_admission)
+        self.assertIn("live_calls_authorized", schema)
+        self.assertRegex(nomad_admission, r"LiveCallsAuthorized:\s+false")
 
 
 if __name__ == "__main__":

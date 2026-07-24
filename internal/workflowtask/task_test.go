@@ -286,9 +286,19 @@ func TestAppendAdmissionRecordWritesOneJSONLRecordUnderOperatorTaskLedger(t *tes
 	if record.TargetDataLibraryPath != "data/lib/nomad_perla_psc/operator_tasks/task-start_nomad_sync-ab12cd" {
 		t.Fatalf("target data library path mismatch: %q", record.TargetDataLibraryPath)
 	}
-	if record.NomadQueryPlan != nil {
-		t.Fatalf("Task 2 must not attach NOMAD query plan yet: %#v", record.NomadQueryPlan)
+	plan, ok := record.NomadQueryPlan.(map[string]any)
+	if !ok {
+		t.Fatalf("start_nomad_sync admission must attach NOMAD query plan: %#v", record.NomadQueryPlan)
 	}
+	if plan["schema_version"] != "v35.nomad_admission_plan.v1" ||
+		plan["provider"] != "nomad_perla_psc" ||
+		plan["endpoint"] != "/entries/query" ||
+		plan["device_architecture"] != "nip" ||
+		plan["live_calls_authorized"] != false {
+		t.Fatalf("NOMAD admission plan mismatch: %#v", plan)
+	}
+	requireSHA256(t, plan["search_query_hash"].(string))
+	requireSHA256(t, plan["archive_required_tree_hash"].(string))
 
 	ledgerPath := filepath.Join(root, filepath.FromSlash(DefaultAdmissionLedgerPath))
 	lines := readLedgerLines(t, ledgerPath)
@@ -306,6 +316,21 @@ func TestAppendAdmissionRecordWritesOneJSONLRecordUnderOperatorTaskLedger(t *tes
 	files := listRelativeFiles(t, root)
 	if !sameStrings(files, []string{DefaultAdmissionLedgerPath}) {
 		t.Fatalf("unexpected files written: %#v", files)
+	}
+}
+
+func TestAppendAdmissionRecordKeepsNomadPlanNullForNonNomadActions(t *testing.T) {
+	root := t.TempDir()
+	record, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validImportDOIListTask(), fixedAdmissionTime())
+	if err != nil {
+		t.Fatalf("AppendAdmissionRecord() error = %v", err)
+	}
+
+	if record.NomadQueryPlan != nil {
+		t.Fatalf("non-NOMAD admission must not attach NOMAD query plan: %#v", record.NomadQueryPlan)
+	}
+	if record.TargetDataLibraryPath != "data/lib/operator_tasks/task-import_doi_list-ab12cd" {
+		t.Fatalf("target data library path mismatch: %q", record.TargetDataLibraryPath)
 	}
 }
 
@@ -362,6 +387,25 @@ func TestAppendAdmissionRecordIsIdempotentForRepeatedTaskID(t *testing.T) {
 	}
 }
 
+func TestAppendAdmissionRecordRejectsDuplicateTaskIDWithDifferentTaskHash(t *testing.T) {
+	root := t.TempDir()
+	if _, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime()); err != nil {
+		t.Fatalf("first AppendAdmissionRecord() error = %v", err)
+	}
+
+	task := validStartNomadTask()
+	task.CreatedAt = strPtr("2026-07-24T00:00:01Z")
+	_, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, task, fixedAdmissionTime())
+	if !errors.Is(err, ErrLedgerTaskHashMismatch) {
+		t.Fatalf("expected task hash mismatch, got %v", err)
+	}
+
+	lines := readLedgerLines(t, filepath.Join(root, filepath.FromSlash(DefaultAdmissionLedgerPath)))
+	if len(lines) != 1 {
+		t.Fatalf("hash mismatch duplicate wrote %d ledger lines, want 1", len(lines))
+	}
+}
+
 func TestAppendAdmissionRecordRejectsInvalidExistingLedgerLine(t *testing.T) {
 	root := t.TempDir()
 	ledgerPath := filepath.Join(root, filepath.FromSlash(DefaultAdmissionLedgerPath))
@@ -380,6 +424,26 @@ func TestAppendAdmissionRecordRejectsInvalidExistingLedgerLine(t *testing.T) {
 	lines := readLedgerLines(t, ledgerPath)
 	if len(lines) != 1 {
 		t.Fatalf("invalid existing ledger should not be appended to, got %d lines", len(lines))
+	}
+}
+
+func TestAppendAdmissionRecordRejectsExistingLedgerLineWithTrailingTokens(t *testing.T) {
+	root := t.TempDir()
+	if _, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime()); err != nil {
+		t.Fatalf("AppendAdmissionRecord() error = %v", err)
+	}
+	ledgerPath := filepath.Join(root, filepath.FromSlash(DefaultAdmissionLedgerPath))
+	line := readLedgerLines(t, ledgerPath)[0]
+	if err := os.WriteFile(ledgerPath, []byte(line+` {"api_key":"mp-secret"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime())
+	if !errors.Is(err, ErrLedgerInvalid) {
+		t.Fatalf("expected trailing token ledger line to fail closed, got %v", err)
+	}
+	if strings.Contains(err.Error(), "mp-secret") {
+		t.Fatalf("ledger error leaked trailing token contents: %v", err)
 	}
 }
 

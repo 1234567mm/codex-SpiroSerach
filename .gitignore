@@ -21,6 +21,8 @@ data/lib/*/raw/
 data/lib/*/snapshots/
 data/lib/*/cache/
 data/lib/*/downloads/
+data/lib/operator_tasks/*.jsonl
+data/lib/operator_tasks/**/*.jsonl
 data/lib/**/*.zip
 data/lib/**/*.tar
 data/lib/**/*.tar.gz

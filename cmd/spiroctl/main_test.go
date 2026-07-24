@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -385,6 +386,147 @@ func TestSourceProviderTestConnectionRejectsUnsupportedProvider(t *testing.T) {
 	}
 }
 
+func TestWorkflowTaskValidateAcceptsStartNomadSync(t *testing.T) {
+	root := t.TempDir()
+	taskPath := writeWorkflowTaskJSON(t, root, validStartNomadWorkflowTaskJSON())
+
+	output, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "validate", taskPath})
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v output=%s", err, output)
+	}
+	if !strings.Contains(output, "ok workflow-task action_type=start_nomad_sync") ||
+		!strings.Contains(output, "task_id=task-start_nomad_sync-ab12cd") {
+		t.Fatalf("validate output mismatch: %s", output)
+	}
+}
+
+func TestWorkflowTaskValidateRejectsPoisonedMetadataWithBoundedError(t *testing.T) {
+	root := t.TempDir()
+	taskPath := writeWorkflowTaskJSON(t, root, strings.ReplaceAll(
+		validStartNomadWorkflowTaskJSON(),
+		`"provider":"nomad_perla_psc"`,
+		`"provider":"materials_project"`,
+	))
+
+	err := run([]string{"workflow-task", "validate", taskPath})
+	if err == nil || !strings.Contains(err.Error(), "workflow_task_metadata_mismatch") {
+		t.Fatalf("expected bounded workflow task validation error, got %v", err)
+	}
+	for _, forbidden := range []string{"api_key", "mp-secret", "Bearer ", `D:\private`, "10.1000/example"} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("validation error leaked raw payload value %q: %v", forbidden, err)
+		}
+	}
+}
+
+func TestWorkflowTaskAdmitWritesIdempotentLedgerRecord(t *testing.T) {
+	root := t.TempDir()
+	writeSpiroctlRepoMarkers(t, root)
+	t.Chdir(root)
+	taskPath := writeWorkflowTaskJSON(t, root, validStartNomadWorkflowTaskJSON())
+	ledgerRel := "data/lib/operator_tasks/operator-task-ledger.jsonl"
+
+	firstOutput, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "admit", taskPath, "--ledger", ledgerRel})
+	})
+	if err != nil {
+		t.Fatalf("first admit error = %v output=%s", err, firstOutput)
+	}
+	secondOutput, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "admit", taskPath, "--ledger", ledgerRel})
+	})
+	if err != nil {
+		t.Fatalf("second admit error = %v output=%s", err, secondOutput)
+	}
+
+	var firstRecord struct {
+		SchemaVersion       string         `json:"schema_version"`
+		TaskID              string         `json:"task_id"`
+		ActionType          string         `json:"action_type"`
+		ExecutionAuthorized bool           `json:"execution_authorized"`
+		ExecutionStarted    bool           `json:"execution_started"`
+		NomadQueryPlan      map[string]any `json:"nomad_query_plan"`
+		AdmissionHash       string         `json:"admission_hash"`
+	}
+	if err := json.Unmarshal([]byte(firstOutput), &firstRecord); err != nil {
+		t.Fatalf("admit output is not JSON: %v\n%s", err, firstOutput)
+	}
+	if firstRecord.SchemaVersion != "v35.operator_task_admission.v1" ||
+		firstRecord.TaskID != "task-start_nomad_sync-ab12cd" ||
+		firstRecord.ActionType != "start_nomad_sync" ||
+		firstRecord.ExecutionAuthorized ||
+		firstRecord.ExecutionStarted ||
+		firstRecord.NomadQueryPlan["schema_version"] != "v35.nomad_admission_plan.v1" ||
+		firstRecord.NomadQueryPlan["live_calls_authorized"] != false {
+		t.Fatalf("admission output mismatch: %#v", firstRecord)
+	}
+
+	var secondRecord struct {
+		AdmissionHash string `json:"admission_hash"`
+	}
+	if err := json.Unmarshal([]byte(secondOutput), &secondRecord); err != nil {
+		t.Fatalf("second admit output is not JSON: %v\n%s", err, secondOutput)
+	}
+	if secondRecord.AdmissionHash != firstRecord.AdmissionHash {
+		t.Fatalf("idempotent admit hash drift: first=%s second=%s", firstRecord.AdmissionHash, secondRecord.AdmissionHash)
+	}
+
+	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ledgerRel)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lines := strings.Count(strings.TrimSpace(string(body)), "\n") + 1; lines != 1 {
+		t.Fatalf("ledger line count = %d body=%s", lines, body)
+	}
+	for _, forbidden := range []string{"api_key", "mp-secret", "Bearer ", `D:\private`, "10.1000/example"} {
+		if strings.Contains(firstOutput+secondOutput+string(body), forbidden) {
+			t.Fatalf("workflow admission leaked raw payload value %q", forbidden)
+		}
+	}
+}
+
+func TestWorkflowTaskAdmitFromSubdirectoryWritesToRepositoryRoot(t *testing.T) {
+	root := t.TempDir()
+	writeSpiroctlRepoMarkers(t, root)
+	workdir := filepath.Join(root, "frontend", "atomreasonx")
+	if err := os.MkdirAll(workdir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(workdir)
+	taskPath := writeWorkflowTaskJSON(t, root, validStartNomadWorkflowTaskJSON())
+	ledgerRel := "data/lib/operator_tasks/operator-task-ledger.jsonl"
+
+	if _, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "admit", taskPath, "--ledger", ledgerRel})
+	}); err != nil {
+		t.Fatalf("admit from subdir error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(ledgerRel))); err != nil {
+		t.Fatalf("ledger was not written under repo root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workdir, filepath.FromSlash(ledgerRel))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ledger was written under cwd subdirectory, stat err = %v", err)
+	}
+}
+
+func TestWorkflowTaskAdmitRejectsLedgerPathOutsideOperatorTasks(t *testing.T) {
+	root := t.TempDir()
+	writeSpiroctlRepoMarkers(t, root)
+	t.Chdir(root)
+	taskPath := writeWorkflowTaskJSON(t, root, validStartNomadWorkflowTaskJSON())
+
+	err := run([]string{"workflow-task", "admit", taskPath, "--ledger", "data/lib/provider_cache/operator-task-ledger.jsonl"})
+	if err == nil || !strings.Contains(err.Error(), "workflow_task_ledger_path_unsafe") {
+		t.Fatalf("expected unsafe ledger path error, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "data", "lib")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("unsafe admit created data/lib directory, stat err = %v", statErr)
+	}
+}
+
 func TestRunRejectsUnknownTarget(t *testing.T) {
 	err := run([]string{"unknown", "validate", "data/source_registry.json"})
 	if err == nil || !strings.Contains(err.Error(), "unknown target") {
@@ -513,6 +655,54 @@ func writeSpiroctlMaterialsCloudReadySnapshot(t *testing.T, dir string) string {
 		t.Fatal(err)
 	}
 	return manifestPath
+}
+
+func writeWorkflowTaskJSON(t *testing.T, root string, body string) string {
+	t.Helper()
+	path := filepath.Join(root, "workflow-task.json")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func writeSpiroctlRepoMarkers(t *testing.T, root string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module spirosearch\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Join(root, "data")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "source_registry.json"), []byte("[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func validStartNomadWorkflowTaskJSON() string {
+	return `{
+		"kind":"workflow_command_task",
+		"schema_version":"v35.operator_task.v1",
+		"task_id":"task-start_nomad_sync-ab12cd",
+		"action_type":"start_nomad_sync",
+		"provider":"nomad_perla_psc",
+		"provider_scope":"source",
+		"status":"queued",
+		"queue_scope":"operator_local",
+		"declared_effects":["provider_sync_jobs"],
+		"writes_authorized":false,
+		"execution_started":false,
+		"created_at":null,
+		"config":{
+			"transport":"operator_task_queue",
+			"runtime_writes":false,
+			"api_key":"mp-secret",
+			"auth":"Bearer local-token",
+			"local_path":"D:\\private\\nomad.json",
+			"doi_list":["10.1000/example"]
+		}
+	}`
 }
 
 func createSpiroctlBackendFixture(t *testing.T, full bool) string {

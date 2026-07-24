@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"spirosearch/internal/localbackend"
 	"spirosearch/internal/materialsproject"
@@ -20,6 +22,7 @@ import (
 	"spirosearch/internal/runartifact"
 	"spirosearch/internal/sourceregistry"
 	"spirosearch/internal/sourcesnapshot"
+	"spirosearch/internal/workflowtask"
 )
 
 const (
@@ -76,8 +79,11 @@ func runWithDependencies(args []string, serve readonlyServeFunc, materialsProjec
 	if len(args) >= 3 && args[0] == "source-provider" && args[1] == "test-connection" {
 		return runSourceProviderTestConnection(args, materialsProjectProbe)
 	}
+	if len(args) >= 3 && args[0] == "workflow-task" {
+		return runWorkflowTask(args)
+	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -203,6 +209,84 @@ func runWithDependencies(args []string, serve readonlyServeFunc, materialsProjec
 	default:
 		return fmt.Errorf("unknown target: %s", args[0])
 	}
+}
+
+func runWorkflowTask(args []string) error {
+	if len(args) == 3 && args[1] == "validate" {
+		task, err := loadWorkflowTaskArtifact(args[2])
+		if err != nil {
+			return err
+		}
+		if err := workflowtask.ValidateTaskArtifact(task); err != nil {
+			return err
+		}
+		fmt.Printf("ok workflow-task action_type=%s task_id=%s\n", task.ActionType, task.TaskID)
+		return nil
+	}
+	if len(args) == 5 && args[1] == "admit" && args[3] == "--ledger" {
+		task, err := loadWorkflowTaskArtifact(args[2])
+		if err != nil {
+			return err
+		}
+		root, err := workflowTaskRepositoryRoot()
+		if err != nil {
+			return err
+		}
+		record, err := workflowtask.AppendAdmissionRecord(root, args[4], task, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(record)
+	}
+	return fmt.Errorf("usage: spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl>")
+}
+
+func workflowTaskRepositoryRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if isSpirosearchRepositoryRoot(dir) {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("workflow_task_repository_root_not_found")
+		}
+		dir = parent
+	}
+}
+
+func isSpirosearchRepositoryRoot(dir string) bool {
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(dir, "data", "source_registry.json")); err != nil {
+		return false
+	}
+	return true
+}
+
+func loadWorkflowTaskArtifact(path string) (workflowtask.TaskArtifact, error) {
+	handle, err := os.Open(path)
+	if err != nil {
+		return workflowtask.TaskArtifact{}, err
+	}
+	defer handle.Close()
+	decoder := json.NewDecoder(handle)
+	decoder.UseNumber()
+	var task workflowtask.TaskArtifact
+	if err := decoder.Decode(&task); err != nil {
+		return workflowtask.TaskArtifact{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil {
+		return workflowtask.TaskArtifact{}, fmt.Errorf("workflow task JSON must contain a single object")
+	} else if err != io.EOF {
+		return workflowtask.TaskArtifact{}, err
+	}
+	return task, nil
 }
 
 func runSourceProviderTestConnection(args []string, materialsProjectProbe materialsProjectProbeFunc) error {

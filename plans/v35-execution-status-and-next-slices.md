@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `b81e48a`
+Latest implementation HEAD before this status update: `850d6ff`
 Date: 2026-07-24
 
 ## Goal
@@ -12,6 +12,24 @@ Python scientific/ML paths as bounded bridge services until there is parity
 evidence. The goal is not reduced: Go owns deterministic runtime contracts and
 TypeScript owns AtomReasonX workbench surfaces; Python remains only where the
 scientific ecosystem is still the validated implementation.
+
+## External Architecture References
+
+External repositories are reference inputs, not authority to replace
+SpiroSearch's evidence gates.
+
+- `openai/codex` is usable as an Apache-2.0 architecture reference for local
+  agent CLI layering, explicit approvals, sandbox boundaries, and single
+  executable delivery. The absorbable pattern is trust-boundary structure, not
+  Codex-specific product behavior.
+- `esengine/DeepSeek-Reasonix` is MIT-licensed and useful as a Go/TypeScript
+  agent-shell reference: configuration-driven command allowlists, MCP/skill
+  extensibility, gated tool execution, and CLI/desktop parity all map cleanly
+  onto SpiroSearch's sidecar and command-plane direction.
+- `tufeiping/api-for-cherrystudio` / Cherry Studio style API surfaces are useful
+  only as conceptual input for a unified model/RAG/knowledge façade with
+  secret-free frontend state. Do not copy code or wholesale replace modules
+  unless license compatibility is reviewed for the exact source revision.
 
 ## Completed Commits
 
@@ -56,6 +74,7 @@ The current branch contains these V35 execution commits:
 | `1ffa0c3` | P2 Materials Project operator command transport | Routes AtomReasonX source config commands through a fixed Tauri bridge to Python `ConfigCommandPlane`, while non-config workflow actions remain queued and read-only/runtime writer boundaries stay separate. |
 | `e410a4c` | P1 AtomReasonX source-settings command projection | Projects accepted source config command results into the UI-local workbench state, preserves readonly/no-command mode, ignores rejected/queued/non-source/stale results, and keeps source-setting projection secret-free. |
 | `b81e48a` | P1 AtomReasonX workflow operator task queue | Converts known NOMAD/import/workflow commands into explicit UI-local `workflow_command_task` artifacts with `writes_authorized=false` and `execution_started=false`; unknown commands remain `transport_pending`, and no provider cache, SQLite, scoring, experiment, download, or live provider write path is invoked. |
+| `850d6ff` | P1/P2 workflow task admission foundation | Adds Go workflow task validation, append-only ledger foundation, and admission schema. This commit stops before NOMAD query-plan attachment, CLI admission, and drift gates; the current checkpoint completes those follow-up tasks. |
 
 ## Current Data Source Status
 
@@ -76,6 +95,12 @@ The current branch contains these V35 execution commits:
 ## Verification Evidence
 
 Recent gates run during this checkpoint:
+
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/workflowtask -v` passed as the baseline for the existing Task 1/2 ledger foundation.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/workflowtask ./internal/nomadperla -v` first failed as expected after adding Task 3 tests because `BuildNomadAdmissionPlan` did not exist and `NomadQueryPlan` was still `null`; it then passed after implementing the pure NOMAD admission planner and ledger attachment.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/workflowtask ./internal/nomadperla ./cmd/spiroctl -v` passed after adding `workflow-task validate` and `workflow-task admit`.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 30 tests after adding TypeScript/Go/schema/CLI drift sentinels; the sandboxed `.venv` Python command remained blocked by local uv trampoline permissions.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after adding workflow task and NOMAD admission coverage.
 
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/runartifact ./cmd/spiroctl -v` passed for the run artifact slice.

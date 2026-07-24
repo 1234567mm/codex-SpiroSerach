@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"spirosearch/internal/nomadperla"
 	"spirosearch/internal/providercache"
 )
 
@@ -23,8 +25,9 @@ const (
 )
 
 var (
-	ErrLedgerPathUnsafe = errors.New("workflow_task_ledger_path_unsafe")
-	ErrLedgerInvalid    = errors.New("workflow_task_ledger_invalid")
+	ErrLedgerPathUnsafe       = errors.New("workflow_task_ledger_path_unsafe")
+	ErrLedgerInvalid          = errors.New("workflow_task_ledger_invalid")
+	ErrLedgerTaskHashMismatch = errors.New("workflow_task_ledger_task_hash_mismatch")
 )
 
 type AdmissionRecord struct {
@@ -53,8 +56,12 @@ func AppendAdmissionRecord(root string, ledgerRelPath string, task TaskArtifact,
 	if err != nil {
 		return AdmissionRecord{}, err
 	}
+	operatorTaskHash, err := taskHash(task)
+	if err != nil {
+		return AdmissionRecord{}, err
+	}
 
-	existing, ok, err := findExistingAdmissionRecord(ledgerPath, task.TaskID)
+	existing, ok, err := findExistingAdmissionRecord(ledgerPath, task.TaskID, operatorTaskHash)
 	if err != nil {
 		return AdmissionRecord{}, err
 	}
@@ -85,7 +92,7 @@ func AppendAdmissionRecord(root string, ledgerRelPath string, task TaskArtifact,
 }
 
 func buildAdmissionRecord(task TaskArtifact, now time.Time) (AdmissionRecord, error) {
-	operatorTaskHash, err := providercache.StableHash(operatorTaskHashPayload(task))
+	operatorTaskHash, err := taskHash(task)
 	if err != nil {
 		return AdmissionRecord{}, fmt.Errorf("workflow_task_hash_failed: %w", err)
 	}
@@ -109,6 +116,11 @@ func buildAdmissionRecord(task TaskArtifact, now time.Time) (AdmissionRecord, er
 		TargetDataLibraryPath:   targetDataLibraryPath(definition.Provider, task.TaskID),
 		NomadQueryPlan:          nil,
 	}
+	nomadQueryPlan, err := buildNomadQueryPlan(task, definition)
+	if err != nil {
+		return AdmissionRecord{}, err
+	}
+	record.NomadQueryPlan = nomadQueryPlan
 	admissionHash, err := providercache.StableHash(admissionHashPayload(record))
 	if err != nil {
 		return AdmissionRecord{}, fmt.Errorf("workflow_task_admission_hash_failed: %w", err)
@@ -117,7 +129,7 @@ func buildAdmissionRecord(task TaskArtifact, now time.Time) (AdmissionRecord, er
 	return record, nil
 }
 
-func findExistingAdmissionRecord(ledgerPath string, taskID string) (AdmissionRecord, bool, error) {
+func findExistingAdmissionRecord(ledgerPath string, taskID string, operatorTaskHash string) (AdmissionRecord, bool, error) {
 	handle, err := os.Open(ledgerPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return AdmissionRecord{}, false, nil
@@ -135,13 +147,22 @@ func findExistingAdmissionRecord(ledgerPath string, taskID string) (AdmissionRec
 			return AdmissionRecord{}, false, ErrLedgerInvalid
 		}
 		var record AdmissionRecord
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
+		decoder := json.NewDecoder(strings.NewReader(line))
+		decoder.UseNumber()
+		if err := decoder.Decode(&record); err != nil {
+			return AdmissionRecord{}, false, ErrLedgerInvalid
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); err == nil || err != io.EOF {
 			return AdmissionRecord{}, false, ErrLedgerInvalid
 		}
 		if err := validateAdmissionRecord(record); err != nil {
 			return AdmissionRecord{}, false, err
 		}
 		if record.TaskID == taskID {
+			if record.OperatorTaskHash != operatorTaskHash {
+				return AdmissionRecord{}, false, ErrLedgerTaskHashMismatch
+			}
 			return record, true, nil
 		}
 	}
@@ -179,6 +200,9 @@ func validateAdmissionRecord(record AdmissionRecord) error {
 	if record.TargetDataLibraryPath != targetDataLibraryPath(definition.Provider, record.TaskID) {
 		return ErrLedgerInvalid
 	}
+	if err := validateNomadQueryPlan(record, definition); err != nil {
+		return err
+	}
 	expectedAdmissionHash, err := providercache.StableHash(admissionHashPayload(record))
 	if err != nil || expectedAdmissionHash != record.AdmissionHash {
 		return ErrLedgerInvalid
@@ -207,6 +231,47 @@ func resolveLedgerPath(root string, ledgerRelPath string) (string, string, error
 		return "", "", ErrLedgerPathUnsafe
 	}
 	return normalized, targetAbs, nil
+}
+
+func buildNomadQueryPlan(task TaskArtifact, definition Definition) (any, error) {
+	if task.ActionType != "start_nomad_sync" {
+		return nil, nil
+	}
+	plan, err := nomadperla.BuildNomadAdmissionPlan(nomadperla.AdmissionTask{
+		ActionType:    task.ActionType,
+		Provider:      copyStringPointer(definition.Provider),
+		ProviderScope: definition.ProviderScope,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return plan.ToMap(), nil
+}
+
+func validateNomadQueryPlan(record AdmissionRecord, definition Definition) error {
+	if record.ActionType != "start_nomad_sync" {
+		if record.NomadQueryPlan != nil {
+			return ErrLedgerInvalid
+		}
+		return nil
+	}
+	expected, err := buildNomadQueryPlan(TaskArtifact{ActionType: record.ActionType}, definition)
+	if err != nil || expected == nil || record.NomadQueryPlan == nil {
+		return ErrLedgerInvalid
+	}
+	expectedHash, err := providercache.StableHash(expected)
+	if err != nil {
+		return ErrLedgerInvalid
+	}
+	actualHash, err := providercache.StableHash(record.NomadQueryPlan)
+	if err != nil || actualHash != expectedHash {
+		return ErrLedgerInvalid
+	}
+	return nil
+}
+
+func taskHash(task TaskArtifact) (string, error) {
+	return providercache.StableHash(operatorTaskHashPayload(task))
 }
 
 func normalizeLedgerPath(ledgerRelPath string) (string, error) {
