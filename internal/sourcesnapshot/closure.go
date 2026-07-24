@@ -248,7 +248,7 @@ func evaluateClosureReadiness(dir string, manifest Manifest, records []map[strin
 
 	switch manifest.SourceID {
 	case pubchemqcProvider:
-		evaluatePubChemQCClosure(manifest, records, evidence, add)
+		evaluatePubChemQCClosure(dir, manifest, records, evidence, add)
 	case materialsCloudProvider:
 		evaluateMaterialsCloudClosure(dir, manifest, records, evidence, add)
 	}
@@ -296,6 +296,7 @@ func validateSharedClosureEvidence(evidence ClosureEvidence, manifest Manifest, 
 }
 
 func evaluatePubChemQCClosure(
+	dir string,
 	manifest Manifest,
 	records []map[string]any,
 	evidence *ClosureEvidence,
@@ -306,6 +307,11 @@ func evaluatePubChemQCClosure(
 	}
 	if evidence == nil || strings.TrimSpace(evidence.ParserParityReport) == "" {
 		add("pubchemqc_parser_parity_missing")
+	}
+	if strings.TrimSpace(dir) != "" && evidence != nil {
+		if err := validatePubChemQCClosureReportBodies(dir, records, manifest); err != nil {
+			add(pubChemQCClosureReasonForReportError(err))
+		}
 	}
 	for _, record := range records {
 		if err := validatePubChemQCRecord(record); err != nil {
@@ -327,6 +333,18 @@ func evaluatePubChemQCClosure(
 	}
 	if strings.TrimSpace(manifest.RequiredCitation) == "" {
 		add("citation_review_missing")
+	}
+}
+
+func pubChemQCClosureReasonForReportError(err error) string {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "pubchemqc_python_oracle_report_invalid"):
+		return "pubchemqc_python_oracle_report_invalid"
+	case strings.Contains(message, "pubchemqc_parser_parity_report_invalid"):
+		return "pubchemqc_parser_parity_report_invalid"
+	default:
+		return "pubchemqc_closure_report_invalid"
 	}
 }
 

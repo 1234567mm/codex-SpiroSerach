@@ -217,6 +217,11 @@ func LoadPubChemQCDataset(dir string) (PubChemQCDataset, error) {
 			return PubChemQCDataset{}, fmt.Errorf("pubchemqc record %d: %w", index, err)
 		}
 	}
+	if manifest.QuarantineStatus == "ready" && !isFixtureVersion(manifest.DatasetVersion) {
+		if err := validatePubChemQCClosureReportBodies(dir, records, manifest); err != nil {
+			return PubChemQCDataset{}, err
+		}
+	}
 	return PubChemQCDataset{Manifest: manifest, Records: records}, nil
 }
 

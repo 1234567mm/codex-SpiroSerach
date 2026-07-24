@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/pubchemqc-parser-parity-report.schema.json",
+  "title": "PubChemQCParserParityReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "parser", "oracle", "accepted_fields"],
+  "properties": {
+    "schema_version": { "const": "v35.pubchemqc_parser_parity_report.v1" },
+    "status": { "const": "pass" },
+    "parser": { "const": "go" },
+    "oracle": { "const": "python" },
+    "accepted_fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "pubchem_cid",
+          "inchi_key",
+          "homo_ev",
+          "lumo_ev",
+          "band_gap_ev",
+          "method",
+          "basis_set",
+          "computed",
+          "source_doi",
+          "license",
+          "dataset_version",
+          "required_citation"
+        ]
+      }
+    }
+  }
+}

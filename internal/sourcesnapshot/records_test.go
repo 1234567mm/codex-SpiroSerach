@@ -349,6 +349,41 @@ func TestPubChemQCSnapshotRequiresExplicitComputedFactFlag(t *testing.T) {
 	}
 }
 
+func TestPubChemQCSnapshotRejectsReadySnapshotWithInvalidOracleReportBody(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyPubChemQCSnapshot(t, dir)
+	replaceSnapshotFile(t, dir, "validation/python-oracle.json", []byte(`{"schema_version":"v35.pubchemqc_python_oracle_report.v1","status":"pass","oracle":"python","record_count":2}`))
+
+	_, err := LoadPubChemQCDataset(dir)
+	if err == nil || !strings.Contains(err.Error(), "pubchemqc_python_oracle_report_invalid") {
+		t.Fatalf("expected python oracle report validation failure, got %v", err)
+	}
+}
+
+func TestPubChemQCSnapshotRejectsReadySnapshotWithoutClosureEvidence(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyPubChemQCSnapshot(t, dir)
+	updateSnapshotManifest(t, dir, func(manifest *Manifest) {
+		manifest.ClosureEvidence = nil
+	})
+
+	_, err := LoadPubChemQCDataset(dir)
+	if err == nil || !strings.Contains(err.Error(), "closure_evidence_missing") {
+		t.Fatalf("expected closure evidence validation failure, got %v", err)
+	}
+}
+
+func TestPubChemQCSnapshotRejectsUnlistedClosureReport(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyPubChemQCSnapshot(t, dir)
+	removeSnapshotManifestFile(t, dir, "validation/parser-parity.json")
+
+	_, err := LoadPubChemQCDataset(dir)
+	if err == nil || !strings.Contains(err.Error(), "closure_evidence_file_unlisted") {
+		t.Fatalf("expected unlisted closure report validation failure, got %v", err)
+	}
+}
+
 func TestMaterialsCloudSnapshotRequiresRecordLicenseCitationAndMetadataOnlyFlag(t *testing.T) {
 	dir := t.TempDir()
 	records := `[{"archive_record_id":"mc-1","dataset_doi":"10.24435/materialscloud.fixture","dataset_version":"v1","title":"Fixture","download_url":"https://archive.materialscloud.org/record/file","license":"","required_citation":"fixture citation","computed":false,"metadata_only":true}]`
@@ -473,6 +508,23 @@ func TestSourceRegistryMarksHopv15AndOpvDbGoShadowReady(t *testing.T) {
 		if !containsString(materialsCloud.AllowedOutputFields, field) {
 			t.Fatalf("materials_cloud missing allowed output field %q", field)
 		}
+	}
+}
+
+func updateSnapshotManifest(t *testing.T, dir string, mutate func(*Manifest)) {
+	t.Helper()
+	manifestPath := filepath.Join(dir, "source-manifest.json")
+	manifest, err := LoadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutate(&manifest)
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

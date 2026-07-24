@@ -296,6 +296,12 @@ Assert-SchemaConst 'schemas/materials-cloud-record-parser-report.schema.json' `
 Assert-SchemaConst 'schemas/materials-cloud-unit-validation-report.schema.json' `
     'schema_version' `
     'v35.materials_cloud_unit_validation_report.v1'
+Assert-SchemaConst 'schemas/pubchemqc-python-oracle-report.schema.json' `
+    'schema_version' `
+    'v35.pubchemqc_python_oracle_report.v1'
+Assert-SchemaConst 'schemas/pubchemqc-parser-parity-report.schema.json' `
+    'schema_version' `
+    'v35.pubchemqc_parser_parity_report.v1'
 Assert-SchemaConst 'schemas/source-provider-connection-probe.schema.json' `
     'schema_version' `
     'v35.source_provider_connection_probe.v1'

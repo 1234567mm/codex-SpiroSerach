@@ -179,6 +179,41 @@ func TestMaterialsCloudClosureReportSchemasMatchGoContracts(t *testing.T) {
 	}
 }
 
+func TestPubChemQCClosureReportSchemasMatchGoContracts(t *testing.T) {
+	oracleRaw, err := os.ReadFile("../../schemas/pubchemqc-python-oracle-report.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var oracleSchema map[string]any
+	if err := json.Unmarshal(oracleRaw, &oracleSchema); err != nil {
+		t.Fatal(err)
+	}
+	oracleProperties := oracleSchema["properties"].(map[string]any)
+	if oracleProperties["schema_version"].(map[string]any)["const"] != PubChemQCPythonOracleReportSchemaVersion {
+		t.Fatalf("python oracle schema_version const drifted")
+	}
+
+	parityRaw, err := os.ReadFile("../../schemas/pubchemqc-parser-parity-report.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paritySchema map[string]any
+	if err := json.Unmarshal(parityRaw, &paritySchema); err != nil {
+		t.Fatal(err)
+	}
+	parityProperties := paritySchema["properties"].(map[string]any)
+	if parityProperties["schema_version"].(map[string]any)["const"] != PubChemQCParserParityReportSchemaVersion {
+		t.Fatalf("parser parity schema_version const drifted")
+	}
+	acceptedFieldItems := parityProperties["accepted_fields"].(map[string]any)["items"].(map[string]any)
+	acceptedFields := stringSetFromAnySlice(acceptedFieldItems["enum"].([]any))
+	for field := range pubchemqcClosureKnownFields {
+		if !acceptedFields[field] {
+			t.Fatalf("parser parity schema missing accepted field %q", field)
+		}
+	}
+}
+
 func TestClosureReadinessAcceptsMaterialsCloudSingleRecordScientificEvidence(t *testing.T) {
 	dir := t.TempDir()
 	writeClosureReadyMaterialsCloudSnapshot(t, dir)
@@ -197,6 +232,44 @@ func TestClosureReadinessAcceptsMaterialsCloudSingleRecordScientificEvidence(t *
 	}
 	if report.SourceID != materialsCloudProvider || report.ClosureGateStatus != "pass" {
 		t.Fatalf("closure report identity mismatch: %#v", report)
+	}
+}
+
+func TestClosureReadinessRejectsPubChemQCFailedPythonOracleReport(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyPubChemQCSnapshot(t, dir)
+	replaceSnapshotFile(t, dir, "validation/python-oracle.json", []byte(`{"schema_version":"v35.pubchemqc_python_oracle_report.v1","status":"fail","oracle":"python","record_count":1}`))
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Ready || !containsString(report.Reasons, "pubchemqc_python_oracle_report_invalid") {
+		t.Fatalf("expected python oracle report rejection, got %#v", report)
+	}
+}
+
+func TestClosureReadinessRejectsPubChemQCMissingParserAcceptedField(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyPubChemQCSnapshot(t, dir)
+	replaceSnapshotFile(t, dir, "validation/parser-parity.json", []byte(`{"schema_version":"v35.pubchemqc_parser_parity_report.v1","status":"pass","parser":"go","oracle":"python","accepted_fields":["pubchem_cid","inchi_key","homo_ev","lumo_ev","band_gap_ev","method","basis_set","computed","source_doi","license","dataset_version"]}`))
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Ready || !containsString(report.Reasons, "pubchemqc_parser_parity_report_invalid") {
+		t.Fatalf("expected parser parity report rejection, got %#v", report)
 	}
 }
 
@@ -386,8 +459,8 @@ func writeClosureReadyPubChemQCSnapshotWithMutation(t *testing.T, dir string, mu
 		"raw/pubchemqc-b3lyp.tar.zst":   []byte("synthetic raw archive placeholder"),
 		"docs/license.txt":              []byte("PubChemQC public dataset terms"),
 		"docs/attribution.txt":          []byte("PubChemQC project paper and dataset"),
-		"validation/python-oracle.json": []byte(`{"status":"pass","oracle":"python","records":1}`),
-		"validation/parser-parity.json": []byte(`{"status":"pass","parser":"go","oracle":"python"}`),
+		"validation/python-oracle.json": []byte(`{"schema_version":"v35.pubchemqc_python_oracle_report.v1","status":"pass","oracle":"python","record_count":1}`),
+		"validation/parser-parity.json": []byte(`{"schema_version":"v35.pubchemqc_parser_parity_report.v1","status":"pass","parser":"go","oracle":"python","accepted_fields":["pubchem_cid","inchi_key","homo_ev","lumo_ev","band_gap_ev","method","basis_set","computed","source_doi","license","dataset_version","required_citation"]}`),
 	}
 	roles := map[string]string{
 		"records.json":                  "normalized_records",

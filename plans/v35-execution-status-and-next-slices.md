@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `a67ef09`
+Latest implementation HEAD before this status update: `febabe3`
 Date: 2026-07-24
 
 ## Goal
@@ -50,7 +50,8 @@ The current branch contains these V35 execution commits:
 | `3802fe5` | P2 backend Materials Project probe command bridge | Connects Python `ConfigCommandPlane` source `test_connection` results to the V35 Materials Project probe report shape, with missing-key no-runner behavior, backend-owned secret source tracking, fixed Go `spiroctl` runner support, sanitized output artifacts, and idempotent replay of prior probe artifacts without a second live runner call. |
 | `afc8d42` | P3 Materials Cloud single-record scientific closure contract | Adds a record-specific Materials Cloud scientific import admission path gated by parser, unit, checksum, license, citation, and manifest-listed validation evidence; metadata-only fixtures remain blocked, unknown scientific fields still fail closed, and `source-closure` readiness gains a schema-pinned JSON contract. |
 | `a67ef09` | Agent verification workflow optimization | Makes broad gates milestone evidence, adds targeted review-fix reverification rules, discovery/test budget guidance, and verification-scope reporting without changing runtime behavior. |
-| current slice | P3 Materials Cloud report-body closure hardening | Adds schema-pinned Materials Cloud parser/unit report bodies and fail-closed validation for `status=pass`, accepted scientific fields, and expected units before any single-record scientific bundle can pass closure or load as provider facts. |
+| `febabe3` | P3 Materials Cloud report-body closure hardening | Adds schema-pinned Materials Cloud parser/unit report bodies and fail-closed validation for `status=pass`, accepted scientific fields, and expected units before any single-record scientific bundle can pass closure or load as provider facts. |
+| current slice | P3 PubChemQC Python bridge report-body closure hardening | Adds schema-pinned PubChemQC Python oracle and Go-vs-Python parser parity reports, requiring `status=pass`, oracle/parser identity, record-count agreement, and accepted-field coverage before a ready snapshot can pass closure. |
 
 ## Current Data Source Status
 
@@ -61,7 +62,7 @@ The current branch contains these V35 execution commits:
 | NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. | Keep archive fallback conservative; add live sync transport only behind explicit operator command. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
-| PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts. | Full dataset acquisition, parser parity, Python oracle report, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
+| PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts; ready snapshots now require schema-valid Python oracle and parser parity report bodies. | Full dataset acquisition, real parser parity, Python oracle output, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
 | Materials Cloud | Manual archive metadata import plus P3 closure-readiness gate; metadata-only facts remain blocked; a single-record scientific path is now defined only for explicitly allowlisted fields with parser, unit, checksum, license, citation, manifest-listed validation evidence, and schema-valid parser/unit report bodies. | Real operator-selected record DOI/version/file bundle, record-specific parser report body, unit validation body, license/citation review, checksum coverage, and identity evidence before non-fixture scientific facts are admitted. |
 | NOMAD perovskite schema package | Schema/reference module; not a data mirror. | Optional deeper schema extraction only if it improves field alias coverage. |
 | Crossref/OpenAlex | Existing Python/provider plan surfaces; not part of current Go parity wave. | Future literature metadata Go parity after data-source P3 stabilizes. |
@@ -156,6 +157,9 @@ Recent gates run during this checkpoint:
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot -v` passed after Materials Cloud report-body closure hardening, covering schema drift, parser report `status=fail`, missing accepted fields, mismatched units, and provider loader rejection.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after Materials Cloud report-body closure hardening.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after Materials Cloud report-body closure hardening. No Python/frontend/full Go rerun was required because this slice only changed Go source snapshot/closure code, Go CLI fixture tests, source closure schemas, and the V35 validation script.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot -v` passed after PubChemQC Python bridge report-body closure hardening, covering schema drift, failed oracle report, missing parser accepted field, and ready-snapshot loader rejection.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after PubChemQC Python bridge report-body closure hardening.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after PubChemQC Python bridge report-body closure hardening. Broader Python/frontend/full Go gates were intentionally omitted because this slice only changed Go source snapshot/closure code, source closure schemas, and V35 schema checks; it does not change Python bridge implementation or AtomReasonX runtime code.
 
 ## Remaining Work
 
@@ -171,8 +175,11 @@ Recent gates run during this checkpoint:
 2. PubChemQC full snapshot import remains open. Do not claim Go replacement
    until dataset-size handling, parser parity, Python oracle comparison,
    identity join, checksum, license/citation, and storage policy pass the
-   readiness gate. Deferred scientific fields such as geometry, total energy,
-   dipole, charge state, or software must fail closed until parser parity exists.
+   readiness gate. The Python oracle and parser parity reports now have
+   machine-checkable bodies, but real snapshot acquisition and oracle generation
+   are still required. Deferred scientific fields such as geometry, total
+   energy, dipole, charge state, or software must fail closed until parser
+   parity exists.
 3. Materials Cloud scientific import remains open for real data, but the
    admission contract is now explicit for a single record: parser report, unit
    validation, record-specific license/citation review, checksum coverage,
