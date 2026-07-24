@@ -116,11 +116,19 @@ var (
 		"required_citation",
 		"computed",
 		"metadata_only",
+		"material_id",
+		"formula",
+		"structure_ref",
+		"band_gap_ev",
+		"formation_energy_ev_per_atom",
+		"energy_above_hull_ev",
+		"method",
+		"software",
 		"review_required",
 		"review_reasons",
 		"resolution_status",
 	)
-	materialsCloudRawRecordFields = setOf(
+	materialsCloudMetadataRecordFields = setOf(
 		"archive_record_id",
 		"dataset_doi",
 		"dataset_version",
@@ -130,6 +138,26 @@ var (
 		"required_citation",
 		"computed",
 		"metadata_only",
+	)
+	materialsCloudScientificRecordFields = setOf(
+		"archive_record_id",
+		"dataset_doi",
+		"dataset_version",
+		"title",
+		"download_url",
+		"license",
+		"required_citation",
+		"computed",
+		"metadata_only",
+		"material_id",
+		"formula",
+		"structure_ref",
+		"band_gap_ev",
+		"formation_energy_ev_per_atom",
+		"energy_above_hull_ev",
+		"method",
+		"software",
+		"resolution_status",
 	)
 )
 
@@ -198,7 +226,7 @@ func LoadMaterialsCloudDataset(dir string) (MaterialsCloudDataset, error) {
 		return MaterialsCloudDataset{}, err
 	}
 	for index, record := range records {
-		if err := validateMaterialsCloudRecord(record); err != nil {
+		if err := validateMaterialsCloudRecord(record, manifest); err != nil {
 			return MaterialsCloudDataset{}, fmt.Errorf("materials_cloud record %d: %w", index, err)
 		}
 	}
@@ -548,12 +576,7 @@ func validatePubChemQCRecord(record map[string]any) error {
 	return nil
 }
 
-func validateMaterialsCloudRecord(record map[string]any) error {
-	for field := range record {
-		if !materialsCloudRawRecordFields[field] {
-			return fmt.Errorf("parser_not_defined for Materials Cloud field: %s", field)
-		}
-	}
+func validateMaterialsCloudRecord(record map[string]any, manifest Manifest) error {
 	for _, field := range []string{
 		"archive_record_id",
 		"dataset_doi",
@@ -567,15 +590,96 @@ func validateMaterialsCloudRecord(record map[string]any) error {
 			return fmt.Errorf("%s is required", field)
 		}
 	}
-	if value, ok := record["metadata_only"]; !ok || value == nil {
+	metadataOnlyValue, ok := record["metadata_only"]
+	if !ok || metadataOnlyValue == nil {
 		return errors.New("metadata_only must be true for Materials Cloud archive metadata records")
-	} else if parsed, ok := value.(bool); !ok || !parsed {
-		return errors.New("metadata_only must be true for Materials Cloud archive metadata records")
+	}
+	metadataOnly, ok := metadataOnlyValue.(bool)
+	if !ok {
+		return errors.New("metadata_only must be boolean for Materials Cloud records")
+	}
+	if metadataOnly {
+		return validateMaterialsCloudMetadataRecord(record)
+	}
+	return validateMaterialsCloudScientificRecord(record, manifest)
+}
+
+func validateMaterialsCloudMetadataRecord(record map[string]any) error {
+	for field := range record {
+		if !materialsCloudMetadataRecordFields[field] {
+			return fmt.Errorf("parser_not_defined for Materials Cloud field: %s", field)
+		}
 	}
 	if value, ok := record["computed"]; ok && value != nil {
 		parsed, ok := value.(bool)
 		if !ok || parsed {
 			return errors.New("computed must be false for Materials Cloud archive metadata records")
+		}
+	}
+	return nil
+}
+
+func validateMaterialsCloudScientificRecord(record map[string]any, manifest Manifest) error {
+	if err := validateMaterialsCloudScientificClosureEvidence(manifest); err != nil {
+		return err
+	}
+	for field := range record {
+		if !materialsCloudScientificRecordFields[field] {
+			return fmt.Errorf("parser_not_defined for Materials Cloud field: %s", field)
+		}
+	}
+	if value, ok := record["computed"]; !ok || value == nil {
+		return errors.New("computed must be true for Materials Cloud scientific records")
+	} else if parsed, ok := value.(bool); !ok || !parsed {
+		return errors.New("computed must be true for Materials Cloud scientific records")
+	}
+	for _, field := range []string{"material_id", "formula", "structure_ref", "method", "software"} {
+		if stringField(record, field) == "" {
+			return fmt.Errorf("%s is required for Materials Cloud scientific records", field)
+		}
+	}
+	if !manifestFilePathListed(manifest, stringField(record, "structure_ref")) {
+		return errors.New("materials_cloud_structure_ref_unlisted")
+	}
+	requiredFloat, err := optionalFloatField(record, "band_gap_ev")
+	if err != nil {
+		return err
+	}
+	if _, ok := record["band_gap_ev"]; !ok || record["band_gap_ev"] == nil || !isFinite(requiredFloat) {
+		return errors.New("band_gap_ev is required and must be finite for Materials Cloud scientific records")
+	}
+	for _, field := range []string{"formation_energy_ev_per_atom", "energy_above_hull_ev"} {
+		value, err := optionalFloatField(record, field)
+		if err != nil {
+			return err
+		}
+		if _, ok := record[field]; ok && record[field] != nil && !isFinite(value) {
+			return fmt.Errorf("%s must be finite", field)
+		}
+	}
+	return nil
+}
+
+func validateMaterialsCloudScientificClosureEvidence(manifest Manifest) error {
+	if manifest.ClosureEvidence == nil {
+		return errors.New("closure_evidence_missing for Materials Cloud scientific record")
+	}
+	evidence := manifest.ClosureEvidence
+	if strings.TrimSpace(evidence.SchemaVersion) != ClosureEvidenceSchemaVersion ||
+		strings.TrimSpace(evidence.ParserName) == "" ||
+		strings.TrimSpace(evidence.ParserVersion) == "" ||
+		strings.TrimSpace(evidence.ChecksumPolicy) != "sha256_all_manifest_files" ||
+		strings.TrimSpace(evidence.LicenseReview) == "" ||
+		strings.TrimSpace(evidence.CitationReview) != "complete" ||
+		strings.TrimSpace(evidence.UnitSystem) == "" ||
+		strings.TrimSpace(evidence.RecordParserReport) == "" ||
+		strings.TrimSpace(evidence.UnitValidationReport) == "" ||
+		strings.TrimSpace(evidence.RecordLicenseReview) != "record_specific_complete" {
+		return errors.New("closure_evidence_missing for Materials Cloud scientific record")
+	}
+	for _, relativePath := range []string{evidence.RecordParserReport, evidence.UnitValidationReport} {
+		if !manifestFilePathListed(manifest, relativePath) {
+			return errors.New("closure_evidence_file_unlisted")
 		}
 	}
 	return nil
@@ -648,7 +752,22 @@ func normalizePubChemQCRecord(record map[string]any, manifest Manifest) map[stri
 }
 
 func normalizeMaterialsCloudRecord(record map[string]any) map[string]any {
-	return map[string]any{
+	if boolField(record, "metadata_only", true) {
+		return map[string]any{
+			"archive_record_id": stringField(record, "archive_record_id"),
+			"dataset_doi":       stringField(record, "dataset_doi"),
+			"dataset_version":   stringField(record, "dataset_version"),
+			"title":             stringField(record, "title"),
+			"download_url":      stringField(record, "download_url"),
+			"license":           stringField(record, "license"),
+			"required_citation": stringField(record, "required_citation"),
+			"computed":          false,
+			"metadata_only":     true,
+			"review_required":   true,
+			"review_reasons":    []string{"metadata_only_not_scientific_fact"},
+		}
+	}
+	normalized := map[string]any{
 		"archive_record_id": stringField(record, "archive_record_id"),
 		"dataset_doi":       stringField(record, "dataset_doi"),
 		"dataset_version":   stringField(record, "dataset_version"),
@@ -656,11 +775,21 @@ func normalizeMaterialsCloudRecord(record map[string]any) map[string]any {
 		"download_url":      stringField(record, "download_url"),
 		"license":           stringField(record, "license"),
 		"required_citation": stringField(record, "required_citation"),
-		"computed":          false,
-		"metadata_only":     true,
-		"review_required":   true,
-		"review_reasons":    []string{"metadata_only_not_scientific_fact"},
+		"computed":          true,
+		"metadata_only":     false,
+		"review_required":   false,
+		"review_reasons":    []string{},
 	}
+	for _, field := range []string{"material_id", "formula", "structure_ref", "method", "software", "resolution_status"} {
+		putOptionalString(normalized, record, field)
+	}
+	for _, field := range []string{"band_gap_ev", "formation_energy_ev_per_atom", "energy_above_hull_ev"} {
+		putOptionalFloat(normalized, record, field)
+	}
+	if stringField(record, "resolution_status") == "" {
+		normalized["resolution_status"] = "resolved"
+	}
+	return normalized
 }
 
 func providerResponseFromRecord(

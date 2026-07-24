@@ -287,6 +287,9 @@ if ([string]::IsNullOrWhiteSpace($env:GOCACHE)) {
 Assert-SchemaConst 'schemas/source-closure-requirements.schema.json' `
     'schema_version' `
     'v35.source_closure_requirements.v1'
+Assert-SchemaConst 'schemas/source-closure-readiness.schema.json' `
+    'schema_version' `
+    'v35.source_closure_readiness.v1'
 Assert-SchemaConst 'schemas/source-provider-connection-probe.schema.json' `
     'schema_version' `
     'v35.source_provider_connection_probe.v1'

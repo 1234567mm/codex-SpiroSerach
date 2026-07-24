@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -209,6 +210,40 @@ func TestMaterialsCloudDatasetLookupProducesMetadataOnlyProviderResponse(t *test
 	}
 }
 
+func TestMaterialsCloudDatasetLookupProducesScientificProviderResponseWithParserEvidence(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyMaterialsCloudSnapshot(t, dir)
+	dataset, err := LoadMaterialsCloudDataset(dir)
+	if err != nil {
+		t.Fatalf("LoadMaterialsCloudDataset() error = %v", err)
+	}
+
+	response, err := dataset.LookupArchiveRecordID(context.Background(), "mc-scientific-1")
+	if err != nil {
+		t.Fatalf("LookupArchiveRecordID() error = %v", err)
+	}
+
+	if response.Provider != "materials_cloud" || response.Query != "archive_record_id:mc-scientific-1" {
+		t.Fatalf("provider/query mismatch: %#v", response)
+	}
+	if response.Normalized["metadata_only"] != false ||
+		response.Normalized["computed"] != true ||
+		response.Normalized["material_id"] != "mc-material-cspbi3" ||
+		response.Normalized["formula"] != "CsPbI3" ||
+		response.Normalized["band_gap_ev"] != 1.73 ||
+		response.Normalized["formation_energy_ev_per_atom"] != -1.21 ||
+		response.Normalized["energy_above_hull_ev"] != 0.02 ||
+		response.Normalized["review_required"] != false {
+		t.Fatalf("normalized scientific result mismatch: %#v", response.Normalized)
+	}
+	if hasAnyKey(response.Normalized, "recommendation", "verdict", "decision", "score") {
+		t.Fatalf("provider facts must not contain conclusions: %#v", response.Normalized)
+	}
+	if err := providercache.ValidateProviderResponse(response); err != nil {
+		t.Fatalf("provider response contract violation: %v", err)
+	}
+}
+
 func TestLocalDatasetMissingRecordsAreLowConfidenceProviderFacts(t *testing.T) {
 	hopv15, err := LoadHopv15Dataset("../../data/lib/hopv15")
 	if err != nil {
@@ -347,6 +382,40 @@ func TestMaterialsCloudSnapshotRejectsScientificFieldsWithoutParser(t *testing.T
 	}
 }
 
+func TestMaterialsCloudSnapshotRejectsScientificRecordWithoutClosureEvidence(t *testing.T) {
+	dir := t.TempDir()
+	records := `[{"archive_record_id":"mc-1","dataset_doi":"10.24435/materialscloud.fixture","dataset_version":"v1","title":"Fixture","download_url":"https://archive.materialscloud.org/record/file","license":"CC-BY-4.0","required_citation":"fixture citation","computed":true,"metadata_only":false,"material_id":"mc-material-1","formula":"CsPbI3","structure_ref":"raw/cspbi3.cif","band_gap_ev":1.7}]`
+	writeSnapshotFixture(t, dir, "materials_cloud", records, 1)
+
+	_, err := LoadMaterialsCloudDataset(dir)
+	if err == nil || !strings.Contains(err.Error(), "closure_evidence_missing") {
+		t.Fatalf("expected closure evidence validation failure, got %v", err)
+	}
+}
+
+func TestMaterialsCloudSnapshotRejectsScientificRecordWithComputedFalse(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyMaterialsCloudSnapshotWithMutation(t, dir, func(records []map[string]any) {
+		records[0]["computed"] = false
+	}, nil)
+
+	_, err := LoadMaterialsCloudDataset(dir)
+	if err == nil || !strings.Contains(err.Error(), "computed must be true") {
+		t.Fatalf("expected computed=true validation failure, got %v", err)
+	}
+}
+
+func TestMaterialsCloudSnapshotRejectsScientificRecordWithUnlistedParserEvidence(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyMaterialsCloudSnapshot(t, dir)
+	removeSnapshotManifestFile(t, dir, "validation/record-parser-report.json")
+
+	_, err := LoadMaterialsCloudDataset(dir)
+	if err == nil || !strings.Contains(err.Error(), "closure_evidence_file_unlisted") {
+		t.Fatalf("expected unlisted parser evidence failure, got %v", err)
+	}
+}
+
 func TestMaterialsCloudSnapshotRejectsUnlistedFieldsUntilParserExists(t *testing.T) {
 	dir := t.TempDir()
 	records := `[{"archive_record_id":"mc-1","dataset_doi":"10.24435/materialscloud.fixture","dataset_version":"v1","title":"Fixture","download_url":"https://archive.materialscloud.org/record/file","license":"CC-BY-4.0","required_citation":"fixture citation","computed":false,"metadata_only":true,"mobility_cm2_v_s":0.01}]`
@@ -393,6 +462,29 @@ func TestSourceRegistryMarksHopv15AndOpvDbGoShadowReady(t *testing.T) {
 		if !containsString(materialsCloud.AllowedOutputFields, field) {
 			t.Fatalf("materials_cloud missing allowed output field %q", field)
 		}
+	}
+}
+
+func removeSnapshotManifestFile(t *testing.T, dir string, relativePath string) {
+	t.Helper()
+	manifestPath := filepath.Join(dir, "source-manifest.json")
+	manifest, err := LoadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := make([]File, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		if file.RelativePath != relativePath {
+			files = append(files, file)
+		}
+	}
+	manifest.Files = files
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

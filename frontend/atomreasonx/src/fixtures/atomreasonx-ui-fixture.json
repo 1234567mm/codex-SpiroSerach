@@ -392,7 +392,19 @@
           "dataset_version",
           "title",
           "download_url",
-          "license"
+          "license",
+          "required_citation",
+          "computed",
+          "metadata_only",
+          "material_id",
+          "formula",
+          "structure_ref",
+          "band_gap_ev",
+          "formation_energy_ev_per_atom",
+          "energy_above_hull_ev",
+          "method",
+          "software",
+          "resolution_status"
         ],
         "provenance_fields": [
           "dataset_doi",

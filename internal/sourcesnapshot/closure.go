@@ -246,7 +246,7 @@ func EvaluateClosureReadiness(manifest Manifest, records []map[string]any) Closu
 	case pubchemqcProvider:
 		evaluatePubChemQCClosure(manifest, records, evidence, add)
 	case materialsCloudProvider:
-		evaluateMaterialsCloudClosure(records, evidence, add)
+		evaluateMaterialsCloudClosure(manifest, records, evidence, add)
 	}
 
 	sort.Strings(report.Reasons)
@@ -326,7 +326,7 @@ func evaluatePubChemQCClosure(
 	}
 }
 
-func evaluateMaterialsCloudClosure(records []map[string]any, evidence *ClosureEvidence, add func(string)) {
+func evaluateMaterialsCloudClosure(manifest Manifest, records []map[string]any, evidence *ClosureEvidence, add func(string)) {
 	if evidence == nil || strings.TrimSpace(evidence.RecordParserReport) == "" {
 		add("materials_cloud_record_parser_missing")
 	}
@@ -337,6 +337,9 @@ func evaluateMaterialsCloudClosure(records []map[string]any, evidence *ClosureEv
 		add("materials_cloud_record_specific_license_missing")
 	}
 	for _, record := range records {
+		if err := validateMaterialsCloudRecord(record, manifest); err != nil {
+			add(materialsCloudClosureReasonForRecordError(err))
+		}
 		if boolField(record, "metadata_only", false) {
 			add("materials_cloud_metadata_only_records")
 		}
@@ -345,6 +348,26 @@ func evaluateMaterialsCloudClosure(records []map[string]any, evidence *ClosureEv
 		} else if parsed, ok := value.(bool); !ok || !parsed {
 			add("materials_cloud_computed_fact_missing")
 		}
+	}
+}
+
+func materialsCloudClosureReasonForRecordError(err error) string {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "parser_not_defined"):
+		return "materials_cloud_parser_not_defined"
+	case strings.Contains(message, "closure_evidence_missing"):
+		return "closure_evidence_missing"
+	case strings.Contains(message, "closure_evidence_file_unlisted"):
+		return "closure_evidence_file_unlisted"
+	case strings.Contains(message, "materials_cloud_structure_ref_unlisted"):
+		return "materials_cloud_structure_ref_unlisted"
+	case strings.Contains(message, "computed must be true"):
+		return "materials_cloud_computed_fact_missing"
+	case strings.Contains(message, "metadata_only"):
+		return "materials_cloud_metadata_only_records"
+	default:
+		return "materials_cloud_record_validation_failed"
 	}
 }
 

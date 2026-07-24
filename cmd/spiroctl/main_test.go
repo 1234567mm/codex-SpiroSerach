@@ -18,6 +18,7 @@ import (
 	"spirosearch/internal/materialsproject"
 	"spirosearch/internal/readonlyserver"
 	"spirosearch/internal/sourceregistry"
+	"spirosearch/internal/sourcesnapshot"
 
 	_ "modernc.org/sqlite"
 )
@@ -236,6 +237,34 @@ func TestSourceClosureValidateBlocksCurrentQuarantinedFixtures(t *testing.T) {
 	}
 }
 
+func TestSourceClosureValidateAcceptsMaterialsCloudSingleRecordScientificBundle(t *testing.T) {
+	manifestPath := writeSpiroctlMaterialsCloudReadySnapshot(t, t.TempDir())
+
+	output, err := captureStdout(func() error {
+		return run([]string{"source-closure", "validate", manifestPath})
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v output=%s", err, output)
+	}
+	var report struct {
+		SchemaVersion     string   `json:"schema_version"`
+		SourceID          string   `json:"source_id"`
+		ClosureGateStatus string   `json:"closure_gate_status"`
+		Ready             bool     `json:"ready"`
+		Reasons           []string `json:"reasons"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("closure output is not JSON: %v\n%s", err, output)
+	}
+	if report.SchemaVersion != sourcesnapshot.ClosureReadinessSchemaVersion ||
+		report.SourceID != "materials_cloud" ||
+		report.ClosureGateStatus != "pass" ||
+		!report.Ready ||
+		len(report.Reasons) != 0 {
+		t.Fatalf("closure readiness report mismatch: %#v", report)
+	}
+}
+
 func TestSourceClosureRequirementsEmitsMachineReadableBacklog(t *testing.T) {
 	for _, sourceID := range []string{"pubchemqc", "materials_cloud"} {
 		t.Run(sourceID, func(t *testing.T) {
@@ -379,6 +408,111 @@ func captureStdout(fn func() error) (string, error) {
 		return string(raw), runErr
 	}
 	return string(raw), readErr
+}
+
+func writeSpiroctlMaterialsCloudReadySnapshot(t *testing.T, dir string) string {
+	t.Helper()
+	records := []byte(`[
+  {
+    "archive_record_id": "mc-spiroctl-scientific-1",
+    "dataset_doi": "10.24435/materialscloud.synthetic.2",
+    "dataset_version": "2026.2",
+    "title": "Synthetic spiroctl Materials Cloud scientific bundle",
+    "download_url": "https://archive.materialscloud.org/record/file?filename=mc-spiroctl-scientific-1.json",
+    "license": "CC-BY-4.0",
+    "required_citation": "Synthetic spiroctl Materials Cloud parser fixture.",
+    "computed": true,
+    "metadata_only": false,
+    "material_id": "mc-spiroctl-cspbi3",
+    "formula": "CsPbI3",
+    "structure_ref": "raw/cspbi3.cif",
+    "band_gap_ev": 1.74,
+    "formation_energy_ev_per_atom": -1.22,
+    "energy_above_hull_ev": 0.01,
+    "method": "PBE",
+    "software": "AiiDA parser fixture",
+    "resolution_status": "resolved"
+  }
+]`)
+	files := map[string][]byte{
+		"records.json":                           records,
+		"raw/materials-cloud-record.json":        []byte(`{"record":"mc-spiroctl-scientific-1"}`),
+		"raw/cspbi3.cif":                         []byte("data_CsPbI3\n_cell_length_a 6.2\n"),
+		"docs/license.txt":                       []byte("CC-BY-4.0 record-specific license review complete"),
+		"docs/attribution.txt":                   []byte("Synthetic spiroctl Materials Cloud parser fixture attribution"),
+		"validation/record-parser-report.json":   []byte(`{"status":"pass","accepted_fields":["band_gap_ev","formation_energy_ev_per_atom","energy_above_hull_ev"]}`),
+		"validation/unit-validation-report.json": []byte(`{"status":"pass","units":{"band_gap_ev":"eV","formation_energy_ev_per_atom":"eV/atom","energy_above_hull_ev":"eV"}}`),
+	}
+	roles := map[string]string{
+		"records.json":                           "normalized_records",
+		"raw/materials-cloud-record.json":        "raw_archive",
+		"raw/cspbi3.cif":                         "raw_archive",
+		"docs/license.txt":                       "license",
+		"docs/attribution.txt":                   "attribution",
+		"validation/record-parser-report.json":   "validation_summary",
+		"validation/unit-validation-report.json": "validation_summary",
+	}
+	snapshotFiles := make([]sourcesnapshot.File, 0, len(files))
+	for _, relativePath := range []string{
+		"records.json",
+		"raw/materials-cloud-record.json",
+		"raw/cspbi3.cif",
+		"docs/license.txt",
+		"docs/attribution.txt",
+		"validation/record-parser-report.json",
+		"validation/unit-validation-report.json",
+	} {
+		content := files[relativePath]
+		fullPath := filepath.Join(dir, filepath.FromSlash(relativePath))
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fullPath, content, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(content)
+		snapshotFiles = append(snapshotFiles, sourcesnapshot.File{
+			RelativePath: relativePath,
+			Bytes:        int64(len(content)),
+			SHA256:       hex.EncodeToString(digest[:]),
+			Role:         roles[relativePath],
+		})
+	}
+	manifest := sourcesnapshot.Manifest{
+		SchemaVersion:         sourcesnapshot.SchemaVersion,
+		SourceID:              "materials_cloud",
+		DatasetDOI:            "10.24435/materialscloud.synthetic.2",
+		DatasetVersion:        "materials-cloud-record-2026.2",
+		RetrievedAt:           "2026-07-23T00:00:00+00:00",
+		SourceURL:             "https://archive.materialscloud.org/record/2026.2",
+		LicenseHint:           "CC-BY-4.0 record-specific Materials Cloud fixture",
+		RequiredCitation:      "Synthetic spiroctl Materials Cloud parser fixture.",
+		Files:                 snapshotFiles,
+		Importer:              sourcesnapshot.Importer{Name: "spirosearch-materials-cloud-single-record-parser", Version: "v35.p3", NormalizerVersion: "v35.materials_cloud.single_record.v1"},
+		NormalizedRecordCount: 1,
+		QuarantineStatus:      "ready",
+		ClosureEvidence: &sourcesnapshot.ClosureEvidence{
+			SchemaVersion:        sourcesnapshot.ClosureEvidenceSchemaVersion,
+			ParserName:           "spirosearch-materials-cloud-single-record-parser",
+			ParserVersion:        "v35.p3",
+			UnitSystem:           "eV; eV/atom",
+			ChecksumPolicy:       "sha256_all_manifest_files",
+			LicenseReview:        "compatible_for_local_research",
+			CitationReview:       "complete",
+			RecordParserReport:   "validation/record-parser-report.json",
+			UnitValidationReport: "validation/unit-validation-report.json",
+			RecordLicenseReview:  "record_specific_complete",
+		},
+	}
+	rawManifest, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(dir, "source-manifest.json")
+	if err := os.WriteFile(manifestPath, rawManifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return manifestPath
 }
 
 func createSpiroctlBackendFixture(t *testing.T, full bool) string {

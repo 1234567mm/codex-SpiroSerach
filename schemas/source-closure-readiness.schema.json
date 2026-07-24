@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/source-closure-readiness.schema.json",
+  "title": "SourceClosureReadinessReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_id",
+    "dataset_version",
+    "record_count",
+    "closure_gate_status",
+    "ready",
+    "reasons"
+  ],
+  "properties": {
+    "schema_version": { "const": "v35.source_closure_readiness.v1" },
+    "source_id": { "type": "string", "minLength": 1 },
+    "dataset_version": { "type": "string", "minLength": 1 },
+    "record_count": { "type": "integer", "minimum": 0 },
+    "closure_gate_status": { "enum": ["blocked", "pass"] },
+    "ready": { "type": "boolean" },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "ready": { "const": true } },
+        "required": ["ready"]
+      },
+      "then": {
+        "properties": {
+          "closure_gate_status": { "const": "pass" },
+          "reasons": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "ready": { "const": false } },
+        "required": ["ready"]
+      },
+      "then": {
+        "properties": {
+          "closure_gate_status": { "const": "blocked" },
+          "reasons": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}
