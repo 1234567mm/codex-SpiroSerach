@@ -13,7 +13,11 @@ config or trigger live provider calls.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+import json
+import os
+from pathlib import Path
+import subprocess
+from typing import Any, Callable
 
 from spirosearch.local_config import (
     LocalConfigStore,
@@ -27,7 +31,7 @@ from spirosearch.model_provider_registry import (
 )
 from spirosearch.model_providers import ModelAdapter, FakeTransport
 from spirosearch.orchestrator_contracts import stable_hash
-from spirosearch.source_registry import ApiKeyManager, SourceRegistry
+from spirosearch.source_registry import SourceRegistry
 from spirosearch.v23_command import (
     ActionRequest,
     ActionResult,
@@ -36,6 +40,10 @@ from spirosearch.v23_command import (
 )
 
 CONFIG_COMMAND_SCHEMA_VERSION = "v33.config_command.v1"
+SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION = "v35.source_provider_connection_probe.v1"
+MATERIALS_PROJECT_PROVIDER = "materials_project"
+DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA = "CsPbI3"
+SourceProviderProbeRunner = Callable[[Any, str, str, str], dict[str, Any]]
 
 
 @dataclass
@@ -51,6 +59,7 @@ class ConfigCommandPlane:
     registry: ModelProviderRegistry
     source_registry: SourceRegistry | None = None
     evaluator: CommandPreconditionEvaluator | None = None
+    source_probe_runner: SourceProviderProbeRunner | None = None
 
     def _ensure_evaluator(self) -> CommandPreconditionEvaluator:
         if self.evaluator is None:
@@ -81,6 +90,7 @@ class ConfigCommandPlane:
         validation_state: str,
         provider_scope: str | None = None,
         validation_mode: str | None = None,
+        provider_probe: dict[str, Any] | None = None,
     ) -> ActionResult:
         if result.status != "accepted":
             return result
@@ -101,6 +111,8 @@ class ConfigCommandPlane:
         }
         if validation_mode is not None:
             effect["validation_mode"] = validation_mode
+        if provider_probe is not None:
+            effect["provider_probe"] = provider_probe
         return ActionResult(
             request_id=result.request_id,
             action_type=result.action_type,
@@ -201,7 +213,7 @@ class ConfigCommandPlane:
         evaluator: CommandPreconditionEvaluator,
         request: ActionRequest,
     ) -> tuple[ActionResult, dict[str, Any]] | None:
-        if request.action_type not in ("config_write", "key_rotate", "key_remove"):
+        if request.action_type not in ("config_write", "key_rotate", "key_remove", "test_connection"):
             return None
         request_hash = stable_hash(request.to_dict(include_request_id=False))
         existing = evaluator.idempotency_records.get(request.idempotency_key)
@@ -235,6 +247,8 @@ class ConfigCommandPlane:
 
         changed_fields: list[str] = []
         validation_state = "validated"
+        provider_scope: str | None = None
+        provider_probe: dict[str, Any] | None = None
 
         if request.action_type == "config_write":
             provider = str(request.payload.get("provider", ""))
@@ -296,9 +310,26 @@ class ConfigCommandPlane:
             provider_entry = resolved["entry"]
             provider_scope = str(resolved["provider_scope"])
             if provider_scope == "source":
-                api_keys = ApiKeyManager(self.source_registry, config_store=self.config_store)
-                if provider_entry.requires_api_key and not api_keys.optional_key(provider):
-                    validation_state = "validation_failed"
+                if provider == MATERIALS_PROJECT_PROVIDER:
+                    contract = request.payload.get("probe_contract")
+                    if (
+                        contract is not None
+                        and str(contract) != SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION
+                    ):
+                        return self._reject(
+                            request,
+                            "unsupported_probe_contract",
+                            "unsupported source-provider probe contract",
+                        )
+                    formula = _materials_project_probe_formula(request.payload.get("formula"))
+                    api_key, key_source = self._source_api_key(provider)
+                    provider_probe = self._run_materials_project_probe(
+                        provider_entry,
+                        api_key,
+                        key_source,
+                        formula,
+                    )
+                    validation_state = str(provider_probe["validation_state"])
                 elif provider_entry.operational_status in {"disabled", "quarantined"}:
                     validation_state = "validation_failed"
                 else:
@@ -348,13 +379,16 @@ class ConfigCommandPlane:
             request,
             changed_fields,
             validation_state,
-            locals().get("provider_scope"),
+            provider_scope,
             validation_mode=(
-                "configuration_only"
+                "live_probe"
+                if provider_probe is not None
+                else "configuration_only"
                 if request.action_type == "test_connection"
-                and locals().get("provider_scope") == "source"
+                and provider_scope == "source"
                 else None
             ),
+            provider_probe=provider_probe,
         )
         request_hash = stable_hash(request.to_dict(include_request_id=False))
         evaluator.idempotency_records[request.idempotency_key] = IdempotencyRecord(
@@ -397,3 +431,172 @@ class ConfigCommandPlane:
             "output_artifacts": sanitized.get("output_artifacts", []),
         }
         return sanitized
+
+    def _source_api_key(self, provider: str) -> tuple[str, str]:
+        if self.source_registry is None:
+            return "", ""
+        entry = self.source_registry.get(provider)
+        if not entry.requires_api_key:
+            return "", ""
+        local_key = str(self.config_store.get_api_key(provider) or "").strip()
+        if local_key:
+            return local_key, "operator_secret"
+        env_name = str(entry.api_key_env or "").strip()
+        env_key = str(os.environ.get(env_name, "")).strip() if env_name else ""
+        if env_key:
+            return env_key, "environment"
+        return "", ""
+
+    def _run_materials_project_probe(
+        self,
+        provider_entry: Any,
+        api_key: str,
+        key_source: str,
+        formula: str,
+    ) -> dict[str, Any]:
+        if not str(api_key).strip():
+            return _materials_project_probe_report(
+                provider_entry,
+                formula=formula,
+                status="missing_api_key",
+                validation_state="missing",
+                api_key_configured=False,
+                error_code="missing_api_key",
+                error_message=(
+                    "Materials Project API key is required in "
+                    f"{provider_entry.api_key_env or 'MATERIALS_PROJECT_API_KEY'}"
+                ),
+            )
+        if provider_entry.operational_status in {"disabled", "quarantined"}:
+            return _materials_project_probe_report(
+                provider_entry,
+                formula=formula,
+                status="blocked",
+                validation_state="validation_failed",
+                api_key_configured=False,
+                error_code="provider_not_live_enabled",
+                error_message="Materials Project is not live enabled by source registry",
+            )
+        runner = self.source_probe_runner or _run_materials_project_probe_via_spiroctl
+        try:
+            report = runner(provider_entry, api_key, key_source, formula)
+            report = dict(report)
+            if report.get("api_key_configured"):
+                report["key_source"] = key_source
+            _assert_materials_project_probe_report_is_safe(report, api_key)
+            return report
+        except Exception as exc:
+            return _materials_project_probe_report(
+                provider_entry,
+                formula=formula,
+                status="provider_error",
+                validation_state="validation_failed",
+                api_key_configured=True,
+                key_source=key_source,
+                error_code="probe_bridge_failed",
+                error_message=_redact_secret(str(exc), api_key),
+            )
+
+
+def _materials_project_probe_formula(value: Any) -> str:
+    if value is None:
+        return DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA
+    if not isinstance(value, str):
+        return DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA
+    formula = value.strip()
+    return formula or DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA
+
+
+def _materials_project_probe_report(
+    provider_entry: Any,
+    *,
+    formula: str,
+    status: str,
+    validation_state: str,
+    api_key_configured: bool,
+    error_code: str,
+    error_message: str,
+    key_source: str = "",
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "schema_version": SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+        "provider": MATERIALS_PROJECT_PROVIDER,
+        "status": status,
+        "validation_state": validation_state,
+        "read_only": True,
+        "live_enabled": provider_entry.live_enabled,
+        "requires_api_key": provider_entry.requires_api_key,
+        "api_key_env": provider_entry.api_key_env or "MATERIALS_PROJECT_API_KEY",
+        "api_key_configured": api_key_configured,
+        "formula": formula,
+        "normalized_field_count": 0,
+        "allowed_output_fields": list(provider_entry.allowed_output_fields),
+        "review_triggers": list(provider_entry.review_triggers),
+        "error_code": error_code,
+        "error_message": error_message,
+    }
+    if key_source:
+        report["key_source"] = key_source
+    return report
+
+
+def _run_materials_project_probe_via_spiroctl(
+    provider_entry: Any,
+    api_key: str,
+    key_source: str,
+    formula: str,
+) -> dict[str, Any]:
+    del provider_entry, key_source
+    repo_root = Path(__file__).resolve().parents[2]
+    args = [
+        "go",
+        "run",
+        "./cmd/spiroctl",
+        "source-provider",
+        "test-connection",
+        MATERIALS_PROJECT_PROVIDER,
+        "--formula",
+        formula,
+    ]
+    env = os.environ.copy()
+    env["MATERIALS_PROJECT_API_KEY"] = api_key
+    completed = subprocess.run(
+        args,
+        cwd=repo_root,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=90,
+        check=False,
+    )
+    safe_stdout = _redact_secret(completed.stdout, api_key)
+    safe_stderr = _redact_secret(completed.stderr, api_key)
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "spiroctl source-provider test-connection failed "
+            f"with exit code {completed.returncode}. Stdout: {safe_stdout} Stderr: {safe_stderr}"
+        )
+    try:
+        report = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"spiroctl probe did not return JSON: {safe_stdout}") from exc
+    if not isinstance(report, dict):
+        raise RuntimeError("spiroctl probe returned a non-object JSON payload")
+    return report
+
+
+def _assert_materials_project_probe_report_is_safe(report: dict[str, Any], api_key: str) -> None:
+    if report.get("schema_version") != SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION:
+        raise ValueError("source-provider probe schema_version mismatch")
+    if report.get("provider") != MATERIALS_PROJECT_PROVIDER:
+        raise ValueError("source-provider probe provider mismatch")
+    if report.get("read_only") is not True:
+        raise ValueError("source-provider probe must be read_only")
+    if str(api_key).strip() and str(api_key).strip() in json.dumps(report, sort_keys=True):
+        raise ValueError("source-provider probe report leaked API key")
+
+
+def _redact_secret(text: str, secret: str) -> str:
+    if not str(secret).strip():
+        return text
+    return text.replace(str(secret).strip(), "<redacted>")
