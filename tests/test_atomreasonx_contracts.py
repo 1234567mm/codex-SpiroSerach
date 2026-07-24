@@ -492,7 +492,13 @@ class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):
         ).read_text(encoding="utf-8")
         go_task = (REPO_ROOT / "internal" / "workflowtask" / "task.go").read_text(encoding="utf-8")
         go_ledger = (REPO_ROOT / "internal" / "workflowtask" / "ledger.go").read_text(encoding="utf-8")
+        go_execution = (REPO_ROOT / "internal" / "workflowtask" / "execution.go").read_text(
+            encoding="utf-8",
+        )
         schema = (REPO_ROOT / "schemas" / "operator-task-admission.schema.json").read_text(
+            encoding="utf-8",
+        )
+        execution_schema = (REPO_ROOT / "schemas" / "operator-task-execution.schema.json").read_text(
             encoding="utf-8",
         )
         cli = (REPO_ROOT / "cmd" / "spiroctl" / "main.go").read_text(encoding="utf-8")
@@ -504,8 +510,17 @@ class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):
         self.assertIn("v35.operator_task.v1", go_task)
         self.assertIn("v35.operator_task_admission.v1", go_ledger)
         self.assertIn("v35.operator_task_admission.v1", schema)
+        self.assertIn("v35.operator_task_execution.v1", go_execution)
+        self.assertIn("v35.operator_task_execution.v1", execution_schema)
         self.assertIn("workflow-task", cli)
         self.assertIn("admit", cli)
+        self.assertIn("execute", cli)
+        self.assertIn("--authorize-live-provider-calls", cli)
+        self.assertIn("source_snapshot_only", go_execution)
+        self.assertIn('"provider_cache_written"', execution_schema)
+        self.assertIn('"local_backend_written"', execution_schema)
+        self.assertIn('"scoring_written"', execution_schema)
+        self.assertIn('"experiment_written"', execution_schema)
         self.assertIn("v35.nomad_admission_plan.v1", nomad_admission)
         self.assertIn("live_calls_authorized", schema)
         self.assertRegex(nomad_admission, r"LiveCallsAuthorized:\s+false")

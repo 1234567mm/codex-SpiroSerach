@@ -308,6 +308,9 @@ Assert-SchemaConst 'schemas/source-provider-connection-probe.schema.json' `
 Assert-SchemaConst 'schemas/operator-task-admission.schema.json' `
     'schema_version' `
     'v35.operator_task_admission.v1'
+Assert-SchemaConst 'schemas/operator-task-execution.schema.json' `
+    'schema_version' `
+    'v35.operator_task_execution.v1'
 
 Invoke-Go 'Go read/validation package tests' @(
     'test',

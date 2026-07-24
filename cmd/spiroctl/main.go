@@ -16,6 +16,7 @@ import (
 
 	"spirosearch/internal/localbackend"
 	"spirosearch/internal/materialsproject"
+	"spirosearch/internal/nomadperla"
 	"spirosearch/internal/providercache"
 	"spirosearch/internal/readonlyapi"
 	"spirosearch/internal/readonlyserver"
@@ -39,6 +40,7 @@ func main() {
 
 type readonlyServeFunc func(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error
 type materialsProjectProbeFunc func(context.Context, sourceregistry.Entry, materialsproject.ProbeOptions) (materialsproject.ConnectionProbeReport, error)
+type nomadTransportFactoryFunc func() nomadperla.Transport
 
 type readonlyServeAnnouncement struct {
 	BaseURL       string `json:"base_url"`
@@ -49,18 +51,29 @@ type readonlyServeAnnouncement struct {
 }
 
 func run(args []string) error {
-	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection)
+	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection, nil)
 }
 
 func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
-	return runWithDependencies(args, serve, materialsproject.ProbeConnection)
+	return runWithDependencies(args, serve, materialsproject.ProbeConnection, nil)
 }
 
 func runWithMaterialsProjectProbe(args []string, probe materialsProjectProbeFunc) error {
-	return runWithDependencies(args, serveReadonlyHTTP, probe)
+	return runWithDependencies(args, serveReadonlyHTTP, probe, nil)
 }
 
-func runWithDependencies(args []string, serve readonlyServeFunc, materialsProjectProbe materialsProjectProbeFunc) error {
+func runWithNomadTransport(args []string, transport nomadperla.Transport) error {
+	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection, func() nomadperla.Transport {
+		return transport
+	})
+}
+
+func runWithDependencies(
+	args []string,
+	serve readonlyServeFunc,
+	materialsProjectProbe materialsProjectProbeFunc,
+	nomadTransportFactory nomadTransportFactoryFunc,
+) error {
 	if len(args) >= 3 && args[0] == "readonly-run" && args[1] == "serve" {
 		outputDir, addr, ok := parseReadonlyServeArgs(args)
 		if !ok {
@@ -80,10 +93,10 @@ func runWithDependencies(args []string, serve readonlyServeFunc, materialsProjec
 		return runSourceProviderTestConnection(args, materialsProjectProbe)
 	}
 	if len(args) >= 3 && args[0] == "workflow-task" {
-		return runWorkflowTask(args)
+		return runWorkflowTask(args, nomadTransportFactory)
 	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -211,7 +224,7 @@ func runWithDependencies(args []string, serve readonlyServeFunc, materialsProjec
 	}
 }
 
-func runWorkflowTask(args []string) error {
+func runWorkflowTask(args []string, nomadTransportFactory nomadTransportFactoryFunc) error {
 	if len(args) == 3 && args[1] == "validate" {
 		task, err := loadWorkflowTaskArtifact(args[2])
 		if err != nil {
@@ -238,7 +251,31 @@ func runWorkflowTask(args []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(record)
 	}
-	return fmt.Errorf("usage: spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl>")
+	if len(args) == 9 &&
+		args[1] == "execute" &&
+		args[2] == "--task-id" &&
+		args[4] == "--ledger" &&
+		args[6] == "--authorize-live-provider-calls" &&
+		args[7] == "--target" {
+		root, err := workflowTaskRepositoryRoot()
+		if err != nil {
+			return err
+		}
+		report, err := workflowtask.ExecuteNomadAdmission(context.Background(), workflowtask.ExecuteNomadAdmissionOptions{
+			Root:                       root,
+			LedgerRelPath:              args[5],
+			TaskID:                     args[3],
+			TargetRelPath:              args[8],
+			AuthorizeLiveProviderCalls: true,
+			Now:                        time.Now().UTC(),
+			TransportFactory:           nomadTransportFactory,
+		})
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(report)
+	}
+	return fmt.Errorf("usage: spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir>")
 }
 
 func workflowTaskRepositoryRoot() (string, error) {

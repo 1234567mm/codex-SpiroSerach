@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `850d6ff`
+Latest implementation HEAD before this status update: `ae72246`
 Date: 2026-07-24
 
 ## Goal
@@ -27,7 +27,7 @@ SpiroSearch's evidence gates.
   extensibility, gated tool execution, and CLI/desktop parity all map cleanly
   onto SpiroSearch's sidecar and command-plane direction.
 - `tufeiping/api-for-cherrystudio` / Cherry Studio style API surfaces are useful
-  only as conceptual input for a unified model/RAG/knowledge façade with
+  only as conceptual input for a unified model/RAG/knowledge facade with
   secret-free frontend state. Do not copy code or wholesale replace modules
   unless license compatibility is reviewed for the exact source revision.
 
@@ -75,6 +75,8 @@ The current branch contains these V35 execution commits:
 | `e410a4c` | P1 AtomReasonX source-settings command projection | Projects accepted source config command results into the UI-local workbench state, preserves readonly/no-command mode, ignores rejected/queued/non-source/stale results, and keeps source-setting projection secret-free. |
 | `b81e48a` | P1 AtomReasonX workflow operator task queue | Converts known NOMAD/import/workflow commands into explicit UI-local `workflow_command_task` artifacts with `writes_authorized=false` and `execution_started=false`; unknown commands remain `transport_pending`, and no provider cache, SQLite, scoring, experiment, download, or live provider write path is invoked. |
 | `850d6ff` | P1/P2 workflow task admission foundation | Adds Go workflow task validation, append-only ledger foundation, and admission schema. This commit stops before NOMAD query-plan attachment, CLI admission, and drift gates; the current checkpoint completes those follow-up tasks. |
+| `ae72246` | P1/P2 workflow task admission gates | Completes deterministic NOMAD positive HTL query-plan attachment, `spiroctl workflow-task validate/admit`, schema-constrained admission records, ledger idempotency hardening, and TypeScript/Go/schema drift gates. |
+| current checkpoint | P2 NOMAD workflow task execution snapshot | Adds `spiroctl workflow-task execute --task-id ... --ledger ... --authorize-live-provider-calls --target ...` as an explicitly authorized source-snapshot writer for admitted NOMAD tasks. It writes raw search/archive payloads, normalized provider-response records, validation summary, and a V35 source manifest under `data/lib/nomad_perla_psc/snapshots/`; it still does not write provider cache, SQLite, scoring, review, or experiments. |
 
 ## Current Data Source Status
 
@@ -82,7 +84,7 @@ The current branch contains these V35 execution commits:
 | --- | --- | --- |
 | PubChem | Go shadow ready; source settings remain separate from model provider settings. | Later live transport hardening and rate-limit telemetry. |
 | Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts, can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure, the desktop command slice executes config-plane actions through a fixed Tauri bridge with persistent idempotency replay, and AtomReasonX projects accepted source-setting command results back into workbench state without secrets or provider facts. | Next source-provider transport work can add read-only live probe ergonomics and later explicit write-authorized import/execution admission; provider cache, SQLite, scoring, and experiment writes remain out of the current operator-task queue. |
-| NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. AtomReasonX now records known NOMAD sync controls as local operator tasks, but does not execute downloads or mutate local data. | Keep archive fallback conservative; add live sync execution only behind explicit operator command authorization and a separate data-library write contract. |
+| NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. AtomReasonX records known NOMAD sync controls as local operator tasks, Go admits them to an append-only ledger, and the CLI now has an explicitly authorized execution path that writes a quarantined/pending source snapshot only. | Keep archive fallback conservative; wire operator-reviewed execution into AtomReasonX without exposing tokens or executable paths, then add closure/review promotion gates before provider cache, SQLite, scoring, or experiment writes. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
 | PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts; ready snapshots now require schema-valid Python oracle and parser parity report bodies. | Full dataset acquisition, real parser parity, Python oracle output, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
@@ -101,6 +103,9 @@ Recent gates run during this checkpoint:
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/workflowtask ./internal/nomadperla ./cmd/spiroctl -v` passed after adding `workflow-task validate` and `workflow-task admit`.
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 30 tests after adding TypeScript/Go/schema/CLI drift sentinels; the sandboxed `.venv` Python command remained blocked by local uv trampoline permissions.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after adding workflow task and NOMAD admission coverage.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/nomadperla ./internal/workflowtask ./cmd/spiroctl -v` passed after adding the explicit NOMAD execution path, including fake-transport source snapshot generation and `source-snapshot validate` over the generated manifest.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after adding `schemas/operator-task-execution.schema.json` coverage.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 30 tests after adding execution CLI/schema drift sentinels; the sandboxed `.venv` Python command remained blocked by local uv trampoline permissions.
 
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/runartifact ./cmd/spiroctl -v` passed for the run artifact slice.
@@ -248,8 +253,10 @@ Recent gates run during this checkpoint:
 3. Keep read transport side-effect free. Config command transport is now
    separate and idempotent for source/model settings; workflow commands such as
    NOMAD sync and snapshot imports now have an explicit UI-local operator task
-   queue, but execution, download, cache write, SQLite write, scoring rebuild,
-   and experiment write authorization remain future slices.
+   queue and a backend ledger. NOMAD execution now exists only as a CLI path
+   requiring `--authorize-live-provider-calls` and a safe source-snapshot target;
+   cache write, SQLite write, scoring rebuild, review promotion, and experiment
+   write authorization remain future slices.
 4. Go must not become a second SQLite/provider-cache writer until schema
    ownership and write authorization are explicit.
 
@@ -277,14 +284,14 @@ Recommended next large stage:
 
 Alternative if prioritizing operator workflow:
 
-1. Execute `plans/v35-operator-task-ledger-and-nomad-admission-plan.md` to
-   promote the UI-local workflow operator task queue into a backend-owned task
-   ledger, starting with positive HTL NOMAD sync/import admission and
-   data-library staging. The first ledger slice is admission-only: it may append
-   under `data/lib/operator_tasks/`, but provider sync, scoring rebuild, cache
-   write, SQLite write, experiment write, and live download execution remain
-   separate contracts until reviewed.
-2. Full installer verification for bundled sidecar packaging now requires the
+1. Wire AtomReasonX operator-reviewed workflow task execution to the fixed
+   `spiroctl workflow-task execute` command shape, preserving the same
+   authorization flag, safe target path, source snapshot manifest validation,
+   and no-token/no-executable-path WebView boundary.
+2. Add a read-only UI surface for generated NOMAD execution reports and source
+   manifests before any cache, SQLite, scoring, review-promotion, or experiment
+   writer is introduced.
+3. Full installer verification for bundled sidecar packaging now requires the
    local Rust desktop toolchain closure: install `rustfmt` plus MSVC Build Tools
    with the C++ linker, then rerun `cargo fmt --check`, `cargo test`, and
    `npm.cmd run tauri:build`.

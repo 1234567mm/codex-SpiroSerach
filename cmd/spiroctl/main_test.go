@@ -12,6 +12,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -527,6 +530,119 @@ func TestWorkflowTaskAdmitRejectsLedgerPathOutsideOperatorTasks(t *testing.T) {
 	}
 }
 
+func TestWorkflowTaskExecuteWritesNomadSourceSnapshotWithExplicitAuthorization(t *testing.T) {
+	root := t.TempDir()
+	writeSpiroctlRepoMarkersWithSourceRegistry(t, root)
+	t.Chdir(root)
+	taskPath := writeWorkflowTaskJSON(t, root, validStartNomadWorkflowTaskJSON())
+	ledgerRel := "data/lib/operator_tasks/operator-task-ledger.jsonl"
+	if _, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "admit", taskPath, "--ledger", ledgerRel})
+	}); err != nil {
+		t.Fatalf("admit error = %v", err)
+	}
+	transport := &spiroctlNomadTransport{
+		search:  spiroctlNomadSearchFixture(),
+		archive: spiroctlNomadArchiveFixture(),
+	}
+	target := "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd"
+
+	output, err := captureStdout(func() error {
+		return runWithNomadTransport([]string{
+			"workflow-task",
+			"execute",
+			"--task-id",
+			"task-start_nomad_sync-ab12cd",
+			"--ledger",
+			ledgerRel,
+			"--authorize-live-provider-calls",
+			"--target",
+			target,
+		}, transport)
+	})
+	if err != nil {
+		t.Fatalf("execute error = %v output=%s", err, output)
+	}
+
+	var report struct {
+		SchemaVersion           string `json:"schema_version"`
+		TaskID                  string `json:"task_id"`
+		ExecutionStatus         string `json:"execution_status"`
+		WriteAuthorizationScope string `json:"write_authorization_scope"`
+		LiveCallsAuthorized     bool   `json:"live_calls_authorized"`
+		ProviderCacheWritten    bool   `json:"provider_cache_written"`
+		LocalBackendWritten     bool   `json:"local_backend_written"`
+		ScoringWritten          bool   `json:"scoring_written"`
+		ExperimentWritten       bool   `json:"experiment_written"`
+		SourceManifestPath      string `json:"source_manifest_path"`
+		NormalizedRecordCount   int    `json:"normalized_record_count"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("execute output is not JSON: %v\n%s", err, output)
+	}
+	assertOperatorTaskExecutionSchemaInstance(t, []byte(output))
+	if report.SchemaVersion != "v35.operator_task_execution.v1" ||
+		report.TaskID != "task-start_nomad_sync-ab12cd" ||
+		report.ExecutionStatus != "source_snapshot_written" ||
+		report.WriteAuthorizationScope != "source_snapshot_only" ||
+		!report.LiveCallsAuthorized ||
+		report.ProviderCacheWritten ||
+		report.LocalBackendWritten ||
+		report.ScoringWritten ||
+		report.ExperimentWritten ||
+		report.SourceManifestPath != target+"/source-manifest.json" ||
+		report.NormalizedRecordCount != 1 {
+		t.Fatalf("execution report mismatch: %#v", report)
+	}
+	if len(transport.calls) != 2 {
+		t.Fatalf("NOMAD calls = %d, want search and archive", len(transport.calls))
+	}
+	if err := run([]string{"source-snapshot", "validate", report.SourceManifestPath}); err != nil {
+		t.Fatalf("source-snapshot validate failed for execution output: %v", err)
+	}
+	summaryBody, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(target), "validation-summary.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertOperatorTaskExecutionSchemaInstance(t, summaryBody)
+	for _, forbidden := range []string{"api_key", "mp-secret", "Bearer ", `D:\private`, "10.1000/example"} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("execute output leaked raw task config value %q: %s", forbidden, output)
+		}
+	}
+}
+
+func TestWorkflowTaskExecuteRequiresAuthorizationFlagShape(t *testing.T) {
+	root := t.TempDir()
+	writeSpiroctlRepoMarkersWithSourceRegistry(t, root)
+	t.Chdir(root)
+	taskPath := writeWorkflowTaskJSON(t, root, validStartNomadWorkflowTaskJSON())
+	ledgerRel := "data/lib/operator_tasks/operator-task-ledger.jsonl"
+	if _, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "admit", taskPath, "--ledger", ledgerRel})
+	}); err != nil {
+		t.Fatalf("admit error = %v", err)
+	}
+	transport := &spiroctlNomadTransport{search: spiroctlNomadSearchFixture()}
+
+	err := runWithNomadTransport([]string{
+		"workflow-task",
+		"execute",
+		"--task-id",
+		"task-start_nomad_sync-ab12cd",
+		"--ledger",
+		ledgerRel,
+		"--target",
+		"data/lib/nomad_perla_psc/snapshots/missing-auth",
+	}, transport)
+	if err == nil || !strings.Contains(err.Error(), "usage: spiroctl workflow-task") {
+		t.Fatalf("expected usage error for missing authorization flag, got %v", err)
+	}
+	if len(transport.calls) != 0 {
+		t.Fatalf("missing authorization flag called NOMAD transport: %#v", transport.calls)
+	}
+}
+
 func TestRunRejectsUnknownTarget(t *testing.T) {
 	err := run([]string{"unknown", "validate", "data/source_registry.json"})
 	if err == nil || !strings.Contains(err.Error(), "unknown target") {
@@ -680,6 +796,24 @@ func writeSpiroctlRepoMarkers(t *testing.T, root string) {
 	}
 }
 
+func writeSpiroctlRepoMarkersWithSourceRegistry(t *testing.T, root string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module spirosearch\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Join(root, "data")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join("..", "..", "data", "source_registry.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "source_registry.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func validStartNomadWorkflowTaskJSON() string {
 	return `{
 		"kind":"workflow_command_task",
@@ -703,6 +837,214 @@ func validStartNomadWorkflowTaskJSON() string {
 			"doi_list":["10.1000/example"]
 		}
 	}`
+}
+
+type spiroctlNomadTransport struct {
+	calls   []string
+	search  map[string]any
+	archive map[string]any
+}
+
+func (t *spiroctlNomadTransport) PostJSON(_ context.Context, requestURL string, _ []byte, _ map[string]string) (map[string]any, error) {
+	t.calls = append(t.calls, requestURL)
+	if strings.Contains(requestURL, "/entries/archive/query") {
+		return cloneSpiroctlMap(t.archive), nil
+	}
+	return cloneSpiroctlMap(t.search), nil
+}
+
+func spiroctlNomadSearchFixture() map[string]any {
+	return map[string]any{
+		"pagination": map[string]any{"total": 1},
+		"data": []any{
+			map[string]any{
+				"entry_id":  "mock_entry_spiro_cli_001",
+				"upload_id": "mock_upload_spiro_cli",
+				"datasets": []any{
+					map[string]any{
+						"doi":     "10.1234/nomad-cli",
+						"license": "CC-BY-4.0",
+					},
+				},
+				"results": map[string]any{
+					"material": map[string]any{"chemical_formula_reduced": "FAPbI3"},
+					"properties": map[string]any{
+						"optoelectronic": map[string]any{
+							"solar_cell": map[string]any{
+								"efficiency":                    21.3,
+								"open_circuit_voltage":          1.12,
+								"short_circuit_current_density": 235.0,
+								"fill_factor":                   0.81,
+								"hole_transport_layer":          []any{"Spiro-OMeTAD"},
+								"device_stack":                  []any{"SLG", "ITO", "SnO2", "FAPbI3", "Spiro-OMeTAD", "Au"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func spiroctlNomadArchiveFixture() map[string]any {
+	return map[string]any{
+		"data": []any{
+			map[string]any{
+				"archive": map[string]any{
+					"data": map[string]any{
+						"htl": map[string]any{"name": "Spiro-OMeTAD"},
+						"jv":  map[string]any{"default_PCE": 21.3},
+					},
+					"metadata": map[string]any{
+						"datasets": []any{
+							map[string]any{
+								"doi":     "10.1234/nomad-cli",
+								"license": "CC-BY-4.0",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func cloneSpiroctlMap(value map[string]any) map[string]any {
+	if value == nil {
+		return map[string]any{}
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	var cloned map[string]any
+	if err := json.Unmarshal(raw, &cloned); err != nil {
+		panic(err)
+	}
+	return cloned
+}
+
+func assertOperatorTaskExecutionSchemaInstance(t *testing.T, raw []byte) {
+	t.Helper()
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	schemaPath := filepath.Join(filepath.Dir(testFile), "..", "..", "schemas", "operator-task-execution.schema.json")
+	schemaRaw, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(schemaRaw, &schema); err != nil {
+		t.Fatalf("execution schema is not valid JSON: %v", err)
+	}
+	var instance map[string]any
+	if err := json.Unmarshal(raw, &instance); err != nil {
+		t.Fatalf("execution instance is not valid JSON: %v\n%s", err, raw)
+	}
+	properties := schema["properties"].(map[string]any)
+	required := schema["required"].([]any)
+	for _, item := range required {
+		key := item.(string)
+		if _, ok := instance[key]; !ok {
+			t.Fatalf("execution instance missing required schema field %q: %s", key, raw)
+		}
+	}
+	if schema["additionalProperties"] == false {
+		for key := range instance {
+			if _, ok := properties[key]; !ok {
+				t.Fatalf("execution instance has additional property %q: %s", key, raw)
+			}
+		}
+	}
+	for key, value := range instance {
+		property, ok := properties[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		if want, ok := property["type"].(string); ok {
+			assertExecutionSchemaType(t, key, value, want, raw)
+		}
+		if want, ok := property["const"]; ok && !reflect.DeepEqual(value, want) {
+			t.Fatalf("execution instance field %s = %#v, want const %#v", key, value, want)
+		}
+		if enum, ok := property["enum"].([]any); ok && !executionSchemaEnumContains(enum, value) {
+			t.Fatalf("execution instance field %s = %#v, not in enum %#v", key, value, enum)
+		}
+		if pattern, ok := property["pattern"].(string); ok {
+			text, ok := value.(string)
+			if !ok {
+				t.Fatalf("execution instance field %s is not a string for pattern validation: %#v", key, value)
+			}
+			if strings.Contains(pattern, "(?!") {
+				assertExecutionPathPattern(t, key, text)
+				continue
+			}
+			matched, err := regexp.MatchString(pattern, text)
+			if err != nil {
+				t.Fatalf("schema pattern %q for %s is not supported by test validator: %v", pattern, key, err)
+			}
+			if !matched {
+				t.Fatalf("execution instance field %s = %q does not match %q", key, text, pattern)
+			}
+		}
+	}
+}
+
+func assertExecutionSchemaType(t *testing.T, key string, value any, want string, raw []byte) {
+	t.Helper()
+	switch want {
+	case "string":
+		if _, ok := value.(string); !ok {
+			t.Fatalf("execution instance field %s is %T, want string: %s", key, value, raw)
+		}
+	case "boolean":
+		if _, ok := value.(bool); !ok {
+			t.Fatalf("execution instance field %s is %T, want boolean: %s", key, value, raw)
+		}
+	case "integer":
+		number, ok := value.(float64)
+		if !ok || number != float64(int64(number)) {
+			t.Fatalf("execution instance field %s is %#v, want integer: %s", key, value, raw)
+		}
+	case "array":
+		if _, ok := value.([]any); !ok {
+			t.Fatalf("execution instance field %s is %T, want array: %s", key, value, raw)
+		}
+	}
+}
+
+func executionSchemaEnumContains(enum []any, value any) bool {
+	for _, item := range enum {
+		if reflect.DeepEqual(item, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func assertExecutionPathPattern(t *testing.T, key string, value string) {
+	t.Helper()
+	if strings.Contains(value, `\`) ||
+		strings.Contains(value, ":") ||
+		strings.Contains(value, "//") ||
+		strings.Contains(value, "/../") ||
+		strings.HasPrefix(value, "../") ||
+		strings.HasSuffix(value, "/..") {
+		t.Fatalf("execution instance field %s has unsafe path shape: %q", key, value)
+	}
+	switch key {
+	case "target_data_library_path":
+		if !strings.HasPrefix(value, "data/lib/nomad_perla_psc/snapshots/") {
+			t.Fatalf("target_data_library_path outside NOMAD snapshots: %q", value)
+		}
+	case "source_manifest_path":
+		if !strings.HasPrefix(value, "data/lib/nomad_perla_psc/snapshots/") ||
+			!strings.HasSuffix(value, "/source-manifest.json") {
+			t.Fatalf("source_manifest_path outside NOMAD snapshots: %q", value)
+		}
+	}
 }
 
 func createSpiroctlBackendFixture(t *testing.T, full bool) string {

@@ -359,6 +359,27 @@ func TestAppendAdmissionRecordRejectsLedgerPathEscapes(t *testing.T) {
 	}
 }
 
+func TestAppendAdmissionRecordRejectsLedgerPathSymlinkAncestor(t *testing.T) {
+	root := t.TempDir()
+	operatorTaskDir := filepath.Join(root, "data", "lib", "operator_tasks")
+	if err := os.MkdirAll(operatorTaskDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	linkPath := filepath.Join(operatorTaskDir, "redirect")
+	if err := os.Symlink(outside, linkPath); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+
+	_, err := AppendAdmissionRecord(root, "data/lib/operator_tasks/redirect/operator-task-ledger.jsonl", validStartNomadTask(), fixedAdmissionTime())
+	if !errors.Is(err, ErrLedgerPathUnsafe) {
+		t.Fatalf("expected symlink ancestor to be rejected, got %v", err)
+	}
+	if paths := listRelativeFiles(t, outside); len(paths) != 0 {
+		t.Fatalf("ledger write escaped through symlink: %#v", paths)
+	}
+}
+
 func TestAppendAdmissionRecordIsIdempotentForRepeatedTaskID(t *testing.T) {
 	root := t.TempDir()
 	first, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime())

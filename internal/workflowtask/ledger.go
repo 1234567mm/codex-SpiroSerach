@@ -230,6 +230,9 @@ func resolveLedgerPath(root string, ledgerRelPath string) (string, string, error
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", "", ErrLedgerPathUnsafe
 	}
+	if err := rejectExistingPathRedirects(rootAbs, normalized, ErrLedgerPathUnsafe); err != nil {
+		return "", "", err
+	}
 	return normalized, targetAbs, nil
 }
 
