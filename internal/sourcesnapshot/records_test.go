@@ -416,6 +416,17 @@ func TestMaterialsCloudSnapshotRejectsScientificRecordWithUnlistedParserEvidence
 	}
 }
 
+func TestMaterialsCloudSnapshotRejectsScientificRecordWithInvalidUnitReportBody(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyMaterialsCloudSnapshot(t, dir)
+	replaceSnapshotFile(t, dir, "validation/unit-validation-report.json", []byte(`{"schema_version":"v35.materials_cloud_unit_validation_report.v1","status":"pass","units":{"band_gap_ev":"J","formation_energy_ev_per_atom":"eV/atom","energy_above_hull_ev":"eV"}}`))
+
+	_, err := LoadMaterialsCloudDataset(dir)
+	if err == nil || !strings.Contains(err.Error(), "materials_cloud_unit_validation_report_invalid") {
+		t.Fatalf("expected unit report body validation failure, got %v", err)
+	}
+}
+
 func TestMaterialsCloudSnapshotRejectsUnlistedFieldsUntilParserExists(t *testing.T) {
 	dir := t.TempDir()
 	records := `[{"archive_record_id":"mc-1","dataset_doi":"10.24435/materialscloud.fixture","dataset_version":"v1","title":"Fixture","download_url":"https://archive.materialscloud.org/record/file","license":"CC-BY-4.0","required_citation":"fixture citation","computed":false,"metadata_only":true,"mobility_cm2_v_s":0.01}]`

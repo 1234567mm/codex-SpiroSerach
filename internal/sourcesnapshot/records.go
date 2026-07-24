@@ -226,7 +226,7 @@ func LoadMaterialsCloudDataset(dir string) (MaterialsCloudDataset, error) {
 		return MaterialsCloudDataset{}, err
 	}
 	for index, record := range records {
-		if err := validateMaterialsCloudRecord(record, manifest); err != nil {
+		if err := validateMaterialsCloudRecord(record, manifest, dir); err != nil {
 			return MaterialsCloudDataset{}, fmt.Errorf("materials_cloud record %d: %w", index, err)
 		}
 	}
@@ -576,7 +576,7 @@ func validatePubChemQCRecord(record map[string]any) error {
 	return nil
 }
 
-func validateMaterialsCloudRecord(record map[string]any, manifest Manifest) error {
+func validateMaterialsCloudRecord(record map[string]any, manifest Manifest, dir string) error {
 	for _, field := range []string{
 		"archive_record_id",
 		"dataset_doi",
@@ -601,7 +601,7 @@ func validateMaterialsCloudRecord(record map[string]any, manifest Manifest) erro
 	if metadataOnly {
 		return validateMaterialsCloudMetadataRecord(record)
 	}
-	return validateMaterialsCloudScientificRecord(record, manifest)
+	return validateMaterialsCloudScientificRecord(record, manifest, dir)
 }
 
 func validateMaterialsCloudMetadataRecord(record map[string]any) error {
@@ -619,7 +619,7 @@ func validateMaterialsCloudMetadataRecord(record map[string]any) error {
 	return nil
 }
 
-func validateMaterialsCloudScientificRecord(record map[string]any, manifest Manifest) error {
+func validateMaterialsCloudScientificRecord(record map[string]any, manifest Manifest, dir string) error {
 	if err := validateMaterialsCloudScientificClosureEvidence(manifest); err != nil {
 		return err
 	}
@@ -655,6 +655,11 @@ func validateMaterialsCloudScientificRecord(record map[string]any, manifest Mani
 		}
 		if _, ok := record[field]; ok && record[field] != nil && !isFinite(value) {
 			return fmt.Errorf("%s must be finite", field)
+		}
+	}
+	if strings.TrimSpace(dir) != "" {
+		if err := validateMaterialsCloudScientificReportBodies(dir, record, manifest); err != nil {
+			return err
 		}
 	}
 	return nil

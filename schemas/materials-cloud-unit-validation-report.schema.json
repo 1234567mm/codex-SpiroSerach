@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/materials-cloud-unit-validation-report.schema.json",
+  "title": "MaterialsCloudUnitValidationReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "units"],
+  "properties": {
+    "schema_version": { "const": "v35.materials_cloud_unit_validation_report.v1" },
+    "status": { "const": "pass" },
+    "units": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "band_gap_ev": { "const": "eV" },
+        "formation_energy_ev_per_atom": { "const": "eV/atom" },
+        "energy_above_hull_ev": { "const": "eV" }
+      }
+    }
+  }
+}

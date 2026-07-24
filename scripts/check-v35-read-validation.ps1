@@ -290,6 +290,12 @@ Assert-SchemaConst 'schemas/source-closure-requirements.schema.json' `
 Assert-SchemaConst 'schemas/source-closure-readiness.schema.json' `
     'schema_version' `
     'v35.source_closure_readiness.v1'
+Assert-SchemaConst 'schemas/materials-cloud-record-parser-report.schema.json' `
+    'schema_version' `
+    'v35.materials_cloud_record_parser_report.v1'
+Assert-SchemaConst 'schemas/materials-cloud-unit-validation-report.schema.json' `
+    'schema_version' `
+    'v35.materials_cloud_unit_validation_report.v1'
 Assert-SchemaConst 'schemas/source-provider-connection-probe.schema.json' `
     'schema_version' `
     'v35.source_provider_connection_probe.v1'

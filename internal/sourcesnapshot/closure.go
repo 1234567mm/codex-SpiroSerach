@@ -187,7 +187,7 @@ func BuildClosureReadinessReport(dir string, manifest Manifest) (ClosureReadines
 	if err != nil {
 		return ClosureReadinessReport{}, err
 	}
-	return EvaluateClosureReadiness(manifest, records), nil
+	return evaluateClosureReadiness(dir, manifest, records), nil
 }
 
 func ValidateClosureReadiness(dir string, manifest Manifest) (ClosureReadinessReport, error) {
@@ -202,6 +202,10 @@ func ValidateClosureReadiness(dir string, manifest Manifest) (ClosureReadinessRe
 }
 
 func EvaluateClosureReadiness(manifest Manifest, records []map[string]any) ClosureReadinessReport {
+	return evaluateClosureReadiness("", manifest, records)
+}
+
+func evaluateClosureReadiness(dir string, manifest Manifest, records []map[string]any) ClosureReadinessReport {
 	report := ClosureReadinessReport{
 		SchemaVersion:     ClosureReadinessSchemaVersion,
 		SourceID:          manifest.SourceID,
@@ -246,7 +250,7 @@ func EvaluateClosureReadiness(manifest Manifest, records []map[string]any) Closu
 	case pubchemqcProvider:
 		evaluatePubChemQCClosure(manifest, records, evidence, add)
 	case materialsCloudProvider:
-		evaluateMaterialsCloudClosure(manifest, records, evidence, add)
+		evaluateMaterialsCloudClosure(dir, manifest, records, evidence, add)
 	}
 
 	sort.Strings(report.Reasons)
@@ -326,7 +330,7 @@ func evaluatePubChemQCClosure(
 	}
 }
 
-func evaluateMaterialsCloudClosure(manifest Manifest, records []map[string]any, evidence *ClosureEvidence, add func(string)) {
+func evaluateMaterialsCloudClosure(dir string, manifest Manifest, records []map[string]any, evidence *ClosureEvidence, add func(string)) {
 	if evidence == nil || strings.TrimSpace(evidence.RecordParserReport) == "" {
 		add("materials_cloud_record_parser_missing")
 	}
@@ -337,7 +341,7 @@ func evaluateMaterialsCloudClosure(manifest Manifest, records []map[string]any, 
 		add("materials_cloud_record_specific_license_missing")
 	}
 	for _, record := range records {
-		if err := validateMaterialsCloudRecord(record, manifest); err != nil {
+		if err := validateMaterialsCloudRecord(record, manifest, dir); err != nil {
 			add(materialsCloudClosureReasonForRecordError(err))
 		}
 		if boolField(record, "metadata_only", false) {
@@ -362,6 +366,10 @@ func materialsCloudClosureReasonForRecordError(err error) string {
 		return "closure_evidence_file_unlisted"
 	case strings.Contains(message, "materials_cloud_structure_ref_unlisted"):
 		return "materials_cloud_structure_ref_unlisted"
+	case strings.Contains(message, "materials_cloud_record_parser_report_invalid"):
+		return "materials_cloud_record_parser_report_invalid"
+	case strings.Contains(message, "materials_cloud_unit_validation_report_invalid"):
+		return "materials_cloud_unit_validation_report_invalid"
 	case strings.Contains(message, "computed must be true"):
 		return "materials_cloud_computed_fact_missing"
 	case strings.Contains(message, "metadata_only"):

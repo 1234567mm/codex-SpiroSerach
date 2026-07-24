@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `3802fe5`
+Latest implementation HEAD before this status update: `a67ef09`
 Date: 2026-07-24
 
 ## Goal
@@ -48,7 +48,9 @@ The current branch contains these V35 execution commits:
 | `afe45e4` | P2 AtomReasonX Materials Project probe command contract | Adds the TypeScript result contract and settings Test-button command payload for the Materials Project source-provider probe, keeps source settings separate from model settings, and allowlists non-secret probe input to `formula` only. |
 | `38ed17f` | P1/P2 V35 probe checkpoint coverage | Updates the V35 checkpoint and regression test coverage so the Materials Project Go package/probe CLI contract is part of the durable validation surface. |
 | `3802fe5` | P2 backend Materials Project probe command bridge | Connects Python `ConfigCommandPlane` source `test_connection` results to the V35 Materials Project probe report shape, with missing-key no-runner behavior, backend-owned secret source tracking, fixed Go `spiroctl` runner support, sanitized output artifacts, and idempotent replay of prior probe artifacts without a second live runner call. |
-| current slice | P3 Materials Cloud single-record scientific closure contract | Adds a record-specific Materials Cloud scientific import admission path gated by parser, unit, checksum, license, citation, and manifest-listed validation evidence; metadata-only fixtures remain blocked, unknown scientific fields still fail closed, and `source-closure` readiness gains a schema-pinned JSON contract. |
+| `afc8d42` | P3 Materials Cloud single-record scientific closure contract | Adds a record-specific Materials Cloud scientific import admission path gated by parser, unit, checksum, license, citation, and manifest-listed validation evidence; metadata-only fixtures remain blocked, unknown scientific fields still fail closed, and `source-closure` readiness gains a schema-pinned JSON contract. |
+| `a67ef09` | Agent verification workflow optimization | Makes broad gates milestone evidence, adds targeted review-fix reverification rules, discovery/test budget guidance, and verification-scope reporting without changing runtime behavior. |
+| current slice | P3 Materials Cloud report-body closure hardening | Adds schema-pinned Materials Cloud parser/unit report bodies and fail-closed validation for `status=pass`, accepted scientific fields, and expected units before any single-record scientific bundle can pass closure or load as provider facts. |
 
 ## Current Data Source Status
 
@@ -60,7 +62,7 @@ The current branch contains these V35 execution commits:
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
 | PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts. | Full dataset acquisition, parser parity, Python oracle report, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
-| Materials Cloud | Manual archive metadata import plus P3 closure-readiness gate; metadata-only facts remain blocked; a single-record scientific path is now defined only for explicitly allowlisted fields with parser, unit, checksum, license, citation, and manifest-listed validation evidence. | Real operator-selected record DOI/version/file bundle, record-specific parser report, unit validation, license/citation review, checksum coverage, and identity evidence before non-fixture scientific facts are admitted. |
+| Materials Cloud | Manual archive metadata import plus P3 closure-readiness gate; metadata-only facts remain blocked; a single-record scientific path is now defined only for explicitly allowlisted fields with parser, unit, checksum, license, citation, manifest-listed validation evidence, and schema-valid parser/unit report bodies. | Real operator-selected record DOI/version/file bundle, record-specific parser report body, unit validation body, license/citation review, checksum coverage, and identity evidence before non-fixture scientific facts are admitted. |
 | NOMAD perovskite schema package | Schema/reference module; not a data mirror. | Optional deeper schema extraction only if it improves field alias coverage. |
 | Crossref/OpenAlex | Existing Python/provider plan surfaces; not part of current Go parity wave. | Future literature metadata Go parity after data-source P3 stabilizes. |
 | Custom HTL DFT | Project-generated calculation path; Python bridge retained. | Keep as science bridge until workflow/tooling parity exists. |
@@ -150,6 +152,10 @@ Recent gates run during this checkpoint:
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the backend Materials Project probe command bridge and idempotent replay fix.
 - `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -q` passed with 937 tests and 9 skipped after the backend Materials Project probe command bridge and idempotent replay fix; the generated root `uv.lock` was removed.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after the Materials Cloud single-record scientific closure contract, including metadata-only block, synthetic ready bundle, CLI pass report, missing evidence, unknown field, and computed=false regressions.
+- `git diff --check -- .codex/skills docs/agent-collaboration-governance.md`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed for the agent verification workflow optimization. Broader runtime gates were intentionally omitted because the committed change was process documentation only.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot -v` passed after Materials Cloud report-body closure hardening, covering schema drift, parser report `status=fail`, missing accepted fields, mismatched units, and provider loader rejection.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after Materials Cloud report-body closure hardening.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after Materials Cloud report-body closure hardening. No Python/frontend/full Go rerun was required because this slice only changed Go source snapshot/closure code, Go CLI fixture tests, source closure schemas, and the V35 validation script.
 
 ## Remaining Work
 
@@ -170,9 +176,9 @@ Recent gates run during this checkpoint:
 3. Materials Cloud scientific import remains open for real data, but the
    admission contract is now explicit for a single record: parser report, unit
    validation, record-specific license/citation review, checksum coverage,
-   manifest-listed validation files, computed=true, metadata_only=false, and
-   a closed scientific field allowlist are required. The current repository
-   fixture remains metadata-only and closure-blocked.
+   manifest-listed validation files, schema-valid report bodies, computed=true,
+   metadata_only=false, and a closed scientific field allowlist are required.
+   The current repository fixture remains metadata-only and closure-blocked.
 4. NOMAD PERLA live archive behavior remains conservative. Rate limit,
    archive-unavailable, and schema-unrecognized cases must stay review-routed.
 5. Crossref/OpenAlex and literature metadata Go parity are future slices, not

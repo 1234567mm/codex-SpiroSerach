@@ -440,8 +440,8 @@ func writeSpiroctlMaterialsCloudReadySnapshot(t *testing.T, dir string) string {
 		"raw/cspbi3.cif":                         []byte("data_CsPbI3\n_cell_length_a 6.2\n"),
 		"docs/license.txt":                       []byte("CC-BY-4.0 record-specific license review complete"),
 		"docs/attribution.txt":                   []byte("Synthetic spiroctl Materials Cloud parser fixture attribution"),
-		"validation/record-parser-report.json":   []byte(`{"status":"pass","accepted_fields":["band_gap_ev","formation_energy_ev_per_atom","energy_above_hull_ev"]}`),
-		"validation/unit-validation-report.json": []byte(`{"status":"pass","units":{"band_gap_ev":"eV","formation_energy_ev_per_atom":"eV/atom","energy_above_hull_ev":"eV"}}`),
+		"validation/record-parser-report.json":   []byte(`{"schema_version":"v35.materials_cloud_record_parser_report.v1","status":"pass","accepted_fields":["material_id","formula","structure_ref","band_gap_ev","formation_energy_ev_per_atom","energy_above_hull_ev","method","software","resolution_status"]}`),
+		"validation/unit-validation-report.json": []byte(`{"schema_version":"v35.materials_cloud_unit_validation_report.v1","status":"pass","units":{"band_gap_ev":"eV","formation_energy_ev_per_atom":"eV/atom","energy_above_hull_ev":"eV"}}`),
 	}
 	roles := map[string]string{
 		"records.json":                           "normalized_records",

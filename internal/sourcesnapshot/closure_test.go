@@ -137,6 +137,48 @@ func TestClosureReadinessContractMatchesJSONSchema(t *testing.T) {
 	}
 }
 
+func TestMaterialsCloudClosureReportSchemasMatchGoContracts(t *testing.T) {
+	parserRaw, err := os.ReadFile("../../schemas/materials-cloud-record-parser-report.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parserSchema map[string]any
+	if err := json.Unmarshal(parserRaw, &parserSchema); err != nil {
+		t.Fatal(err)
+	}
+	parserProperties := parserSchema["properties"].(map[string]any)
+	if parserProperties["schema_version"].(map[string]any)["const"] != MaterialsCloudRecordParserReportSchemaVersion {
+		t.Fatalf("parser report schema_version const drifted")
+	}
+	acceptedFieldItems := parserProperties["accepted_fields"].(map[string]any)["items"].(map[string]any)
+	acceptedFields := stringSetFromAnySlice(acceptedFieldItems["enum"].([]any))
+	for field := range materialsCloudScientificReportFields {
+		if !acceptedFields[field] {
+			t.Fatalf("parser report schema missing accepted field %q", field)
+		}
+	}
+
+	unitRaw, err := os.ReadFile("../../schemas/materials-cloud-unit-validation-report.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var unitSchema map[string]any
+	if err := json.Unmarshal(unitRaw, &unitSchema); err != nil {
+		t.Fatal(err)
+	}
+	unitProperties := unitSchema["properties"].(map[string]any)
+	if unitProperties["schema_version"].(map[string]any)["const"] != MaterialsCloudUnitValidationReportSchemaVersion {
+		t.Fatalf("unit report schema_version const drifted")
+	}
+	unitFields := unitProperties["units"].(map[string]any)["properties"].(map[string]any)
+	for field, unit := range materialsCloudScientificUnits {
+		fieldSchema, ok := unitFields[field].(map[string]any)
+		if !ok || fieldSchema["const"] != unit {
+			t.Fatalf("unit report schema missing %s=%s", field, unit)
+		}
+	}
+}
+
 func TestClosureReadinessAcceptsMaterialsCloudSingleRecordScientificEvidence(t *testing.T) {
 	dir := t.TempDir()
 	writeClosureReadyMaterialsCloudSnapshot(t, dir)
@@ -155,6 +197,44 @@ func TestClosureReadinessAcceptsMaterialsCloudSingleRecordScientificEvidence(t *
 	}
 	if report.SourceID != materialsCloudProvider || report.ClosureGateStatus != "pass" {
 		t.Fatalf("closure report identity mismatch: %#v", report)
+	}
+}
+
+func TestClosureReadinessRejectsMaterialsCloudFailedParserReport(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyMaterialsCloudSnapshot(t, dir)
+	replaceSnapshotFile(t, dir, "validation/record-parser-report.json", []byte(`{"schema_version":"v35.materials_cloud_record_parser_report.v1","status":"fail","accepted_fields":["material_id","formula","structure_ref","band_gap_ev","formation_energy_ev_per_atom","energy_above_hull_ev","method","software","resolution_status"]}`))
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Ready || !containsString(report.Reasons, "materials_cloud_record_parser_report_invalid") {
+		t.Fatalf("expected parser report body rejection, got %#v", report)
+	}
+}
+
+func TestClosureReadinessRejectsMaterialsCloudMissingAcceptedField(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyMaterialsCloudSnapshot(t, dir)
+	replaceSnapshotFile(t, dir, "validation/record-parser-report.json", []byte(`{"schema_version":"v35.materials_cloud_record_parser_report.v1","status":"pass","accepted_fields":["material_id","formula","structure_ref","band_gap_ev","formation_energy_ev_per_atom","energy_above_hull_ev","method","software"]}`))
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Ready || !containsString(report.Reasons, "materials_cloud_record_parser_report_invalid") {
+		t.Fatalf("expected parser accepted_fields rejection, got %#v", report)
 	}
 }
 
@@ -231,6 +311,25 @@ func TestClosureReadinessRejectsMaterialsCloudUnlistedStructureReference(t *test
 	}
 	if report.Ready || !containsString(report.Reasons, "materials_cloud_structure_ref_unlisted") {
 		t.Fatalf("expected unlisted structure_ref rejection, got %#v", report)
+	}
+}
+
+func TestClosureReadinessRejectsMaterialsCloudMismatchedUnitReport(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyMaterialsCloudSnapshot(t, dir)
+	replaceSnapshotFile(t, dir, "validation/unit-validation-report.json", []byte(`{"schema_version":"v35.materials_cloud_unit_validation_report.v1","status":"pass","units":{"band_gap_ev":"J","formation_energy_ev_per_atom":"eV/atom","energy_above_hull_ev":"eV"}}`))
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Ready || !containsString(report.Reasons, "materials_cloud_unit_validation_report_invalid") {
+		t.Fatalf("expected unit report body rejection, got %#v", report)
 	}
 }
 
@@ -401,8 +500,8 @@ func writeClosureReadyMaterialsCloudSnapshotWithMutation(
 		"raw/cspbi3.cif":                         []byte("data_CsPbI3\n_cell_length_a 6.2\n"),
 		"docs/license.txt":                       []byte("CC-BY-4.0 record-specific license review complete"),
 		"docs/attribution.txt":                   []byte("Synthetic Materials Cloud parser fixture attribution"),
-		"validation/record-parser-report.json":   []byte(`{"status":"pass","accepted_fields":["band_gap_ev","formation_energy_ev_per_atom","energy_above_hull_ev"]}`),
-		"validation/unit-validation-report.json": []byte(`{"status":"pass","units":{"band_gap_ev":"eV","formation_energy_ev_per_atom":"eV/atom","energy_above_hull_ev":"eV"}}`),
+		"validation/record-parser-report.json":   []byte(`{"schema_version":"v35.materials_cloud_record_parser_report.v1","status":"pass","accepted_fields":["material_id","formula","structure_ref","band_gap_ev","formation_energy_ev_per_atom","energy_above_hull_ev","method","software","resolution_status"]}`),
+		"validation/unit-validation-report.json": []byte(`{"schema_version":"v35.materials_cloud_unit_validation_report.v1","status":"pass","units":{"band_gap_ev":"eV","formation_energy_ev_per_atom":"eV/atom","energy_above_hull_ev":"eV"}}`),
 	}
 	roles := map[string]string{
 		"records.json":                           "normalized_records",
@@ -474,6 +573,38 @@ func writeClosureReadyMaterialsCloudSnapshotWithMutation(
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "source-manifest.json"), rawManifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func replaceSnapshotFile(t *testing.T, dir string, relativePath string, content []byte) {
+	t.Helper()
+	fullPath := filepath.Join(dir, filepath.FromSlash(relativePath))
+	if err := os.WriteFile(fullPath, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(dir, "source-manifest.json")
+	manifest, err := LoadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(content)
+	found := false
+	for index, file := range manifest.Files {
+		if file.RelativePath == relativePath {
+			manifest.Files[index].Bytes = int64(len(content))
+			manifest.Files[index].SHA256 = hex.EncodeToString(digest[:])
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("manifest file not found: %s", relativePath)
+	}
+	rawManifest, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath, rawManifest, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
