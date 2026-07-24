@@ -12,6 +12,7 @@ class V35ReadValidationScriptTests(unittest.TestCase):
 
         for package in [
             "./internal/sourceregistry",
+            "./internal/materialsproject",
             "./internal/sourcesnapshot",
             "./internal/providercache",
             "./internal/localbackend",

@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `314005d`
+Latest implementation HEAD before this status update: `afe45e4`
 Date: 2026-07-24
 
 ## Goal
@@ -44,14 +44,15 @@ The current branch contains these V35 execution commits:
 | `53bb44f` | P3 source closure readiness gate | Adds `spiroctl source-closure validate <source-manifest>` with a stable JSON readiness report, separates fixture/integrity validation from production/scientific closure, and blocks current PubChemQC and Materials Cloud fixtures from being claimed as closure-ready. |
 | `909034a` | P3 source closure requirements backlog | Adds `spiroctl source-closure requirements <source-id>` as a machine-readable input checklist for PubChemQC and Materials Cloud real-data closure, without downloading data or widening provider/scoring write paths. |
 | `314005d` | P1 source closure requirements schema contract | Adds a versioned JSON schema for the requirements report, Go report validation, schema drift tests, and V35 gate coverage so TypeScript/agent readers have a stable contract. |
-| current slice | P1 Materials Project source-provider probe contract | Adds a sanitized read-only `spiroctl source-provider test-connection materials_project` report over registry/key/live probe state, with missing-key no-network behavior and schema/gate coverage. |
+| `7705579` | P1 Materials Project source-provider probe contract | Adds a sanitized read-only `spiroctl source-provider test-connection materials_project` report over registry/key/live probe state, with missing-key no-network behavior and schema/gate coverage. |
+| `afe45e4` | P2 AtomReasonX Materials Project probe command contract | Adds the TypeScript result contract and settings Test-button command payload for the Materials Project source-provider probe, keeps source settings separate from model settings, and allowlists non-secret probe input to `formula` only. |
 
 ## Current Data Source Status
 
 | Source | Current state | Next required closure |
 | --- | --- | --- |
 | PubChem | Go shadow ready; source settings remain separate from model provider settings. | Later live transport hardening and rate-limit telemetry. |
-| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` now exposes a sanitized read-only probe contract. | Live provider can move forward after operator key configuration is connected to the Go probe beyond the current environment seam. |
+| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` now exposes a sanitized read-only probe contract, and AtomReasonX has the source-scoped command/result contract for that probe. | Live provider can move forward after operator key configuration is connected to the Go probe beyond the current environment seam and the command backend bridge executes the fixed probe without giving raw keys to the renderer. |
 | NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. | Keep archive fallback conservative; add live sync transport only behind explicit operator command. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
@@ -134,6 +135,12 @@ Recent gates run during this checkpoint:
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after adding explicit schema contract validation for `source-closure requirements`.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/materialsproject ./cmd/spiroctl -v` passed after adding the Materials Project source-provider probe contract.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after adding `source-provider test-connection materials_project` missing-key read-only coverage.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 34 Vitest tests after wiring the AtomReasonX Materials Project source-provider probe command contract.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the AtomReasonX probe command contract slice.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts tests.test_atomreasonx_frontend -v` passed outside sandbox with 41 tests after the AtomReasonX probe command contract slice; the sandboxed `.venv` Python path remained blocked by the local `uv` trampoline permission issue.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the AtomReasonX probe command contract slice.
+- `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed with exit code 0 after the AtomReasonX probe command contract slice; tool output was truncated, and the generated root `uv.lock` was removed.
+- `git diff --check`, `git diff --cached --check`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed before committing the AtomReasonX probe command contract slice.
 
 ## Remaining Work
 
