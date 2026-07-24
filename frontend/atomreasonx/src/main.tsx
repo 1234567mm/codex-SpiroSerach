@@ -2,8 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppShell } from "./AppShell";
 import { SettingsModal } from "./components/SettingsModal";
-import { createWorkbenchCommandDispatcher } from "./adapters/command-adapter";
+import { createWorkbenchCommandDispatcher, type WorkbenchCommandAdapter } from "./adapters/command-adapter";
 import { createRuntimeWorkbenchCommandAdapter } from "./adapters/tauri-command-adapter";
+import { projectSourceSettingsCommandResult } from "./adapters/source-settings-command-projection";
 import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import {
   buildReadonlyRunRecentOutputDirs,
@@ -14,7 +15,7 @@ import {
 } from "./adapters/readonly-run-operator-config";
 import fixture from "./fixtures/atomreasonx-ui-fixture.json";
 import { useWorkbenchWorkspaceStore } from "./stores/workspace-store";
-import type { AtomReasonXWorkspaceState } from "./contracts/types";
+import type { AtomReasonXCommandResult, AtomReasonXWorkspaceState } from "./contracts/types";
 
 const baseWorkspace = fixture as unknown as AtomReasonXWorkspaceState;
 const commandAdapter = createRuntimeWorkbenchCommandAdapter();
@@ -47,6 +48,35 @@ const AtomReasonXRoot: React.FC = () => {
     }
   }, []);
   const workspaceState = useWorkbenchWorkspaceStore(runtimeReadAdapter.adapter);
+  const [projectedWorkspace, setProjectedWorkspace] = React.useState<AtomReasonXWorkspaceState | null>(null);
+  const loadedWorkspace = workspaceState.status === "ready" ? workspaceState.workspace : null;
+  const visibleWorkspace = projectedWorkspace ?? loadedWorkspace;
+  const workspaceResetKey = loadedWorkspace
+    ? `${readonlyOutputDir ?? "fixture"}:${loadedWorkspace.active_workspace}:${loadedWorkspace.source_settings.config_version}`
+    : `${readonlyOutputDir ?? "fixture"}:not-ready`;
+
+  React.useEffect(() => {
+    setProjectedWorkspace(null);
+  }, [workspaceResetKey]);
+
+  const projectingCommandAdapter = React.useMemo<WorkbenchCommandAdapter>(() => ({
+    async submit(request) {
+      const result = await commandAdapter.submit(request);
+      if (visibleWorkspace && isAtomReasonXCommandResult(result)) {
+        setProjectedWorkspace(current => {
+          const base = current ?? visibleWorkspace;
+          const next = projectSourceSettingsCommandResult(base, result);
+          return next === base ? current : next;
+        });
+      }
+      return result;
+    },
+  }), [visibleWorkspace]);
+  const commandDispatcher = visibleWorkspace && !runtimeReadAdapter.readOnly
+    ? createWorkbenchCommandDispatcher(projectingCommandAdapter, () => ({
+      expectedTargetVersion: String(visibleWorkspace.source_settings.config_version),
+    }))
+    : undefined;
 
   if (workspaceState.status === "loading") {
     return <div className="app-shell app-shell-loading">Loading AtomReasonX workspace</div>;
@@ -73,12 +103,7 @@ const AtomReasonXRoot: React.FC = () => {
     );
   }
 
-  const workspace = workspaceState.workspace;
-  const commandDispatcher = runtimeReadAdapter.readOnly
-    ? undefined
-    : createWorkbenchCommandDispatcher(commandAdapter, () => ({
-      expectedTargetVersion: String(workspace.source_settings.config_version),
-    }));
+  const workspace = visibleWorkspace ?? workspaceState.workspace;
 
   return (
     <AppShell
@@ -98,4 +123,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AtomReasonXRoot />
   </React.StrictMode>
+);
+
+const isAtomReasonXCommandResult = (value: unknown): value is AtomReasonXCommandResult => (
+  typeof value === "object"
+  && value !== null
+  && !Array.isArray(value)
+  && (value as { schema_version?: unknown }).schema_version === "v23.action_result.v1"
+  && Array.isArray((value as { output_artifacts?: unknown }).output_artifacts)
 );

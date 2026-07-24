@@ -196,6 +196,9 @@ class TestFixtureStructure(unittest.TestCase):
         tauri_adapter = (
             REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "tauri-command-adapter.ts"
         ).read_text(encoding="utf-8")
+        projection = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "source-settings-command-projection.ts"
+        ).read_text(encoding="utf-8")
         workflow = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "WorkflowView.tsx").read_text(
             encoding="utf-8",
         )
@@ -209,6 +212,8 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("read-only-artifact-adapter", adapter)
         self.assertNotIn("ReadOnlyRunAPI", tauri_adapter)
         self.assertNotIn("read-only-artifact-adapter", tauri_adapter)
+        self.assertNotIn("ReadOnlyRunAPI", projection)
+        self.assertNotIn("read-only-artifact-adapter", projection)
         self.assertNotIn("read-only-artifact-adapter", workflow)
         self.assertNotIn("read-only-artifact-adapter", settings)
         self.assertNotIn("command-adapter", database)
@@ -226,6 +231,9 @@ class TestFixtureStructure(unittest.TestCase):
         )
 
         self.assertIn("createRuntimeWorkbenchCommandAdapter", main_ts)
+        self.assertIn("projectSourceSettingsCommandResult", main_ts)
+        self.assertIn("visibleWorkspace.source_settings.config_version", main_ts)
+        self.assertIn("!runtimeReadAdapter.readOnly", main_ts)
         self.assertIn('"submit_config_command"', adapter)
         self.assertIn("buildQueuedCommandResult", adapter)
         self.assertIn("submit_config_command", rust)
@@ -239,6 +247,19 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("pythonPath", main_ts)
         self.assertNotIn("SPIROSEARCH_PYTHON", main_ts)
         self.assertNotIn("tauri-plugin-shell", rust)
+
+    def test_source_settings_command_projection_is_ui_local_and_secret_free(self) -> None:
+        projection = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "source-settings-command-projection.ts"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("projectSourceSettingsCommandResult", projection)
+        self.assertIn("result.status !== \"accepted\"", projection)
+        self.assertIn("source.key_fingerprint = null", projection)
+        self.assertIn("effect.provider_probe.key_source === \"operator_secret\"", projection)
+        self.assertNotIn("localStorage", projection)
+        self.assertNotIn("fetch(", projection)
+        self.assertNotIn("api_key=", projection)
 
     def test_config_runtime_uses_repo_config_root_and_persistent_replay_ledger(self) -> None:
         runtime = (

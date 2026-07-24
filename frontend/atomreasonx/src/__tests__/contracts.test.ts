@@ -42,6 +42,7 @@ import {
   createTauriConfigCommandAdapter,
   createRuntimeWorkbenchCommandAdapter,
 } from "../adapters/tauri-command-adapter";
+import { projectSourceSettingsCommandResult } from "../adapters/source-settings-command-projection";
 import {
   createLoadingWorkbenchWorkspaceState,
   loadWorkbenchWorkspace,
@@ -451,7 +452,8 @@ describe("AtomReasonX contract fixtures", () => {
     expect(mainSource).toContain("workspaceState.status === \"error\"");
     expect(mainSource).toContain("<SettingsModal");
     expect(mainSource).toContain("runtimeReadAdapter.readOnly");
-    expect(mainSource).toContain("? undefined");
+    expect(mainSource).toContain("!runtimeReadAdapter.readOnly");
+    expect(mainSource).toContain(": undefined");
     expect(mainSource).not.toContain("spiroctlPath");
     expect(mainSource).not.toContain("localStorage");
     expect(mainSource).not.toContain("readonly_token");
@@ -914,6 +916,230 @@ describe("AtomReasonX contract fixtures", () => {
     expect(commandResult.output_artifacts[0].provider_probe?.status).toBe("missing_api_key");
     expect(blob).not.toContain("mp-secret");
     expect(blob).not.toContain("api_key=");
+  });
+
+  it("projects accepted source key rotation into UI-local source settings without secrets", () => {
+    const workspace = JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState;
+    const before = JSON.stringify(workspace.source_settings);
+    const result: AtomReasonXCommandResult = {
+      schema_version: "v23.action_result.v1",
+      request_id: "request-key-rotate",
+      action_type: "key_rotate",
+      status: "accepted",
+      idempotency_key: "idem-key-rotate",
+      actor_id: "operator-1",
+      reason_code: "command_preconditions_passed",
+      message: "accepted",
+      output_artifacts: [{
+        kind: "config_command_effect",
+        schema_version: "v33.config_command.v1",
+        action_type: "key_rotate",
+        provider: "materials_project",
+        provider_scope: "source",
+        changed_fields: ["api_key"],
+        validation_state: "validated",
+        config_version: 8,
+      }],
+      audit: {
+        idempotency_key: "idem-key-rotate",
+        expected_source_version: "7",
+        declared_effects: ["provider", "provider_scope", "api_key"],
+        changed_fields: ["api_key"],
+        validation_state: "validated",
+        config_version: 8,
+        output_artifacts: [],
+      },
+    };
+    result.audit.output_artifacts = result.output_artifacts;
+
+    const projected = projectSourceSettingsCommandResult(workspace, result);
+    const source = projected.source_settings.sources.find(item => item.provider_id === "materials_project");
+
+    expect(JSON.stringify(workspace.source_settings)).toBe(before);
+    expect(projected).not.toBe(workspace);
+    expect(projected.source_settings.config_version).toBe(8);
+    expect(source?.has_api_key).toBe(true);
+    expect(source?.key_fingerprint).toBeNull();
+    expect(source?.validation_state).toBe("configured");
+    expect(JSON.stringify(projected)).not.toContain("mp-test-key");
+    expect(JSON.stringify(projected)).not.toContain("api_key=");
+  });
+
+  it("projects Materials Project probe validation without treating env keys as saved local keys", () => {
+    const workspace = JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState;
+    const sourceBefore = workspace.source_settings.sources.find(item => item.provider_id === "materials_project");
+    const result: AtomReasonXCommandResult = {
+      schema_version: "v23.action_result.v1",
+      request_id: "request-probe",
+      action_type: "test_connection",
+      status: "accepted",
+      idempotency_key: "idem-probe",
+      actor_id: "operator-1",
+      reason_code: "command_preconditions_passed",
+      message: "accepted",
+      output_artifacts: [{
+        kind: "config_command_effect",
+        schema_version: "v33.config_command.v1",
+        action_type: "test_connection",
+        provider: "materials_project",
+        provider_scope: "source",
+        changed_fields: [],
+        validation_state: "validated",
+        validation_mode: "live_probe",
+        config_version: 9,
+        provider_probe: {
+          schema_version: SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+          provider: "materials_project",
+          status: "validated",
+          validation_state: "validated",
+          read_only: true,
+          live_enabled: true,
+          requires_api_key: true,
+          api_key_env: "MATERIALS_PROJECT_API_KEY",
+          api_key_configured: true,
+          key_source: "environment",
+          formula: DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA,
+          normalized_field_count: 3,
+          allowed_output_fields: ["resolution_status"],
+          review_triggers: [],
+        },
+      }],
+      audit: {
+        idempotency_key: "idem-probe",
+        expected_source_version: "8",
+        declared_effects: ["provider_connection_probe"],
+        changed_fields: [],
+        validation_state: "validated",
+        config_version: 9,
+        output_artifacts: [],
+      },
+    };
+    result.audit.output_artifacts = result.output_artifacts;
+
+    const projected = projectSourceSettingsCommandResult(workspace, result);
+    const source = projected.source_settings.sources.find(item => item.provider_id === "materials_project");
+
+    expect(sourceBefore?.has_api_key).toBe(false);
+    expect(projected.source_settings.config_version).toBe(9);
+    expect(source?.validation_state).toBe("validated");
+    expect(source?.has_api_key).toBe(false);
+    expect(source?.key_fingerprint).toBeNull();
+  });
+
+  it("does not project rejected queued or non-source command results", () => {
+    const workspace = JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState;
+    const rejected: AtomReasonXCommandResult = {
+      schema_version: "v23.action_result.v1",
+      request_id: "request-rejected",
+      action_type: "key_rotate",
+      status: "rejected",
+      idempotency_key: "idem-rejected",
+      actor_id: "operator-1",
+      reason_code: "invalid_secret_value",
+      message: "rejected",
+      output_artifacts: [{
+        kind: "config_command_effect",
+        schema_version: "v33.config_command.v1",
+        action_type: "key_rotate",
+        provider: "materials_project",
+        provider_scope: "source",
+        changed_fields: ["api_key"],
+        validation_state: "validated",
+        config_version: 8,
+      }],
+      audit: {
+        idempotency_key: "idem-rejected",
+        expected_source_version: "7",
+        declared_effects: [],
+        changed_fields: [],
+        validation_state: "rejected",
+        config_version: 7,
+        output_artifacts: [],
+      },
+    };
+    rejected.audit.output_artifacts = rejected.output_artifacts;
+    const queued = {
+      ...rejected,
+      request_id: "queued-local",
+      status: "queued",
+      reason_code: "transport_pending",
+    };
+    const modelEffect = {
+      ...rejected,
+      status: "accepted",
+      output_artifacts: [{
+        ...rejected.output_artifacts[0],
+        provider: "deepseek",
+        provider_scope: "model" as const,
+      }],
+    };
+
+    expect(projectSourceSettingsCommandResult(workspace, rejected)).toBe(workspace);
+    expect(projectSourceSettingsCommandResult(workspace, queued)).toBe(workspace);
+    expect(projectSourceSettingsCommandResult(workspace, modelEffect)).toBe(workspace);
+  });
+
+  it("ignores stale accepted source command results that return out of order", () => {
+    const workspace = JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState;
+    const mp = workspace.source_settings.sources.find(item => item.provider_id === "materials_project");
+    expect(mp).toBeDefined();
+    workspace.source_settings.config_version = 9;
+    mp!.has_api_key = false;
+    mp!.validation_state = "missing";
+    const staleProbe: AtomReasonXCommandResult = {
+      schema_version: "v23.action_result.v1",
+      request_id: "request-stale-probe",
+      action_type: "test_connection",
+      status: "accepted",
+      idempotency_key: "idem-stale-probe",
+      actor_id: "operator-1",
+      reason_code: "command_preconditions_passed",
+      message: "accepted",
+      output_artifacts: [{
+        kind: "config_command_effect",
+        schema_version: "v33.config_command.v1",
+        action_type: "test_connection",
+        provider: "materials_project",
+        provider_scope: "source",
+        changed_fields: [],
+        validation_state: "validated",
+        validation_mode: "live_probe",
+        config_version: 8,
+        provider_probe: {
+          schema_version: SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+          provider: "materials_project",
+          status: "validated",
+          validation_state: "validated",
+          read_only: true,
+          live_enabled: true,
+          requires_api_key: true,
+          api_key_env: "MATERIALS_PROJECT_API_KEY",
+          api_key_configured: true,
+          key_source: "operator_secret",
+          formula: DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA,
+          normalized_field_count: 3,
+          allowed_output_fields: ["resolution_status"],
+          review_triggers: [],
+        },
+      }],
+      audit: {
+        idempotency_key: "idem-stale-probe",
+        expected_source_version: "8",
+        declared_effects: ["provider_connection_probe"],
+        changed_fields: [],
+        validation_state: "validated",
+        config_version: 8,
+        output_artifacts: [],
+      },
+    };
+    staleProbe.audit.output_artifacts = staleProbe.output_artifacts;
+
+    const projected = projectSourceSettingsCommandResult(workspace, staleProbe);
+
+    expect(projected).toBe(workspace);
+    expect(mp!.has_api_key).toBe(false);
+    expect(mp!.validation_state).toBe("missing");
+    expect(workspace.source_settings.config_version).toBe(9);
   });
 
   it("exposes V33C HTL workbench source coverage and command actions", () => {

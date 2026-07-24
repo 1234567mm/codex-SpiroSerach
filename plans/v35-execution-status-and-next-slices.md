@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `e38687d`
+Latest implementation HEAD before this status update: `1ffa0c3`
 Date: 2026-07-24
 
 ## Goal
@@ -53,14 +53,15 @@ The current branch contains these V35 execution commits:
 | `febabe3` | P3 Materials Cloud report-body closure hardening | Adds schema-pinned Materials Cloud parser/unit report bodies and fail-closed validation for `status=pass`, accepted scientific fields, and expected units before any single-record scientific bundle can pass closure or load as provider facts. |
 | `11404b6` | P3 PubChemQC Python bridge report-body closure hardening | Adds schema-pinned PubChemQC Python oracle and Go-vs-Python parser parity reports, requiring `status=pass`, oracle/parser identity, record-count agreement, and accepted-field coverage before a ready snapshot can pass closure. |
 | `e38687d` | Agent targeted verification guardrails | Adds hygiene sentinels and documents milestone-gate/targeted-reverification rules so review fixes rerun the affected checks without shrinking the V35 goal. |
-| current slice | P2 Materials Project operator command transport | Routes AtomReasonX source config commands through a fixed Tauri bridge to Python `ConfigCommandPlane`, while non-config workflow actions remain queued and read-only/runtime writer boundaries stay separate. |
+| `1ffa0c3` | P2 Materials Project operator command transport | Routes AtomReasonX source config commands through a fixed Tauri bridge to Python `ConfigCommandPlane`, while non-config workflow actions remain queued and read-only/runtime writer boundaries stay separate. |
+| current slice | P1 AtomReasonX source-settings command projection | Projects accepted source config command results into the UI-local workbench state, preserves readonly/no-command mode, ignores rejected/queued/non-source/stale results, and keeps source-setting projection secret-free. |
 
 ## Current Data Source Status
 
 | Source | Current state | Next required closure |
 | --- | --- | --- |
 | PubChem | Go shadow ready; source settings remain separate from model provider settings. | Later live transport hardening and rate-limit telemetry. |
-| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts, can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure, and the current desktop command slice executes config-plane actions through a fixed Tauri bridge with persistent idempotency replay. | Next transport work should project persisted source-setting status/results back into the workbench and add explicit operator flows for NOMAD sync/import commands; provider cache, SQLite, scoring, and experiment writes remain out of this command slice. |
+| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts, can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure, the desktop command slice executes config-plane actions through a fixed Tauri bridge with persistent idempotency replay, and the current UI slice projects accepted source-setting command results back into workbench state without secrets or provider facts. | Next transport work should add explicit operator flows for NOMAD sync/import commands; provider cache, SQLite, scoring, and experiment writes remain out of this command slice. |
 | NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. | Keep archive fallback conservative; add live sync transport only behind explicit operator command. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
@@ -169,6 +170,10 @@ Recent gates run during this checkpoint:
 - `git diff --check`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed after the Materials Project command transport review fixes. Broader full-suite reruns were intentionally omitted because the post-review fixes were bounded to config command runtime, source-setting command transport contracts, Tauri bridge source policy, local secret validation, and stage status documentation.
 - `cargo fmt --check` remains environment-blocked because `cargo-fmt.exe` is not installed for `stable-x86_64-pc-windows-msvc`.
 - `cargo check --offline` remains environment-blocked because MSVC `link.exe` is not on PATH.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 40 Vitest tests after the AtomReasonX source-settings command projection slice, including out-of-order stale accepted result regression coverage.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the AtomReasonX source-settings command projection slice.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 27 tests after the AtomReasonX source-settings command projection slice; sandboxed `.venv` Python remained blocked by local `uv` trampoline permissions.
+- Noether found a P1 stale accepted result ordering risk during review; the projection now ignores source effects with `config_version` older than the visible `source_settings.config_version`, and targeted frontend/Python reruns above covered the fix. Broader gates were intentionally omitted because the fix is UI-local TypeScript projection plus source-contract assertions only.
 
 ## Remaining Work
 
