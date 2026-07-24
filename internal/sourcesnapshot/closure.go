@@ -7,9 +7,25 @@ import (
 )
 
 const (
-	ClosureEvidenceSchemaVersion  = "v35.source_closure_evidence.v1"
-	ClosureReadinessSchemaVersion = "v35.source_closure_readiness.v1"
+	ClosureEvidenceSchemaVersion     = "v35.source_closure_evidence.v1"
+	ClosureReadinessSchemaVersion    = "v35.source_closure_readiness.v1"
+	ClosureRequirementsSchemaVersion = "v35.source_closure_requirements.v1"
 )
+
+type ClosureRequirement struct {
+	Code        string   `json:"code"`
+	Category    string   `json:"category"`
+	Description string   `json:"description"`
+	RequiredFor []string `json:"required_for"`
+}
+
+type ClosureRequirementsReport struct {
+	SchemaVersion string               `json:"schema_version"`
+	SourceID      string               `json:"source_id"`
+	Status        string               `json:"status"`
+	Requirements  []ClosureRequirement `json:"requirements"`
+	Notes         []string             `json:"notes"`
+}
 
 type ClosureReadinessReport struct {
 	SchemaVersion     string   `json:"schema_version"`
@@ -19,6 +35,58 @@ type ClosureReadinessReport struct {
 	ClosureGateStatus string   `json:"closure_gate_status"`
 	Ready             bool     `json:"ready"`
 	Reasons           []string `json:"reasons"`
+}
+
+func BuildClosureRequirementsReport(sourceID string) (ClosureRequirementsReport, error) {
+	sourceID = strings.TrimSpace(sourceID)
+	report := ClosureRequirementsReport{
+		SchemaVersion: ClosureRequirementsSchemaVersion,
+		SourceID:      sourceID,
+		Status:        "inputs_required",
+	}
+	switch sourceID {
+	case pubchemqcProvider:
+		report.Requirements = []ClosureRequirement{
+			requirement("pubchemqc_full_snapshot_path", "operator_input", "Path to the real PubChemQC dataset snapshot under data/lib/pubchemqc, not a fixture.", "source-closure", "non_fixture_import"),
+			requirement("sha256_manifest_for_all_files", "checksum", "Every raw archive, normalized record, license, attribution, and validation summary file must be listed with SHA-256 and byte count.", "source-snapshot", "source-closure"),
+			requirement("pubchemqc_identity_join", "record_content", "Normalized records must carry PubChem CID plus an explicit identity join such as InChIKey.", "source-closure", "provider_response"),
+			requirement("pubchemqc_method_basis_units", "record_content", "Computed electronic levels must include method, basis set, dataset version, finite eV values, and explicit computed=true.", "source-closure", "provider_response"),
+			requirement("pubchemqc_python_oracle_report", "parity", "A checked-in validation summary must compare Go normalized output against the Python scientific bridge/oracle.", "source-closure"),
+			requirement("pubchemqc_parser_parity_report", "parity", "A checked-in validation summary must prove parser parity before deferred scientific fields are accepted.", "source-closure"),
+			requirement("pubchemqc_license_citation_review", "license", "License scope and required citation must be reviewed for local research use before non-fixture facts are admitted.", "source-closure", "artifact_policy"),
+			requirement("pubchemqc_deferred_scientific_fields", "parser_boundary", "Geometry, total energy, dipole, charge state, and software fields must stay blocked until parser parity is documented.", "source-closure", "scientific_bridge"),
+		}
+		report.Notes = []string{
+			"Live PubChemQC API mode remains quarantined until response schema, terms, rate limits, and uptime behavior are verified.",
+			"Python remains the bridge for large geometry and chemistry-specific validation until parity evidence exists.",
+		}
+	case materialsCloudProvider:
+		report.Requirements = []ClosureRequirement{
+			requirement("materials_cloud_record_id", "operator_input", "A specific Materials Cloud archive record DOI/id and version must be selected; broad automatic import is not closure-ready.", "source-closure", "manual_import"),
+			requirement("materials_cloud_file_checksums", "checksum", "Every imported archive file must have byte count and SHA-256 coverage in the source manifest.", "source-snapshot", "source-closure"),
+			requirement("materials_cloud_record_parser_report", "parser_boundary", "A record-specific parser report must define accepted scientific fields for the chosen archive schema.", "source-closure"),
+			requirement("materials_cloud_unit_validation_report", "units", "Units and reference scales must be validated for every scientific field before admission.", "source-closure", "scoring_gate"),
+			requirement("materials_cloud_record_license_review", "license", "Record-specific license, citation, and redistribution scope must be reviewed before scientific facts are admitted.", "source-closure", "artifact_policy"),
+			requirement("materials_cloud_non_metadata_records", "record_content", "Metadata-only archive records cannot be treated as scientific facts.", "source-closure", "provider_response"),
+			requirement("materials_cloud_identity_resolution", "record_content", "Structure/material identity must be explicit or review-routed as ambiguous.", "source-closure", "review_gate"),
+		}
+		report.Notes = []string{
+			"Materials Cloud is heterogeneous archive infrastructure, not a Materials Project-style summary API in this slice.",
+			"Python may remain the parser bridge for AiiDA, CIF, pymatgen, or chemistry-heavy record formats.",
+		}
+	default:
+		return ClosureRequirementsReport{}, fmt.Errorf("source closure requirements are not defined for source_id=%s", sourceID)
+	}
+	return report, nil
+}
+
+func requirement(code string, category string, description string, requiredFor ...string) ClosureRequirement {
+	return ClosureRequirement{
+		Code:        code,
+		Category:    category,
+		Description: description,
+		RequiredFor: append([]string(nil), requiredFor...),
+	}
 }
 
 type ClosureReadinessError struct {

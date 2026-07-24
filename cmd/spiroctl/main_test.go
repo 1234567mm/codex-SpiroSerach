@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -231,11 +233,59 @@ func TestSourceClosureValidateBlocksCurrentQuarantinedFixtures(t *testing.T) {
 	}
 }
 
+func TestSourceClosureRequirementsEmitsMachineReadableBacklog(t *testing.T) {
+	for _, sourceID := range []string{"pubchemqc", "materials_cloud"} {
+		t.Run(sourceID, func(t *testing.T) {
+			output, err := captureStdout(func() error {
+				return run([]string{"source-closure", "requirements", sourceID})
+			})
+			if err != nil {
+				t.Fatalf("run() error = %v", err)
+			}
+			var report struct {
+				SchemaVersion string `json:"schema_version"`
+				SourceID      string `json:"source_id"`
+				Status        string `json:"status"`
+				Requirements  []struct {
+					Code string `json:"code"`
+				} `json:"requirements"`
+			}
+			if err := json.Unmarshal([]byte(output), &report); err != nil {
+				t.Fatalf("requirements output is not JSON: %v\n%s", err, output)
+			}
+			if report.SchemaVersion != "v35.source_closure_requirements.v1" ||
+				report.SourceID != sourceID ||
+				report.Status != "inputs_required" ||
+				len(report.Requirements) == 0 {
+				t.Fatalf("requirements report mismatch: %#v", report)
+			}
+		})
+	}
+}
+
 func TestRunRejectsUnknownTarget(t *testing.T) {
 	err := run([]string{"unknown", "validate", "data/source_registry.json"})
 	if err == nil || !strings.Contains(err.Error(), "unknown target") {
 		t.Fatalf("expected unknown target error, got %v", err)
 	}
+}
+
+func captureStdout(fn func() error) (string, error) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+	original := os.Stdout
+	os.Stdout = writer
+	runErr := fn()
+	writer.Close()
+	os.Stdout = original
+	raw, readErr := io.ReadAll(reader)
+	reader.Close()
+	if runErr != nil {
+		return string(raw), runErr
+	}
+	return string(raw), readErr
 }
 
 func createSpiroctlBackendFixture(t *testing.T, full bool) string {

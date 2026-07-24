@@ -797,6 +797,14 @@ readiness gate. It emits a stable JSON report with
 record count. Current fixture manifests are expected to pass
 `source-snapshot` and fail `source-closure`.
 
+`source-closure requirements <source-id>` is the operator/backlog surface for
+sources that cannot be closed without real external inputs. It emits
+`schema_version = "v35.source_closure_requirements.v1"`, `status =
+"inputs_required"`, and a list of requirement codes for the selected source.
+The initial supported sources are `pubchemqc` and `materials_cloud`; this
+command is read-only and does not inspect local data, download archives, call
+providers, write caches, or rebuild scoring.
+
 Optional `closure_evidence` fields may be added to a manifest when a real
 snapshot is ready for closure review:
 

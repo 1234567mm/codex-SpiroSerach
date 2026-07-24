@@ -114,6 +114,50 @@ function Invoke-SpiroctlExpectClosureBlocked {
     }
 }
 
+function Invoke-SpiroctlExpectJson {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$ExpectedSchemaVersion,
+        [Parameter(Mandatory = $true)][string]$ExpectedSourceID,
+        [Parameter(Mandatory = $true)][string]$ExpectedStatus
+    )
+
+    Write-Output "==> $Name"
+    $processStart = New-Object System.Diagnostics.ProcessStartInfo
+    $processStart.FileName = 'go'
+    $processStart.Arguments = Join-ProcessArguments (@('run', './cmd/spiroctl') + $Arguments)
+    $processStart.WorkingDirectory = (Get-Location).Path
+    $processStart.UseShellExecute = $false
+    $processStart.RedirectStandardOutput = $true
+    $processStart.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($processStart)
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+        throw "$Name failed with exit code $($process.ExitCode). Stdout: $stdout Stderr: $stderr"
+    }
+    try {
+        $report = $stdout | ConvertFrom-Json
+    }
+    catch {
+        throw "$Name did not emit JSON on stdout. Stdout: $stdout Stderr: $stderr"
+    }
+    if ($report.schema_version -ne $ExpectedSchemaVersion) {
+        throw "$Name emitted unexpected schema_version: $($report.schema_version)"
+    }
+    if ($report.source_id -ne $ExpectedSourceID) {
+        throw "$Name emitted unexpected source_id: $($report.source_id)"
+    }
+    if ($report.status -ne $ExpectedStatus) {
+        throw "$Name emitted unexpected status: $($report.status)"
+    }
+    if (@($report.requirements).Count -eq 0) {
+        throw "$Name emitted no requirements. Report: $stdout"
+    }
+}
+
 function Get-V35SourceSnapshotManifestPaths {
     param([Parameter(Mandatory = $true)][string]$Root)
 
@@ -194,6 +238,18 @@ Invoke-SpiroctlExpectClosureBlocked 'Materials Cloud fixture closure readiness b
     'validate',
     'data/lib/materials_cloud/source-manifest.json'
 ) 'materials_cloud_metadata_only_records'
+
+Invoke-SpiroctlExpectJson 'PubChemQC closure requirements are machine-readable' @(
+    'source-closure',
+    'requirements',
+    'pubchemqc'
+) 'v35.source_closure_requirements.v1' 'pubchemqc' 'inputs_required'
+
+Invoke-SpiroctlExpectJson 'Materials Cloud closure requirements are machine-readable' @(
+    'source-closure',
+    'requirements',
+    'materials_cloud'
+) 'v35.source_closure_requirements.v1' 'materials_cloud' 'inputs_required'
 
 Invoke-Spiroctl 'provider cache fixture validation' @(
     'provider-cache',

@@ -41,7 +41,8 @@ The current branch contains these V35 execution commits:
 | `588c9b9` | AtomReasonX readonly run recent directory selector | Adds a read-side recent readonly run output-dir selector for operator workflow, deduplicates and filters recent paths, rejects credential-shaped and executable-looking values, and keeps the setting free of command, token, localStorage, and sidecar executable-path state. |
 | `c9e34ab` | AtomReasonX sidecar release build policy | Adds a repository-owned PowerShell build path for the Go `spiroctl` Tauri sidecar, writes the Tauri-required `spiroctl-<target-triple>[.exe]` artifact plus checksum and manifest, smoke-tests the host artifact, ignores generated binaries, and extends packaging preflight with production artifact manifest/hash checks. |
 | `752a399` | AtomReasonX bundled spiroctl sidecar enablement | Enables Tauri `bundle.externalBin = ["binaries/spiroctl"]`, routes `tauri:build` through sidecar build and preflight first, adds Rust-side bundled sidecar path resolution without exposing a WebView executable-path surface or shell plugin, and commits a Tauri `Cargo.lock` for reproducible desktop packaging inputs. |
-| current slice | P3 source closure readiness gate | Adds `spiroctl source-closure validate <source-manifest>` with a stable JSON readiness report, separates fixture/integrity validation from production/scientific closure, and blocks current PubChemQC and Materials Cloud fixtures from being claimed as closure-ready. |
+| `53bb44f` | P3 source closure readiness gate | Adds `spiroctl source-closure validate <source-manifest>` with a stable JSON readiness report, separates fixture/integrity validation from production/scientific closure, and blocks current PubChemQC and Materials Cloud fixtures from being claimed as closure-ready. |
+| current slice | P3 source closure requirements backlog | Adds `spiroctl source-closure requirements <source-id>` as a machine-readable input checklist for PubChemQC and Materials Cloud real-data closure, without downloading data or widening provider/scoring write paths. |
 
 ## Current Data Source Status
 
@@ -125,6 +126,8 @@ Recent gates run during this checkpoint:
 - `cargo test` remains environment-blocked by crates.io proxy access, and `cargo test --offline` reaches compilation but fails because MSVC `link.exe` is not on PATH.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed for the P3 source closure readiness gate, including blocked current PubChemQC and Materials Cloud fixtures plus a synthetic PubChemQC ready manifest.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed with JSON checks proving `source-snapshot validate` accepts current fixtures while `source-closure validate` blocks PubChemQC and Materials Cloud production/scientific closure claims.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after adding machine-readable PubChemQC and Materials Cloud `source-closure requirements` reports.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after adding JSON schema/source/status checks for the requirements reports.
 
 ## Remaining Work
 
@@ -134,6 +137,8 @@ Recent gates run during this checkpoint:
    closure remains open. `source-snapshot validate` proves manifest and record
    integrity; `source-closure validate` is the production/scientific admission
    gate and currently blocks PubChemQC and Materials Cloud fixtures.
+   `source-closure requirements pubchemqc|materials_cloud` now reports the
+   exact operator inputs/evidence still required.
 2. PubChemQC full snapshot import remains open. Do not claim Go replacement
    until dataset-size handling, parser parity, Python oracle comparison,
    identity join, checksum, license/citation, and storage policy pass the
