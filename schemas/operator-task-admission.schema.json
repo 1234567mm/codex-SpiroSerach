@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/operator-task-admission.schema.json",
+  "title": "OperatorTaskAdmissionRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "action_type",
+    "provider",
+    "provider_scope",
+    "declared_effects",
+    "admission_status",
+    "write_authorization_scope",
+    "execution_authorized",
+    "execution_started",
+    "created_at",
+    "operator_task_hash",
+    "admission_hash",
+    "target_data_library_path",
+    "nomad_query_plan"
+  ],
+  "properties": {
+    "schema_version": { "const": "v35.operator_task_admission.v1" },
+    "task_id": {
+      "type": "string",
+      "pattern": "^task-[a-z0-9_-]+-[a-z0-9]{1,16}$"
+    },
+    "action_type": {
+      "enum": [
+        "start_nomad_sync",
+        "pause_nomad_sync",
+        "resume_nomad_sync",
+        "cancel_nomad_sync",
+        "import_doi_list",
+        "import_paper_group",
+        "import_hopv15_snapshot",
+        "import_opv_db_snapshot",
+        "import_pubchemqc_snapshot",
+        "import_materials_cloud_archive_record",
+        "refresh_pubchem_identity_cache",
+        "run_parsing_job",
+        "run_extraction_job"
+      ]
+    },
+    "provider": {
+      "type": ["string", "null"],
+      "enum": [
+        "nomad_perla_psc",
+        "hopv15",
+        "opv_db",
+        "pubchemqc",
+        "materials_cloud",
+        "pubchem",
+        null
+      ]
+    },
+    "provider_scope": { "const": "source" },
+    "declared_effects": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "provider_sync_jobs",
+          "paper_sources",
+          "manual_acquisition_tasks",
+          "paper_groups",
+          "paper_assets",
+          "source_import_tasks",
+          "provider_cache",
+          "knowledge_chunks",
+          "extracted_claims",
+          "citation_links"
+        ]
+      }
+    },
+    "admission_status": { "const": "admitted" },
+    "write_authorization_scope": { "const": "ledger_only" },
+    "execution_authorized": { "const": false },
+    "execution_started": { "const": false },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "operator_task_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "admission_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "target_data_library_path": {
+      "type": "string",
+      "pattern": "^data/lib/([a-z0-9_-]+/operator_tasks|operator_tasks)/task-[a-z0-9_-]+-[a-z0-9]{1,16}$"
+    },
+    "nomad_query_plan": {
+      "type": ["object", "null"]
+    }
+  }
+}
