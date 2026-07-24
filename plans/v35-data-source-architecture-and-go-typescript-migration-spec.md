@@ -803,7 +803,10 @@ sources that cannot be closed without real external inputs. It emits
 "inputs_required"`, and a list of requirement codes for the selected source.
 The initial supported sources are `pubchemqc` and `materials_cloud`; this
 command is read-only and does not inspect local data, download archives, call
-providers, write caches, or rebuild scoring.
+providers, write caches, or rebuild scoring. Its machine-readable contract is
+`schemas/source-closure-requirements.schema.json`; Go contract tests keep the
+schema version, supported sources, status values, and requirement categories in
+sync with the runtime report.
 
 Optional `closure_evidence` fields may be added to a manifest when a real
 snapshot is ready for closure review:

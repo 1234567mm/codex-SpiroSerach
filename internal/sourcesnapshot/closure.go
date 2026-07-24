@@ -12,6 +12,20 @@ const (
 	ClosureRequirementsSchemaVersion = "v35.source_closure_requirements.v1"
 )
 
+var (
+	closureRequirementCategories = closureSetOf(
+		"checksum",
+		"license",
+		"operator_input",
+		"parity",
+		"parser_boundary",
+		"record_content",
+		"units",
+	)
+	closureRequirementStatuses = closureSetOf("inputs_required")
+	closureRequirementSources  = closureSetOf(pubchemqcProvider, materialsCloudProvider)
+)
+
 type ClosureRequirement struct {
 	Code        string   `json:"code"`
 	Category    string   `json:"category"`
@@ -77,7 +91,63 @@ func BuildClosureRequirementsReport(sourceID string) (ClosureRequirementsReport,
 	default:
 		return ClosureRequirementsReport{}, fmt.Errorf("source closure requirements are not defined for source_id=%s", sourceID)
 	}
+	if err := ValidateClosureRequirementsReport(report); err != nil {
+		return ClosureRequirementsReport{}, err
+	}
 	return report, nil
+}
+
+func ValidateClosureRequirementsReport(report ClosureRequirementsReport) error {
+	if report.SchemaVersion != ClosureRequirementsSchemaVersion {
+		return fmt.Errorf("unknown closure requirements schema_version: %s", report.SchemaVersion)
+	}
+	if !closureRequirementSources[report.SourceID] {
+		return fmt.Errorf("unknown closure requirements source_id: %s", report.SourceID)
+	}
+	if !closureRequirementStatuses[report.Status] {
+		return fmt.Errorf("unknown closure requirements status for %s: %s", report.SourceID, report.Status)
+	}
+	if len(report.Requirements) == 0 {
+		return fmt.Errorf("closure requirements are empty for %s", report.SourceID)
+	}
+	seenCodes := make(map[string]struct{}, len(report.Requirements))
+	for _, item := range report.Requirements {
+		if strings.TrimSpace(item.Code) == "" {
+			return fmt.Errorf("closure requirement code is required for %s", report.SourceID)
+		}
+		if _, ok := seenCodes[item.Code]; ok {
+			return fmt.Errorf("duplicate closure requirement code for %s: %s", report.SourceID, item.Code)
+		}
+		seenCodes[item.Code] = struct{}{}
+		if !closureRequirementCategories[item.Category] {
+			return fmt.Errorf("unknown closure requirement category for %s: %s", report.SourceID, item.Category)
+		}
+		if strings.TrimSpace(item.Description) == "" {
+			return fmt.Errorf("closure requirement description is required for %s: %s", report.SourceID, item.Code)
+		}
+		if len(item.RequiredFor) == 0 {
+			return fmt.Errorf("closure requirement required_for is required for %s: %s", report.SourceID, item.Code)
+		}
+		seenRequiredFor := make(map[string]struct{}, len(item.RequiredFor))
+		for _, target := range item.RequiredFor {
+			if strings.TrimSpace(target) == "" {
+				return fmt.Errorf("closure requirement required_for contains blank item for %s: %s", report.SourceID, item.Code)
+			}
+			if _, ok := seenRequiredFor[target]; ok {
+				return fmt.Errorf("closure requirement required_for contains duplicate item for %s: %s", report.SourceID, item.Code)
+			}
+			seenRequiredFor[target] = struct{}{}
+		}
+	}
+	if len(report.Notes) == 0 {
+		return fmt.Errorf("closure requirements notes are empty for %s", report.SourceID)
+	}
+	for _, note := range report.Notes {
+		if strings.TrimSpace(note) == "" {
+			return fmt.Errorf("closure requirements note contains blank item for %s", report.SourceID)
+		}
+	}
+	return nil
 }
 
 func requirement(code string, category string, description string, requiredFor ...string) ClosureRequirement {
@@ -87,6 +157,14 @@ func requirement(code string, category string, description string, requiredFor .
 		Description: description,
 		RequiredFor: append([]string(nil), requiredFor...),
 	}
+}
+
+func closureSetOf(values ...string) map[string]bool {
+	result := make(map[string]bool, len(values))
+	for _, value := range values {
+		result[value] = true
+	}
+	return result
 }
 
 type ClosureReadinessError struct {

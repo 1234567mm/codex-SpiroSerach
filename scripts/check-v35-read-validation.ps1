@@ -186,6 +186,25 @@ function Get-V35SourceSnapshotManifestPaths {
     return $paths | Sort-Object
 }
 
+function Assert-SchemaConst {
+    param(
+        [Parameter(Mandatory = $true)][string]$RelativePath,
+        [Parameter(Mandatory = $true)][string]$PropertyName,
+        [Parameter(Mandatory = $true)][string]$ExpectedConst
+    )
+
+    Write-Output "==> schema contract validation: $RelativePath"
+    $schemaPath = Join-Path (Get-Location).Path $RelativePath
+    if (-not [IO.File]::Exists($schemaPath)) {
+        throw "Schema file does not exist: $RelativePath"
+    }
+    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
+    $property = $schema.properties.$PropertyName
+    if ($property.const -ne $ExpectedConst) {
+        throw "$RelativePath property $PropertyName const = $($property.const), want $ExpectedConst"
+    }
+}
+
 $Root = Get-RepositoryRoot $RepositoryRoot
 if (-not [IO.Directory]::Exists($Root)) {
     throw "Repository root does not exist: $Root"
@@ -195,6 +214,10 @@ Set-Location $Root
 if ([string]::IsNullOrWhiteSpace($env:GOCACHE)) {
     $env:GOCACHE = Join-Path $Root '.cache\go-build'
 }
+
+Assert-SchemaConst 'schemas/source-closure-requirements.schema.json' `
+    'schema_version' `
+    'v35.source_closure_requirements.v1'
 
 Invoke-Go 'Go read/validation package tests' @(
     'test',
