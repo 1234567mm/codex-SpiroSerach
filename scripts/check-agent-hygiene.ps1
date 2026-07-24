@@ -20,6 +20,32 @@ function Read-StrictUtf8 {
     return $script:StrictUtf8.GetString($bytes)
 }
 
+function Assert-RequiredText {
+    param(
+        [Parameter(Mandatory = $true)][string]$RelativePath,
+        [Parameter(Mandatory = $true)][string[]]$RequiredText
+    )
+
+    $fullPath = Join-Path $Root $RelativePath
+    $displayPath = $RelativePath.Replace('\', '/')
+    if (-not [IO.File]::Exists($fullPath)) {
+        Add-Violation "$displayPath is missing required process guardrails."
+        return
+    }
+
+    try {
+        $text = Read-StrictUtf8 $fullPath
+        foreach ($fragment in $RequiredText) {
+            if (-not $text.Contains($fragment)) {
+                Add-Violation "$displayPath is missing required process guardrail text: $fragment"
+            }
+        }
+    }
+    catch {
+        Add-Violation "$displayPath could not be read for process guardrail checks."
+    }
+}
+
 function Get-RepositoryRoot {
     param([string]$RequestedRoot)
 
@@ -224,6 +250,41 @@ foreach ($relativePath in $governanceFiles) {
     catch {
         Add-Violation "$displayPath cannot be decoded as strict UTF-8."
     }
+}
+
+$processGuardrails = @(
+    @{
+        RelativePath = 'CLAUDE.md'
+        RequiredText = @('milestone gate', 'targeted reverification')
+    },
+    @{
+        RelativePath = 'docs\agent-collaboration-governance.md'
+        RequiredText = @('broad gates as milestone evidence', 'verification scope')
+    },
+    @{
+        RelativePath = '.codex\skills\review-ship\SKILL.md'
+        RequiredText = @('targeted reverification', 'Review-Fix Verification Record')
+    },
+    @{
+        RelativePath = '.codex\skills\worktree-tdd\SKILL.md'
+        RequiredText = @('Targeted Reverification')
+    },
+    @{
+        RelativePath = '.codex\skills\codebase-memory-mcp\SKILL.md'
+        RequiredText = @('Discovery Budget')
+    },
+    @{
+        RelativePath = '.codex\skills\contract-debugging\SKILL.md'
+        RequiredText = @('Failure Triage Budget')
+    },
+    @{
+        RelativePath = '.codex\skills\artifact-validation\SKILL.md'
+        RequiredText = @('Validation Matrix')
+    }
+)
+
+foreach ($guardrail in $processGuardrails) {
+    Assert-RequiredText $guardrail.RelativePath $guardrail.RequiredText
 }
 
 if ($Violations.Count -gt 0) {

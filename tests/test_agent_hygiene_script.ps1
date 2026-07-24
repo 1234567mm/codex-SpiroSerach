@@ -42,11 +42,21 @@ function New-CleanFixture {
     Set-Utf8File (Join-Path $root '.gitignore') ".qoder/`n"
     Set-Utf8File (Join-Path $root 'reasonix.toml') "[skills]`npaths = [`".codex/skills`"]`n"
     Set-Utf8File (Join-Path $root 'AGENTS.md') "# Agents`n"
-    Set-Utf8File (Join-Path $root 'CLAUDE.md') "# Claude`n"
-    Set-Utf8File (Join-Path $root 'docs\agent-collaboration-governance.md') "# Governance`n"
+    Set-Utf8File (Join-Path $root 'CLAUDE.md') "# Claude`nUse a milestone gate, then targeted reverification for bounded review fixes.`n"
+    Set-Utf8File (Join-Path $root 'docs\agent-collaboration-governance.md') "# Governance`nUse broad gates as milestone evidence and report verification scope.`n"
     Set-Utf8File (Join-Path $root 'docs\ai-collaboration-instruction-templates.md') "# Templates`n"
     Set-Utf8File (Join-Path $root '.codex\skills\example\SKILL.md') "---`nname: example`ndescription: Example skill`n---`n"
     Set-Utf8File (Join-Path $root '.codex\skills\example\agents\openai.yaml') "interface:`n  display_name: Example`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\review-ship\SKILL.md') "---`nname: review-ship`ndescription: Review ship skill`n---`n# Review Ship`nUse targeted reverification.`n## Review-Fix Verification Record`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\review-ship\agents\openai.yaml') "interface:`n  display_name: Review Ship`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\SKILL.md') "---`nname: worktree-tdd`ndescription: Worktree TDD skill`n---`n## Targeted Reverification`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\agents\openai.yaml') "interface:`n  display_name: Worktree TDD`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\codebase-memory-mcp\SKILL.md') "---`nname: codebase-memory-mcp`ndescription: Codebase memory skill`n---`n## Discovery Budget`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\codebase-memory-mcp\agents\openai.yaml') "interface:`n  display_name: Codebase Memory`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\contract-debugging\SKILL.md') "---`nname: contract-debugging`ndescription: Contract debugging skill`n---`n## Failure Triage Budget`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\contract-debugging\agents\openai.yaml') "interface:`n  display_name: Contract Debugging`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\artifact-validation\SKILL.md') "---`nname: artifact-validation`ndescription: Artifact validation skill`n---`n## Validation Matrix`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\artifact-validation\agents\openai.yaml') "interface:`n  display_name: Artifact Validation`n"
     Set-Utf8File (Join-Path $root '.qoder\local-only.txt') "local state`n"
 
     $gitOutput = & git -C $root init --quiet 2>&1
@@ -144,6 +154,11 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $invalidUtf8 'CLAUDE.md'), [byte[]](0x43, 0xC3, 0x28))
     Assert-Failure (Invoke-Checker $invalidUtf8) 'UTF-8' 'invalid UTF-8 fixture'
     Write-Output 'PASS: invalid UTF-8 governance file is rejected'
+
+    $guardrail = New-CleanFixture 'process-guardrail'
+    Set-Utf8File (Join-Path $guardrail 'CLAUDE.md') "# Claude`nUse a milestone gate only.`n"
+    Assert-Failure (Invoke-Checker $guardrail) 'targeted reverification' 'process guardrail fixture'
+    Write-Output 'PASS: missing process guardrail text is rejected'
 
     Write-Output 'PASS: all agent hygiene checker tests passed'
     exit 0

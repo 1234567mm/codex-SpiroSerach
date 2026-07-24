@@ -27,9 +27,14 @@ The default full test gate is:
 $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 ```
 
-Run focused tests while developing, then run the full gate before claiming a
-code change is complete. Documentation-only changes may use document-specific
-checks instead. Never record a fixed test count in governance or prompts.
+Run focused tests while developing. For the first completion gate of a
+behavior, code, schema, or artifact slice, run the applicable milestone gate
+from governance and `review-ship`; use the default full gate when the impact is
+not tightly bounded. After fresh broad or milestone evidence, bounded review
+fixes may use targeted reverification instead of rerunning every expensive
+suite. Record the verification scope and why omitted broad gates remain covered.
+Documentation-only changes may use document-specific checks instead. Never
+record a fixed test count in governance or prompts.
 
 Changes to model evaluation, surrogate, acquisition, replay, scikit-learn, or
 BoTorch paths also require the applicable optional dependency gate:
