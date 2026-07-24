@@ -144,6 +144,28 @@ export interface AtomReasonXSourceSettingsState {
   sources: SourceConfigStatusEntry[];
 }
 
+export interface SourceProviderConnectionProbeReport {
+  schema_version: "v35.source_provider_connection_probe.v1";
+  provider: "materials_project";
+  status: "blocked" | "missing_api_key" | "provider_error" | "validated" | "validation_failed";
+  validation_state: "missing" | "validated" | "validation_failed";
+  read_only: true;
+  live_enabled: boolean;
+  requires_api_key: boolean;
+  api_key_env: string;
+  api_key_configured: boolean;
+  key_source?: "environment" | "operator_secret";
+  formula: string;
+  source_url?: string;
+  response_id?: string;
+  resolution_status?: string;
+  normalized_field_count: number;
+  allowed_output_fields: string[];
+  review_triggers: string[];
+  error_code?: string;
+  error_message?: string;
+}
+
 export interface AtomReasonXSourceProfilesState {
   schema_version: "v35.atomreasonx_source_profiles.v1";
   producer_version: string;
@@ -159,6 +181,7 @@ export interface AtomReasonXCommandEffectArtifact {
   changed_fields: string[];
   validation_state: string;
   validation_mode?: "configuration_only" | "live_probe";
+  provider_probe?: SourceProviderConnectionProbeReport;
   config_version: number;
 }
 

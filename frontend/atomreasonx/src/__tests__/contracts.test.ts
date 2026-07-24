@@ -43,7 +43,14 @@ import {
   loadWorkbenchWorkspace,
 } from "../stores/workspace-store";
 import { buildDataSourceDisplayRows } from "../components/DatabaseView";
-import { buildSourceSettingsCommandPayload, submitSourceSettingsCommand } from "../components/SettingsModal";
+import {
+  DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA,
+  SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+  buildSourceProviderTestConnectionPayload,
+  buildSourceSettingsCommandPayload,
+  submitSourceProviderTestConnectionCommand,
+  submitSourceSettingsCommand,
+} from "../components/SettingsModal";
 import {
   buildWorkflowCommandPayload,
   canSubmitWorkflowCommandAction,
@@ -845,6 +852,66 @@ describe("AtomReasonX contract fixtures", () => {
     expect(commandResult.audit.output_artifacts).toEqual(commandResult.output_artifacts);
   });
 
+  it("models sanitized Materials Project source-provider probe command results", () => {
+    const commandResult: AtomReasonXCommandResult = {
+      schema_version: "v23.action_result.v1",
+      request_id: "request-1",
+      action_type: "test_connection",
+      status: "accepted",
+      idempotency_key: "idem-1",
+      actor_id: "operator-1",
+      reason_code: "accepted",
+      message: "accepted",
+      output_artifacts: [{
+        kind: "config_command_effect",
+        schema_version: "v33.config_command.v1",
+        action_type: "test_connection",
+        provider: "materials_project",
+        provider_scope: "source",
+        changed_fields: [],
+        validation_state: "missing",
+        validation_mode: "live_probe",
+        config_version: 1,
+        provider_probe: {
+          schema_version: SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+          provider: "materials_project",
+          status: "missing_api_key",
+          validation_state: "missing",
+          read_only: true,
+          live_enabled: true,
+          requires_api_key: true,
+          api_key_env: "MATERIALS_PROJECT_API_KEY",
+          api_key_configured: false,
+          formula: DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA,
+          normalized_field_count: 0,
+          allowed_output_fields: ["resolution_status"],
+          review_triggers: ["missing_api_key"],
+          error_code: "missing_api_key",
+          error_message: "Materials Project API key is required in MATERIALS_PROJECT_API_KEY",
+        },
+      }],
+      audit: {
+        idempotency_key: "idem-1",
+        expected_source_version: "0",
+        declared_effects: ["provider_connection_probe"],
+        changed_fields: [],
+        validation_state: "missing",
+        config_version: 1,
+        output_artifacts: [],
+      },
+    };
+    commandResult.audit.output_artifacts = commandResult.output_artifacts;
+
+    const blob = JSON.stringify(commandResult);
+    expect(commandResult.output_artifacts[0].provider_probe?.schema_version).toBe(
+      SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+    );
+    expect(commandResult.output_artifacts[0].provider_probe?.read_only).toBe(true);
+    expect(commandResult.output_artifacts[0].provider_probe?.status).toBe("missing_api_key");
+    expect(blob).not.toContain("mp-secret");
+    expect(blob).not.toContain("api_key=");
+  });
+
   it("exposes V33C HTL workbench source coverage and command actions", () => {
     const workspace = fixture as unknown as AtomReasonXWorkspaceState;
     const providers = workspace.source_coverage.sources.map(source => source.provider_id);
@@ -1068,8 +1135,9 @@ describe("AtomReasonX contract fixtures", () => {
     expect(canSubmitWorkflowCommandAction(workflowAction!)).toBe(true);
     await submitWorkflowCommandAction(dispatcher, workflowAction!);
     await submitSourceSettingsCommand(dispatcher, "key_rotate", source!, { api_key: "mp-test-key" });
+    await submitSourceProviderTestConnectionCommand(dispatcher, source!);
 
-    expect(submitted).toHaveLength(2);
+    expect(submitted).toHaveLength(3);
     expect(submitted[0].schema_version).toBe("v23.action_request.v1");
     expect(submitted[0].action_type).toBe("start_nomad_sync");
     expect(submitted[0].payload.declared_effects).toEqual(["provider_sync_jobs"]);
@@ -1078,6 +1146,13 @@ describe("AtomReasonX contract fixtures", () => {
     expect(submitted[1].idempotency_key).toBe("atomx-dispatch-test-2");
     expect(submitted[1].payload.provider).toBe("materials_project");
     expect(submitted[1].payload.provider_scope).toBe("source");
+    expect(submitted[2].action_type).toBe("test_connection");
+    expect(submitted[2].idempotency_key).toBe("atomx-dispatch-test-3");
+    expect(submitted[2].payload.provider).toBe("materials_project");
+    expect(submitted[2].payload.provider_scope).toBe("source");
+    expect(submitted[2].payload.probe_contract).toBe(SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION);
+    expect(submitted[2].payload.formula).toBe(DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA);
+    expect(JSON.stringify(submitted[2].payload)).not.toContain("api_key");
   });
 
   it("keeps command controls free of read-side adapter imports", () => {
@@ -1102,5 +1177,33 @@ describe("AtomReasonX contract fixtures", () => {
     expect(payload.provider).toBe("materials_project");
     expect(payload.provider_scope).toBe("source");
     expect(payload.api_key).toBe("mp-test-key");
+  });
+
+  it("builds Materials Project test-connection payload for the Go source-provider probe", () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const source = workspace.source_settings.sources.find(item => item.provider_id === "materials_project");
+
+    expect(source).toBeDefined();
+    const payload = buildSourceProviderTestConnectionPayload(source!, {
+      provider: "wrong_provider",
+      provider_scope: "model",
+      probe_contract: "wrong_contract",
+      formula: "FAPbI3",
+      api_key: "should-not-win",
+      apiKey: "should-not-win",
+      secret: "should-not-win",
+      token: "should-not-win",
+      password: "should-not-win",
+      credential: "should-not-win",
+      authorization: "should-not-win",
+    });
+
+    expect(payload.provider).toBe("materials_project");
+    expect(payload.provider_scope).toBe("source");
+    expect(payload.probe_contract).toBe(SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION);
+    expect(payload.formula).toBe("FAPbI3");
+    expect(JSON.stringify(payload)).not.toContain("api_key");
+    expect(JSON.stringify(payload)).not.toContain("should-not-win");
+    expect(JSON.stringify(payload)).not.toContain("wrong_contract");
   });
 });

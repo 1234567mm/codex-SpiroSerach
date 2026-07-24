@@ -217,8 +217,11 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertIn("WorkbenchCommandDispatcher", modal)
         self.assertIn('submitSourceSettingsCommand(commandDispatcher, "key_rotate"', modal)
         self.assertIn('submitSourceSettingsCommand(commandDispatcher, "key_remove"', modal)
-        self.assertIn('submitSourceSettingsCommand(commandDispatcher, "test_connection"', modal)
-        self.assertNotIn("onCommand", modal)
+        self.assertIn("submitSourceProviderTestConnectionCommand(commandDispatcher, source)", modal)
+        self.assertIn("v35.source_provider_connection_probe.v1", modal)
+        self.assertIn("withoutSourceProviderProbeSecrets", modal)
+        self.assertNotIn("onCommand?:", modal)
+        self.assertNotIn("onCommand=", modal)
         self.assertNotIn("key_fingerprint}", modal)
 
 
@@ -331,6 +334,9 @@ class TestCommandResultTypes(unittest.TestCase):
         self.assertIn("blocking_review_count: number;", types)
         self.assertIn("provider_scope: \"model\" | \"source\";", types)
         self.assertIn("validation_mode?: \"configuration_only\" | \"live_probe\";", types)
+        self.assertIn("interface SourceProviderConnectionProbeReport", types)
+        self.assertIn("provider_probe?: SourceProviderConnectionProbeReport;", types)
+        self.assertIn("schema_version: \"v35.source_provider_connection_probe.v1\";", types)
 
 
 if __name__ == "__main__":

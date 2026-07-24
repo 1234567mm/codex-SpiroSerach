@@ -7,6 +7,9 @@ import {
 } from "../adapters/readonly-run-operator-config";
 import type { AtomReasonXSourceSettingsState, SourceConfigStatusEntry } from "../contracts/types";
 
+export const SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION = "v35.source_provider_connection_probe.v1";
+export const DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA = "CsPbI3";
+
 export const buildSourceSettingsCommandPayload = (
   source: SourceConfigStatusEntry,
   extra: Record<string, unknown> = {},
@@ -16,6 +19,27 @@ export const buildSourceSettingsCommandPayload = (
   provider_scope: "source",
 });
 
+export const withoutSourceProviderProbeSecrets = (
+  extra: Record<string, unknown>,
+): Record<string, unknown> => {
+  const formula = typeof extra.formula === "string" ? extra.formula.trim() : "";
+  return formula ? { formula } : {};
+};
+
+export const buildSourceProviderTestConnectionPayload = (
+  source: SourceConfigStatusEntry,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> => {
+  if (source.provider_id !== "materials_project") {
+    return buildSourceSettingsCommandPayload(source);
+  }
+  return buildSourceSettingsCommandPayload(source, {
+    probe_contract: SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+    formula: DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA,
+    ...withoutSourceProviderProbeSecrets(extra),
+  });
+};
+
 export const submitSourceSettingsCommand = (
   commandDispatcher: WorkbenchCommandDispatcher,
   actionType: string,
@@ -24,6 +48,15 @@ export const submitSourceSettingsCommand = (
 ): Promise<unknown> => commandDispatcher.submitAction(
   actionType,
   buildSourceSettingsCommandPayload(source, extra),
+);
+
+export const submitSourceProviderTestConnectionCommand = (
+  commandDispatcher: WorkbenchCommandDispatcher,
+  source: SourceConfigStatusEntry,
+  extra: Record<string, unknown> = {},
+): Promise<unknown> => commandDispatcher.submitAction(
+  "test_connection",
+  buildSourceProviderTestConnectionPayload(source, extra),
 );
 
 export const SettingsModal: React.FC<{
@@ -214,7 +247,7 @@ export const SettingsModal: React.FC<{
                       disabled={!commandDispatcher}
                       onClick={() => {
                         if (commandDispatcher) {
-                          void submitSourceSettingsCommand(commandDispatcher, "test_connection", source);
+                          void submitSourceProviderTestConnectionCommand(commandDispatcher, source);
                         }
                       }}
                     >
