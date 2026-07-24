@@ -29,6 +29,8 @@ SANITIZED_SOURCE_CONFIG_STATUS_SCHEMA_VERSION = "v35.sanitized_source_config_sta
 VALIDATION_STATES = ("missing", "configured", "validation_failed", "validated")
 ALLOWED_PROVIDER_CONFIG_FIELDS = ("enabled", "base_url", "default_model", "workspace_id")
 SECRET_CONFIG_FIELD_TOKENS = ("api_key", "secret", "token", "password", "credential")
+SECRET_STORE_FORBIDDEN_PROVIDER_CHARS = ("\r", "\n", "\0", "=")
+SECRET_STORE_FORBIDDEN_VALUE_CHARS = ("\r", "\n", "\0")
 
 
 def key_fingerprint(key: str) -> str:
@@ -65,6 +67,16 @@ def validate_provider_config_fields(config: Mapping[str, Any]) -> None:
     if unsupported_fields:
         joined = ", ".join(unsupported_fields)
         raise ValueError(f"unsupported provider config fields: {joined}")
+
+
+def validate_secret_store_entry(provider: str, value: str) -> None:
+    """Validate one env-file secret entry before it can be persisted."""
+    if not provider.strip():
+        raise ValueError("secret provider is required")
+    if any(char in provider for char in SECRET_STORE_FORBIDDEN_PROVIDER_CHARS):
+        raise ValueError("secret provider cannot contain env-file control characters")
+    if any(char in value for char in SECRET_STORE_FORBIDDEN_VALUE_CHARS):
+        raise ValueError("secret value cannot contain newline or NUL characters")
 
 
 class SecretStore(ABC):
@@ -110,6 +122,8 @@ class FileSecretStore(SecretStore):
         return result
 
     def _write_all(self, secrets: Mapping[str, str]) -> None:
+        for provider, value in secrets.items():
+            validate_secret_store_entry(str(provider), str(value))
         lines = [f"{provider}={value}" for provider, value in secrets.items()]
         self.path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
@@ -117,6 +131,7 @@ class FileSecretStore(SecretStore):
         return self._read_all().get(provider)
 
     def set_secret(self, provider: str, value: str) -> None:
+        validate_secret_store_entry(provider, value)
         secrets = self._read_all()
         secrets[provider] = value
         self._write_all(secrets)

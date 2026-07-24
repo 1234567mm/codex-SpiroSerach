@@ -60,6 +60,7 @@ class ConfigCommandPlane:
     source_registry: SourceRegistry | None = None
     evaluator: CommandPreconditionEvaluator | None = None
     source_probe_runner: SourceProviderProbeRunner | None = None
+    allow_source_env_api_keys: bool = True
 
     def _ensure_evaluator(self) -> CommandPreconditionEvaluator:
         if self.evaluator is None:
@@ -284,6 +285,12 @@ class ConfigCommandPlane:
                 return self._reject(request, "invalid_payload", "provider is required")
             if not isinstance(new_key, str) or not new_key.strip():
                 return self._reject(request, "invalid_payload", "api_key is required")
+            if _contains_secret_store_control_chars(new_key):
+                return self._reject(
+                    request,
+                    "invalid_secret_value",
+                    "api_key cannot contain newline or NUL characters",
+                )
             resolved = self._get_key_provider_or_reject(request, provider)
             if isinstance(resolved, tuple):
                 return resolved
@@ -441,6 +448,8 @@ class ConfigCommandPlane:
         local_key = str(self.config_store.get_api_key(provider) or "").strip()
         if local_key:
             return local_key, "operator_secret"
+        if not self.allow_source_env_api_keys:
+            return "", ""
         env_name = str(entry.api_key_env or "").strip()
         env_key = str(os.environ.get(env_name, "")).strip() if env_name else ""
         if env_key:
@@ -505,6 +514,10 @@ def _materials_project_probe_formula(value: Any) -> str:
         return DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA
     formula = value.strip()
     return formula or DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA
+
+
+def _contains_secret_store_control_chars(value: str) -> bool:
+    return any(char in value for char in ("\r", "\n", "\0"))
 
 
 def _materials_project_probe_report(

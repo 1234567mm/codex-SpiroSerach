@@ -4,16 +4,17 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::PathBuf,
-    process::{Child, ChildStdout, Command, Stdio},
+    process::{Child, ChildStdout, Command, Output, Stdio},
     sync::{mpsc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tauri::Manager;
 
 const DEFAULT_READONLY_SIDECAR_ADDR: &str = "127.0.0.1:0";
 const READONLY_SIDECAR_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+const CONFIG_COMMAND_RUNTIME_TIMEOUT: Duration = Duration::from_secs(120);
 const MINIMUM_READONLY_TOKEN_LENGTH: usize = 16;
 
 #[derive(Default)]
@@ -119,6 +120,14 @@ fn stop_readonly_sidecar(
     Ok(())
 }
 
+#[tauri::command]
+fn submit_config_command(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    validate_config_command_request(&request)?;
+    let repo_root = resolve_repository_root()?;
+    let python = resolve_python_path(&repo_root);
+    run_config_command_runtime(python, repo_root, request)
+}
+
 fn stop_existing_sidecar_for_output_dir(
     state: &tauri::State<'_, ReadonlySidecarProcesses>,
     output_dir: &PathBuf,
@@ -145,10 +154,178 @@ fn main() {
         .manage(ReadonlySidecarProcesses::default())
         .invoke_handler(tauri::generate_handler![
             start_readonly_sidecar,
-            stop_readonly_sidecar
+            stop_readonly_sidecar,
+            submit_config_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running AtomReasonX application");
+}
+
+fn validate_config_command_request(request: &serde_json::Value) -> Result<(), String> {
+    if !request.is_object() {
+        return Err("config command request must be an object".to_string());
+    }
+    let schema_version = request
+        .get("schema_version")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default();
+    if schema_version != "v23.action_request.v1" {
+        return Err("config command request schema_version is not supported".to_string());
+    }
+    let action_type = request
+        .get("action_type")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default();
+    if !is_config_command_action(action_type) {
+        return Err("config command action_type is not supported by this bridge".to_string());
+    }
+    Ok(())
+}
+
+fn is_config_command_action(action_type: &str) -> bool {
+    matches!(
+        action_type,
+        "config_write" | "key_rotate" | "key_remove" | "test_connection" | "model_list_refresh"
+    )
+}
+
+fn run_config_command_runtime(
+    python: PathBuf,
+    repo_root: PathBuf,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let request_json = serde_json::to_vec(&request)
+        .map_err(|error| format!("failed to serialize config command request: {error}"))?;
+    let mut child = Command::new(python)
+        .args(["-m", "spirosearch.config_command_runtime"])
+        .current_dir(&repo_root)
+        .env("SPIROSEARCH_REPOSITORY_ROOT", &repo_root)
+        .env("PYTHONPATH", pythonpath_with_repo_src(&repo_root))
+        .env_remove("SPIROSEARCH_CONFIG_ROOT")
+        .env_remove("MATERIALS_PROJECT_API_KEY")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("failed to start config command runtime: {error}"))?;
+    {
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "config command runtime stdin was not captured".to_string())?;
+        stdin
+            .write_all(&request_json)
+            .map_err(|error| format!("failed to write config command request: {error}"))?;
+    }
+    let output = wait_for_config_command_output(child)?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if !output.status.success() {
+        return Err(format!(
+            "config command runtime failed with exit code {}",
+            output
+                .status
+                .code()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
+        ));
+    }
+    serde_json::from_str(&stdout).map_err(|error| {
+        format!("config command runtime returned invalid JSON: {error}")
+    })
+}
+
+fn wait_for_config_command_output(mut child: Child) -> Result<Output, String> {
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child
+                    .wait_with_output()
+                    .map_err(|error| format!("failed to collect config command runtime output: {error}"));
+            }
+            Ok(None) => {
+                if started.elapsed() >= CONFIG_COMMAND_RUNTIME_TIMEOUT {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("config command runtime timed out".to_string());
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(error) => {
+                return Err(format!("failed to poll config command runtime: {error}"));
+            }
+        }
+    }
+}
+
+fn pythonpath_with_repo_src(repo_root: &PathBuf) -> String {
+    let src = repo_root.join("src").to_string_lossy().to_string();
+    match std::env::var("PYTHONPATH") {
+        Ok(existing) if !existing.trim().is_empty() => {
+            format!("{}{}{}", src, env_path_separator(), existing)
+        }
+        _ => src,
+    }
+}
+
+fn env_path_separator() -> &'static str {
+    if cfg!(target_os = "windows") {
+        ";"
+    } else {
+        ":"
+    }
+}
+
+fn resolve_python_path(repo_root: &PathBuf) -> PathBuf {
+    if let Ok(value) = std::env::var("SPIROSEARCH_PYTHON") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    let venv_python = if cfg!(target_os = "windows") {
+        repo_root.join(".venv").join("Scripts").join("python.exe")
+    } else {
+        repo_root.join(".venv").join("bin").join("python")
+    };
+    if venv_python.is_file() {
+        return venv_python;
+    }
+    PathBuf::from("python")
+}
+
+fn resolve_repository_root() -> Result<PathBuf, String> {
+    if let Ok(value) = std::env::var("SPIROSEARCH_REPOSITORY_ROOT") {
+        let candidate = PathBuf::from(value.trim());
+        if validate_repository_root(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+        let mut candidate = PathBuf::from(manifest_dir);
+        for _ in 0..3 {
+            if let Some(parent) = candidate.parent() {
+                candidate = parent.to_path_buf();
+            }
+        }
+        if validate_repository_root(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    if let Ok(current_dir) = std::env::current_dir() {
+        for candidate in current_dir.ancestors() {
+            let candidate = candidate.to_path_buf();
+            if validate_repository_root(&candidate) {
+                return Ok(candidate);
+            }
+        }
+    }
+    Err("unable to resolve SpiroSearch repository root for config command runtime".to_string())
+}
+
+fn validate_repository_root(candidate: &PathBuf) -> bool {
+    candidate.join("data").join("source_registry.json").is_file()
+        && candidate.join("src").join("spirosearch").is_dir()
 }
 
 fn canonical_output_dir(output_dir: &str) -> Result<PathBuf, String> {
@@ -377,6 +554,27 @@ mod tests {
             assert!(artifact_name.ends_with(".exe"));
         } else {
             assert!(!artifact_name.ends_with(".exe"));
+        }
+    }
+
+    #[test]
+    fn config_command_bridge_accepts_only_config_plane_actions() {
+        for action_type in [
+            "config_write",
+            "key_rotate",
+            "key_remove",
+            "test_connection",
+            "model_list_refresh",
+        ] {
+            assert!(is_config_command_action(action_type));
+        }
+        for action_type in [
+            "start_nomad_sync",
+            "provider_execution",
+            "readonly-run",
+            "import_pubchemqc_snapshot",
+        ] {
+            assert!(!is_config_command_action(action_type));
         }
     }
 }

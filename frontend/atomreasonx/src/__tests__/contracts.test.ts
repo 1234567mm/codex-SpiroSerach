@@ -39,6 +39,10 @@ import {
   validateReadonlySidecarLaunch,
 } from "../adapters/tauri-readonly-sidecar";
 import {
+  createTauriConfigCommandAdapter,
+  createRuntimeWorkbenchCommandAdapter,
+} from "../adapters/tauri-command-adapter";
+import {
   createLoadingWorkbenchWorkspaceState,
   loadWorkbenchWorkspace,
 } from "../stores/workspace-store";
@@ -1153,6 +1157,86 @@ describe("AtomReasonX contract fixtures", () => {
     expect(submitted[2].payload.probe_contract).toBe(SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION);
     expect(submitted[2].payload.formula).toBe(DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA);
     expect(JSON.stringify(submitted[2].payload)).not.toContain("api_key");
+  });
+
+  it("routes Materials Project source-provider probes through the Tauri config command bridge", async () => {
+    const source = (fixture as unknown as AtomReasonXWorkspaceState).source_settings.sources
+      .find(item => item.provider_id === "materials_project");
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const adapter = createTauriConfigCommandAdapter({
+      invoke: async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
+        calls.push({ command, args });
+        const result = {
+          schema_version: "v23.action_result.v1",
+          request_id: "request-1",
+          action_type: "test_connection",
+          status: "accepted",
+          idempotency_key: "idem-1",
+          actor_id: "operator-1",
+          reason_code: "accepted",
+          message: "accepted",
+          output_artifacts: [],
+          audit: {
+            idempotency_key: "idem-1",
+            expected_source_version: "0",
+            declared_effects: [],
+            changed_fields: [],
+            validation_state: "missing",
+            config_version: 0,
+            output_artifacts: [],
+          },
+        } satisfies AtomReasonXCommandResult;
+        return result as T;
+      },
+    });
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "idem-1",
+      expectedTargetVersion: "0",
+    });
+
+    expect(source).toBeDefined();
+    const result = await submitSourceProviderTestConnectionCommand(dispatcher, source!);
+
+    expect((result as AtomReasonXCommandResult).status).toBe("accepted");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].command).toBe("submit_config_command");
+    expect(calls[0].args?.request).toMatchObject({
+      schema_version: "v23.action_request.v1",
+      action_type: "test_connection",
+      payload: {
+        provider: "materials_project",
+        provider_scope: "source",
+        probe_contract: SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION,
+      },
+    });
+    expect(JSON.stringify(calls[0].args)).not.toContain("api_key");
+  });
+
+  it("keeps non-config workflow commands queued until their command transport slice exists", async () => {
+    const workflowAction = (fixture as unknown as AtomReasonXWorkspaceState).command_actions
+      .find(item => item.action_type === "start_nomad_sync");
+    let invokeCount = 0;
+    const adapter = createRuntimeWorkbenchCommandAdapter({
+      invoke: async <T,>(): Promise<T> => {
+        invokeCount += 1;
+        throw new Error("workflow command should not reach Tauri config bridge");
+      },
+    });
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "workflow-1",
+      expectedTargetVersion: "0",
+    });
+
+    expect(workflowAction).toBeDefined();
+    const result = await submitWorkflowCommandAction(dispatcher, workflowAction!);
+
+    expect(invokeCount).toBe(0);
+    expect(result).toMatchObject({
+      schema_version: "v23.action_result.v1",
+      action_type: "start_nomad_sync",
+      status: "queued",
+      reason_code: "transport_pending",
+    });
   });
 
   it("keeps command controls free of read-side adapter imports", () => {

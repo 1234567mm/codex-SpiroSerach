@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `febabe3`
+Latest implementation HEAD before this status update: `e38687d`
 Date: 2026-07-24
 
 ## Goal
@@ -51,14 +51,16 @@ The current branch contains these V35 execution commits:
 | `afc8d42` | P3 Materials Cloud single-record scientific closure contract | Adds a record-specific Materials Cloud scientific import admission path gated by parser, unit, checksum, license, citation, and manifest-listed validation evidence; metadata-only fixtures remain blocked, unknown scientific fields still fail closed, and `source-closure` readiness gains a schema-pinned JSON contract. |
 | `a67ef09` | Agent verification workflow optimization | Makes broad gates milestone evidence, adds targeted review-fix reverification rules, discovery/test budget guidance, and verification-scope reporting without changing runtime behavior. |
 | `febabe3` | P3 Materials Cloud report-body closure hardening | Adds schema-pinned Materials Cloud parser/unit report bodies and fail-closed validation for `status=pass`, accepted scientific fields, and expected units before any single-record scientific bundle can pass closure or load as provider facts. |
-| current slice | P3 PubChemQC Python bridge report-body closure hardening | Adds schema-pinned PubChemQC Python oracle and Go-vs-Python parser parity reports, requiring `status=pass`, oracle/parser identity, record-count agreement, and accepted-field coverage before a ready snapshot can pass closure. |
+| `11404b6` | P3 PubChemQC Python bridge report-body closure hardening | Adds schema-pinned PubChemQC Python oracle and Go-vs-Python parser parity reports, requiring `status=pass`, oracle/parser identity, record-count agreement, and accepted-field coverage before a ready snapshot can pass closure. |
+| `e38687d` | Agent targeted verification guardrails | Adds hygiene sentinels and documents milestone-gate/targeted-reverification rules so review fixes rerun the affected checks without shrinking the V35 goal. |
+| current slice | P2 Materials Project operator command transport | Routes AtomReasonX source config commands through a fixed Tauri bridge to Python `ConfigCommandPlane`, while non-config workflow actions remain queued and read-only/runtime writer boundaries stay separate. |
 
 ## Current Data Source Status
 
 | Source | Current state | Next required closure |
 | --- | --- | --- |
 | PubChem | Go shadow ready; source settings remain separate from model provider settings. | Later live transport hardening and rate-limit telemetry. |
-| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts and can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure. | Live provider can move forward after real operator command transport executes the backend command plane in the desktop/runtime path and records the result without adding provider cache, SQLite, scoring, or experiment writes. |
+| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts, can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure, and the current desktop command slice executes config-plane actions through a fixed Tauri bridge with persistent idempotency replay. | Next transport work should project persisted source-setting status/results back into the workbench and add explicit operator flows for NOMAD sync/import commands; provider cache, SQLite, scoring, and experiment writes remain out of this command slice. |
 | NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. | Keep archive fallback conservative; add live sync transport only behind explicit operator command. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
@@ -160,6 +162,13 @@ Recent gates run during this checkpoint:
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot -v` passed after PubChemQC Python bridge report-body closure hardening, covering schema drift, failed oracle report, missing parser accepted field, and ready-snapshot loader rejection.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after PubChemQC Python bridge report-body closure hardening.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after PubChemQC Python bridge report-body closure hardening. Broader Python/frontend/full Go gates were intentionally omitted because this slice only changed Go source snapshot/closure code, source closure schemas, and V35 schema checks; it does not change Python bridge implementation or AtomReasonX runtime code.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 36 Vitest tests after the Materials Project operator command transport slice.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the Materials Project operator command transport slice.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_config_command_plane tests.test_atomreasonx_contracts -v` passed outside sandbox with 58 tests after review fixes for the Materials Project command transport slice; sandboxed `.venv` Python remained blocked by local `uv` trampoline permissions.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 26 tests after a Rust bridge source cleanup that removed obsolete redaction helper code.
+- `git diff --check`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed after the Materials Project command transport review fixes. Broader full-suite reruns were intentionally omitted because the post-review fixes were bounded to config command runtime, source-setting command transport contracts, Tauri bridge source policy, local secret validation, and stage status documentation.
+- `cargo fmt --check` remains environment-blocked because `cargo-fmt.exe` is not installed for `stable-x86_64-pc-windows-msvc`.
+- `cargo check --offline` remains environment-blocked because MSVC `link.exe` is not on PATH.
 
 ## Remaining Work
 
@@ -201,8 +210,10 @@ Recent gates run during this checkpoint:
    build policy is available, and Tauri production bundling now declares
    `bundle.externalBin = ["binaries/spiroctl"]`. Installer verification still
    requires a Rust desktop build environment with MSVC `link.exe` and `rustfmt`.
-3. Keep read transport side-effect free; command transport must remain separate
-   and idempotent.
+3. Keep read transport side-effect free. Config command transport is now
+   separate and idempotent for source/model settings; workflow commands such as
+   NOMAD sync and snapshot imports must get their own explicit transport slice
+   and remain queued until then.
 4. Go must not become a second SQLite/provider-cache writer until schema
    ownership and write authorization are explicit.
 

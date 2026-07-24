@@ -193,6 +193,9 @@ class TestFixtureStructure(unittest.TestCase):
         adapter = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "command-adapter.ts").read_text(
             encoding="utf-8",
         )
+        tauri_adapter = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "tauri-command-adapter.ts"
+        ).read_text(encoding="utf-8")
         workflow = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "WorkflowView.tsx").read_text(
             encoding="utf-8",
         )
@@ -204,10 +207,48 @@ class TestFixtureStructure(unittest.TestCase):
         )
         self.assertNotIn("ReadOnlyRunAPI", adapter)
         self.assertNotIn("read-only-artifact-adapter", adapter)
+        self.assertNotIn("ReadOnlyRunAPI", tauri_adapter)
+        self.assertNotIn("read-only-artifact-adapter", tauri_adapter)
         self.assertNotIn("read-only-artifact-adapter", workflow)
         self.assertNotIn("read-only-artifact-adapter", settings)
         self.assertNotIn("command-adapter", database)
         self.assertIn("buildDataSourceDisplayRows", database)
+
+    def test_tauri_config_command_bridge_is_fixed_shape(self) -> None:
+        main_ts = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "main.tsx").read_text(
+            encoding="utf-8",
+        )
+        adapter = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "tauri-command-adapter.ts"
+        ).read_text(encoding="utf-8")
+        rust = (REPO_ROOT / "frontend" / "atomreasonx" / "src-tauri" / "src" / "main.rs").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("createRuntimeWorkbenchCommandAdapter", main_ts)
+        self.assertIn('"submit_config_command"', adapter)
+        self.assertIn("buildQueuedCommandResult", adapter)
+        self.assertIn("submit_config_command", rust)
+        self.assertIn("spirosearch.config_command_runtime", rust)
+        self.assertIn("SPIROSEARCH_REPOSITORY_ROOT", rust)
+        self.assertIn('env_remove("SPIROSEARCH_CONFIG_ROOT")', rust)
+        self.assertIn('env_remove("MATERIALS_PROJECT_API_KEY")', rust)
+        self.assertIn("CONFIG_COMMAND_RUNTIME_TIMEOUT", rust)
+        self.assertIn("config command runtime failed with exit code", rust)
+        self.assertNotIn("stdout={}", rust)
+        self.assertNotIn("pythonPath", main_ts)
+        self.assertNotIn("SPIROSEARCH_PYTHON", main_ts)
+        self.assertNotIn("tauri-plugin-shell", rust)
+
+    def test_config_runtime_uses_repo_config_root_and_persistent_replay_ledger(self) -> None:
+        runtime = (
+            REPO_ROOT / "src" / "spirosearch" / "config_command_runtime.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("IDEMPOTENCY_LEDGER_SCHEMA_VERSION", runtime)
+        self.assertIn("config-command-idempotency.json", runtime)
+        self.assertIn("allow_source_env_api_keys: bool = False", runtime)
+        self.assertNotIn('os.environ.get("SPIROSEARCH_CONFIG_ROOT"', runtime)
 
     def test_settings_modal_wires_source_key_commands_through_dispatcher(self) -> None:
         modal = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "SettingsModal.tsx").read_text(

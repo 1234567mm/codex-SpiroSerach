@@ -2,7 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppShell } from "./AppShell";
 import { SettingsModal } from "./components/SettingsModal";
-import { createLocalCommandAdapter, createWorkbenchCommandDispatcher } from "./adapters/command-adapter";
+import { createWorkbenchCommandDispatcher } from "./adapters/command-adapter";
+import { createRuntimeWorkbenchCommandAdapter } from "./adapters/tauri-command-adapter";
 import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import {
   buildReadonlyRunRecentOutputDirs,
@@ -16,9 +17,7 @@ import { useWorkbenchWorkspaceStore } from "./stores/workspace-store";
 import type { AtomReasonXWorkspaceState } from "./contracts/types";
 
 const baseWorkspace = fixture as unknown as AtomReasonXWorkspaceState;
-const commandAdapter = createLocalCommandAdapter(async () => ({
-  status: "queued",
-}));
+const commandAdapter = createRuntimeWorkbenchCommandAdapter();
 
 const AtomReasonXRoot: React.FC = () => {
   const [showSettings, setShowSettings] = React.useState(false);

@@ -17,6 +17,7 @@ from spirosearch.v23_command import (
     CommandPreconditionEvaluator,
 )
 from spirosearch.config_command import ConfigCommandPlane
+from spirosearch.config_command_runtime import execute_config_command_payload
 from spirosearch.local_config import LocalConfigStore, FileSecretStore
 from spirosearch.model_provider_registry import load_model_provider_registry
 from spirosearch.source_registry import load_source_registry
@@ -215,6 +216,23 @@ class TestKeyRotateCommand(unittest.TestCase):
         self.assertEqual(result.status, "rejected")
         self.assertEqual(result.reason_code, "invalid_payload")
         self.assertIsNone(self.plane.config_store.get_api_key("deepseek"))
+
+    def test_key_rotate_rejects_env_file_control_characters(self) -> None:
+        request = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-ok\nprivate_new_api=sk-attacker",
+            },
+        )
+        result, audit = self.plane.execute(request)
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.reason_code, "invalid_secret_value")
+        self.assertEqual(audit["validation_state"], "rejected")
+        self.assertIsNone(self.plane.config_store.get_api_key("materials_project"))
+        self.assertNotIn("private_new_api", (self.tmpdir / "secrets.env").read_text())
 
     def test_key_rotate_accepts_materials_project_source_provider(self) -> None:
         request = _make_request(
@@ -521,6 +539,127 @@ class TestSanitizedResult(unittest.TestCase):
         self.assertIn("changed_fields", sanitized["audit"])
         self.assertIn("validation_state", sanitized["audit"])
         self.assertEqual(sanitized["audit"]["output_artifacts"], sanitized["output_artifacts"])
+
+
+class TestConfigCommandRuntimeBridge(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmpdir = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_runtime_bridge_rotates_materials_project_key_without_result_leak(self) -> None:
+        payload = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-runtime-secret",
+            },
+        ).to_dict()
+
+        result = execute_config_command_payload(payload, config_root=self.tmpdir)
+        blob = json.dumps(result, sort_keys=True)
+
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["output_artifacts"][0]["provider"], "materials_project")
+        self.assertEqual(result["output_artifacts"][0]["provider_scope"], "source")
+        self.assertNotIn("mp-runtime-secret", blob)
+        self.assertIn("materials_project=mp-runtime-secret", (self.tmpdir / "secrets.env").read_text())
+        self.assertNotIn("mp-runtime-secret", (self.tmpdir / "local-config.json").read_text())
+
+    def test_runtime_bridge_runs_materials_project_probe_with_backend_key(self) -> None:
+        execute_config_command_payload(
+            _make_request(
+                action_type="key_rotate",
+                payload={
+                    "provider": "materials_project",
+                    "provider_scope": "source",
+                    "api_key": "mp-runtime-secret",
+                },
+            ).to_dict(),
+            config_root=self.tmpdir,
+        )
+        payload = _make_request(
+            action_type="test_connection",
+            idempotency_key="runtime-probe-1",
+            expected_target_version="1",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "probe_contract": "v35.source_provider_connection_probe.v1",
+                "formula": "FAPbI3",
+            },
+        ).to_dict()
+
+        result = execute_config_command_payload(
+            payload,
+            config_root=self.tmpdir,
+            source_probe_runner=_fake_source_probe_runner,
+        )
+        blob = json.dumps(result, sort_keys=True)
+        probe = result["output_artifacts"][0]["provider_probe"]
+
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(probe["status"], "validated")
+        self.assertEqual(probe["validation_state"], "validated")
+        self.assertEqual(probe["key_source"], "operator_secret")
+        self.assertEqual(probe["formula"], "FAPbI3")
+        self.assertNotIn("mp-runtime-secret", blob)
+
+    def test_runtime_bridge_replays_key_rotate_across_process_invocations(self) -> None:
+        payload = _make_request(
+            action_type="key_rotate",
+            idempotency_key="runtime-key-rotate-replay",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-runtime-replay-secret",
+            },
+        ).to_dict()
+
+        first = execute_config_command_payload(payload, config_root=self.tmpdir)
+        second = execute_config_command_payload(payload, config_root=self.tmpdir)
+        blob = json.dumps(second, sort_keys=True)
+
+        self.assertEqual(first["status"], "accepted")
+        self.assertEqual(second["status"], "accepted")
+        self.assertEqual(second["audit"]["validation_state"], "replayed")
+        self.assertNotEqual(second["reason_code"], "stale_target_version")
+        self.assertNotIn("mp-runtime-replay-secret", blob)
+        ledger_blob = (self.tmpdir / "config-command-idempotency.json").read_text()
+        self.assertNotIn("mp-runtime-replay-secret", ledger_blob)
+
+    def test_runtime_bridge_does_not_use_materials_project_env_key(self) -> None:
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-runtime-env-secret"
+        try:
+            payload = _make_request(
+                action_type="test_connection",
+                payload={
+                    "provider": "materials_project",
+                    "provider_scope": "source",
+                    "probe_contract": "v35.source_provider_connection_probe.v1",
+                },
+            ).to_dict()
+            result = execute_config_command_payload(
+                payload,
+                config_root=self.tmpdir,
+                source_probe_runner=_fake_source_probe_runner,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        probe = result["output_artifacts"][0]["provider_probe"]
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(probe["status"], "missing_api_key")
+        self.assertFalse(probe["api_key_configured"])
+        self.assertNotIn("environment", json.dumps(result, sort_keys=True))
+        self.assertNotIn("mp-runtime-env-secret", json.dumps(result, sort_keys=True))
 
 
 class TestOptimisticConcurrency(unittest.TestCase):
