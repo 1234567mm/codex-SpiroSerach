@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fixture from "../fixtures/atomreasonx-ui-fixture.json";
 import type {
   AtomReasonXCommandResult,
+  OperatorTaskExecutionReport,
   AtomReasonXWorkspaceState,
 } from "../contracts/types";
 import {
@@ -42,6 +43,14 @@ import {
   createTauriConfigCommandAdapter,
   createRuntimeWorkbenchCommandAdapter,
 } from "../adapters/tauri-command-adapter";
+import {
+  DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+  OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+  buildWorkflowTaskExecutionRequest,
+  canExecuteWorkflowTask,
+  createTauriWorkflowTaskExecutor,
+  validateOperatorTaskExecutionReport,
+} from "../adapters/workflow-task-execution-adapter";
 import { projectSourceSettingsCommandResult } from "../adapters/source-settings-command-projection";
 import { projectWorkflowCommandTaskResult } from "../adapters/workflow-command-task-projection";
 import {
@@ -487,7 +496,11 @@ describe("AtomReasonX contract fixtures", () => {
 
     expect(workflowSource).toContain("operatorTasks");
     expect(workflowSource).toContain("operator-task-list");
+    expect(workflowSource).toContain("workflowTaskExecutor");
+    expect(workflowSource).toContain("canExecuteWorkflowTask");
+    expect(workflowSource).toContain("execute(task)");
     expect(appShellSource).toContain("operatorTasks={workspace.operator_tasks}");
+    expect(appShellSource).toContain("workflowTaskExecutor={workflowTaskExecutor}");
     expect(workflowSource).not.toContain("workbench-read-adapter");
     expect(workflowSource).not.toContain("read-only-artifact-adapter");
   });
@@ -1497,6 +1510,185 @@ describe("AtomReasonX contract fixtures", () => {
     });
     expect(JSON.stringify(result)).not.toContain("api_key");
     expect(JSON.stringify(result)).not.toContain("provider_cache_records");
+  });
+
+  it("builds fixed NOMAD workflow task execution requests only from admitted operator tasks", async () => {
+    const workflowAction = (fixture as unknown as AtomReasonXWorkspaceState).command_actions
+      .find(item => item.action_type === "start_nomad_sync");
+    const adapter = createRuntimeWorkbenchCommandAdapter();
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "nomad-sync-execute-1",
+      expectedTargetVersion: "0",
+    });
+
+    expect(workflowAction).toBeDefined();
+    const result = await submitWorkflowCommandAction(dispatcher, workflowAction!) as AtomReasonXCommandResult;
+    const workspace = projectWorkflowCommandTaskResult(
+      JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState,
+      result,
+    );
+    const task = workspace.operator_tasks[0];
+    const admittedTask = {
+      ...task,
+      admission_status: "admitted" as const,
+      admission_hash: "a".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+    };
+    const request = buildWorkflowTaskExecutionRequest(admittedTask);
+
+    expect(canExecuteWorkflowTask(task)).toBe(false);
+    expect(() => buildWorkflowTaskExecutionRequest(task)).toThrow("workflow task is not executable");
+    expect(canExecuteWorkflowTask(admittedTask)).toBe(true);
+    expect(request).toEqual({
+      schema_version: "v35.operator_task_execution_request.v1",
+      task_id: task.task_id,
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      target_data_library_path: `data/lib/nomad_perla_psc/snapshots/run-${task.task_id}`,
+      authorize_live_provider_calls: true,
+      execution_contract: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+    });
+    expect(JSON.stringify(request)).not.toContain("api_key");
+    expect(JSON.stringify(request)).not.toContain("readonly_token");
+    expect(JSON.stringify(request)).not.toContain("SPIROCTL_PATH");
+    expect(() => buildWorkflowTaskExecutionRequest({
+      ...admittedTask,
+      task_id: "task-start_nomad_sync-api_key",
+    })).toThrow("workflow task is not executable");
+    expect(canExecuteWorkflowTask({
+      ...admittedTask,
+      provider: "materials_project",
+    })).toBe(false);
+    expect(canExecuteWorkflowTask({
+      ...admittedTask,
+      action_type: "import_hopv15_snapshot",
+      provider: "hopv15",
+      declared_effects: ["source_import_tasks"],
+    })).toBe(false);
+  });
+
+  it("routes reviewed NOMAD workflow task execution through a fixed Tauri command", async () => {
+    const workflowAction = (fixture as unknown as AtomReasonXWorkspaceState).command_actions
+      .find(item => item.action_type === "start_nomad_sync");
+    const adapter = createRuntimeWorkbenchCommandAdapter();
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "nomad-sync-execute-2",
+      expectedTargetVersion: "0",
+    });
+    const result = await submitWorkflowCommandAction(dispatcher, workflowAction!) as AtomReasonXCommandResult;
+    const workspace = projectWorkflowCommandTaskResult(
+      JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState,
+      result,
+    );
+    const task = {
+      ...workspace.operator_tasks[0],
+      admission_status: "admitted" as const,
+      admission_hash: "a".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+    };
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const executor = createTauriWorkflowTaskExecutor({
+      invoke: async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
+        calls.push({ command, args });
+        const request = args?.request as ReturnType<typeof buildWorkflowTaskExecutionRequest>;
+        const report = {
+          schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+          task_id: request.task_id,
+          action_type: "start_nomad_sync",
+          provider: "nomad_perla_psc",
+          admission_hash: "a".repeat(64),
+          execution_status: "source_snapshot_written",
+          write_authorization_scope: "source_snapshot_only",
+          live_calls_authorized: true,
+          provider_cache_written: false,
+          local_backend_written: false,
+          scoring_written: false,
+          experiment_written: false,
+          started_at: "2026-07-24T00:00:00Z",
+          target_data_library_path: request.target_data_library_path,
+          source_manifest_path: `${request.target_data_library_path}/source-manifest.json`,
+          normalized_record_count: 1,
+          provider_response_hash: "b".repeat(64),
+          raw_search_hash: "c".repeat(64),
+          raw_archive_hash: "d".repeat(64),
+          archive_status: "available",
+          review_required: false,
+          review_reasons: [],
+        } satisfies OperatorTaskExecutionReport;
+        return report as T;
+      },
+    });
+
+    const execution = await executor.execute(task);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].command).toBe("execute_workflow_task");
+    expect(calls[0].args?.request).toMatchObject({
+      schema_version: "v35.operator_task_execution_request.v1",
+      task_id: task.task_id,
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      authorize_live_provider_calls: true,
+      execution_contract: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+    });
+    expect(execution).toMatchObject({
+      schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+      execution_status: "source_snapshot_written",
+      write_authorization_scope: "source_snapshot_only",
+      provider_cache_written: false,
+      local_backend_written: false,
+      scoring_written: false,
+      experiment_written: false,
+    });
+    expect(JSON.stringify(calls[0].args)).not.toContain("api_key");
+    expect(JSON.stringify(calls[0].args)).not.toContain("readonly_token");
+    expect(JSON.stringify(calls[0].args)).not.toContain("spiroctl.exe");
+  });
+
+  it("rejects execution reports that drift from the schema contract", () => {
+    const request = {
+      schema_version: "v35.operator_task_execution_request.v1" as const,
+      task_id: "task-start_nomad_sync-ab12cd",
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      target_data_library_path: "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd",
+      authorize_live_provider_calls: true as const,
+      execution_contract: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+    };
+    const report = {
+      schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+      task_id: request.task_id,
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      admission_hash: "a".repeat(64),
+      execution_status: "source_snapshot_written",
+      write_authorization_scope: "source_snapshot_only",
+      live_calls_authorized: true,
+      provider_cache_written: false,
+      local_backend_written: false,
+      scoring_written: false,
+      experiment_written: false,
+      started_at: "2026-07-24T00:00:00Z",
+      target_data_library_path: request.target_data_library_path,
+      source_manifest_path: `${request.target_data_library_path}/source-manifest.json`,
+      normalized_record_count: 1,
+      provider_response_hash: "b".repeat(64),
+      raw_search_hash: "c".repeat(64),
+      raw_archive_hash: "d".repeat(64),
+      archive_status: "available",
+      review_required: false,
+      review_reasons: [],
+    };
+
+    expect(validateOperatorTaskExecutionReport(report, request)).toEqual(report);
+    for (const mutated of [
+      { ...report, extra: true },
+      { ...report, archive_status: "accepted" },
+      { ...report, normalized_record_count: -1 },
+      { ...report, review_reasons: [123] },
+      { ...report, source_manifest_path: "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/../source-manifest.json" },
+    ]) {
+      expect(() => validateOperatorTaskExecutionReport(mutated, request)).toThrow();
+    }
   });
 
   it("queues every fixture workflow command action through the explicit operator task path", async () => {

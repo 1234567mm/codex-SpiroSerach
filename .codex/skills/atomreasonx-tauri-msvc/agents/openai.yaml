@@ -1,0 +1,4 @@
+interface:
+  display_name: "AtomReasonX Tauri MSVC"
+  short_description: "Windows Tauri/Rust linker and desktop packaging workflow"
+  default_prompt: "Use $atomreasonx-tauri-msvc when verifying AtomReasonX Tauri, Rust, sidecar packaging, or Windows MSVC build behavior."

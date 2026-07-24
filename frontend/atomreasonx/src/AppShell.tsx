@@ -7,6 +7,7 @@ import { KnowledgeLibraryView } from "./components/KnowledgeLibraryView";
 import { WorkflowView } from "./components/WorkflowView";
 import { InspectorPanel } from "./components/InspectorPanel";
 import type { WorkbenchCommandDispatcher } from "./adapters/command-adapter";
+import type { WorkflowTaskExecutor } from "./adapters/workflow-task-execution-adapter";
 import type {
   ReadonlyRunOperatorConfig,
   ReadonlyRunRecentOutputDir,
@@ -31,6 +32,7 @@ export const AppShell: React.FC<{
   readonlyRecentOutputDirs?: ReadonlyRunRecentOutputDir[];
   onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
   commandDispatcher?: WorkbenchCommandDispatcher;
+  workflowTaskExecutor?: WorkflowTaskExecutor;
 }> = ({
   workspace,
   onOpenSettings,
@@ -40,6 +42,7 @@ export const AppShell: React.FC<{
   readonlyRecentOutputDirs,
   onApplyReadonlyRunOutputDir,
   commandDispatcher,
+  workflowTaskExecutor,
 }) => {
   return (
     <div className="app-shell" style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
@@ -66,6 +69,7 @@ export const AppShell: React.FC<{
               commandActions={workspace.command_actions}
               operatorTasks={workspace.operator_tasks}
               commandDispatcher={commandDispatcher}
+              workflowTaskExecutor={workflowTaskExecutor}
             />
           </div>
           <div className="composer" style={{ padding: "8px" }}>

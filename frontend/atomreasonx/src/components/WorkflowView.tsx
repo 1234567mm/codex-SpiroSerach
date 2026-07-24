@@ -1,5 +1,9 @@
 import React from "react";
 import type { WorkbenchCommandDispatcher } from "../adapters/command-adapter";
+import {
+  canExecuteWorkflowTask,
+  type WorkflowTaskExecutor,
+} from "../adapters/workflow-task-execution-adapter";
 import type { HtlOperatorTaskSummary, HtlWorkbenchCommandAction, HtlWorkflowPreview } from "../contracts/types";
 
 export const buildWorkflowCommandPayload = (action: HtlWorkbenchCommandAction): Record<string, unknown> => ({
@@ -26,7 +30,25 @@ export const WorkflowView: React.FC<{
   commandActions: HtlWorkbenchCommandAction[];
   operatorTasks?: HtlOperatorTaskSummary[];
   commandDispatcher?: WorkbenchCommandDispatcher;
-}> = ({ workflow, commandActions, operatorTasks = [], commandDispatcher }) => {
+  workflowTaskExecutor?: WorkflowTaskExecutor;
+}> = ({ workflow, commandActions, operatorTasks = [], commandDispatcher, workflowTaskExecutor }) => {
+  const [executingTaskIds, setExecutingTaskIds] = React.useState<Set<string>>(() => new Set());
+  const executeTask = React.useCallback(async (task: HtlOperatorTaskSummary) => {
+    if (!workflowTaskExecutor || !canExecuteWorkflowTask(task) || executingTaskIds.has(task.task_id)) {
+      return;
+    }
+    setExecutingTaskIds(previous => new Set(previous).add(task.task_id));
+    try {
+      await workflowTaskExecutor.execute(task);
+    } finally {
+      setExecutingTaskIds(previous => {
+        const next = new Set(previous);
+        next.delete(task.task_id);
+        return next;
+      });
+    }
+  }, [executingTaskIds, workflowTaskExecutor]);
+
   return (
     <section className="workflow-view">
       <div className="section-header">
@@ -64,6 +86,20 @@ export const WorkflowView: React.FC<{
               <strong>{task.action_type}</strong>
               <span>{task.status}</span>
               <span>{task.provider ?? "workspace"}</span>
+              <button
+                type="button"
+                disabled={
+                  !workflowTaskExecutor
+                  || !canExecuteWorkflowTask(task)
+                  || executingTaskIds.has(task.task_id)
+                }
+                title={task.task_id}
+                onClick={() => {
+                  void executeTask(task);
+                }}
+              >
+                Execute
+              </button>
             </div>
           ))}
         </div>

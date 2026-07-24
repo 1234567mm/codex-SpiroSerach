@@ -76,3 +76,14 @@ npm.cmd run sidecar:build
 npm.cmd run sidecar:check
 npm.cmd run tauri:build
 ```
+
+For AtomReasonX Rust and desktop checks on Windows, use the repository wrapper
+so `cargo` and the Tauri CLI inherit the Visual Studio C++ linker environment
+through `vswhere`/`VsDevCmd`:
+
+```powershell
+npm.cmd run tauri:fmt
+npm.cmd run tauri:test
+npm.cmd run tauri:build:app
+npm.cmd run tauri:build
+```

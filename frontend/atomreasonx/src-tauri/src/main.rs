@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{BufRead, BufReader, Write},
     path::PathBuf,
     process::{Child, ChildStdout, Command, Output, Stdio},
@@ -15,11 +15,36 @@ use tauri::Manager;
 const DEFAULT_READONLY_SIDECAR_ADDR: &str = "127.0.0.1:0";
 const READONLY_SIDECAR_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONFIG_COMMAND_RUNTIME_TIMEOUT: Duration = Duration::from_secs(120);
+const WORKFLOW_TASK_EXECUTION_TIMEOUT: Duration = Duration::from_secs(600);
 const MINIMUM_READONLY_TOKEN_LENGTH: usize = 16;
+const OPERATOR_TASK_EXECUTION_REQUEST_SCHEMA_VERSION: &str =
+    "v35.operator_task_execution_request.v1";
+const OPERATOR_TASK_EXECUTION_SCHEMA_VERSION: &str = "v35.operator_task_execution.v1";
+const DEFAULT_OPERATOR_TASK_LEDGER_PATH: &str =
+    "data/lib/operator_tasks/operator-task-ledger.jsonl";
+const NOMAD_EXECUTION_TARGET_PREFIX: &str = "data/lib/nomad_perla_psc/snapshots/run-";
 
 #[derive(Default)]
 struct ReadonlySidecarProcesses {
     children_by_output_dir: Mutex<HashMap<PathBuf, Child>>,
+}
+
+#[derive(Default)]
+struct WorkflowTaskExecutionState {
+    running_task_ids: Mutex<HashSet<String>>,
+}
+
+struct WorkflowTaskExecutionGuard<'a> {
+    task_id: String,
+    state: &'a WorkflowTaskExecutionState,
+}
+
+impl Drop for WorkflowTaskExecutionGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut running) = self.state.running_task_ids.lock() {
+            running.remove(&self.task_id);
+        }
+    }
 }
 
 impl Drop for ReadonlySidecarProcesses {
@@ -47,6 +72,44 @@ struct ReadonlySidecarLaunch {
     read_only: bool,
     readonly_token: String,
     process_id: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowTaskExecutionRequest {
+    schema_version: String,
+    task_id: String,
+    ledger_path: String,
+    target_data_library_path: String,
+    authorize_live_provider_calls: bool,
+    execution_contract: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowTaskExecutionReport {
+    schema_version: String,
+    task_id: String,
+    action_type: String,
+    provider: String,
+    admission_hash: String,
+    execution_status: String,
+    write_authorization_scope: String,
+    live_calls_authorized: bool,
+    provider_cache_written: bool,
+    local_backend_written: bool,
+    scoring_written: bool,
+    experiment_written: bool,
+    started_at: String,
+    target_data_library_path: String,
+    source_manifest_path: String,
+    normalized_record_count: u64,
+    provider_response_hash: String,
+    raw_search_hash: String,
+    raw_archive_hash: String,
+    archive_status: String,
+    review_required: bool,
+    review_reasons: Vec<String>,
 }
 
 #[tauri::command]
@@ -128,6 +191,19 @@ fn submit_config_command(request: serde_json::Value) -> Result<serde_json::Value
     run_config_command_runtime(python, repo_root, request)
 }
 
+#[tauri::command]
+fn execute_workflow_task(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WorkflowTaskExecutionState>,
+    request: serde_json::Value,
+) -> Result<WorkflowTaskExecutionReport, String> {
+    let request = validate_workflow_task_execution_request(request)?;
+    let _guard = acquire_workflow_task_execution_guard(state.inner(), &request.task_id)?;
+    let repo_root = resolve_repository_root()?;
+    let executable = resolve_workflow_execution_spiroctl_path(&app)?;
+    run_workflow_task_execution(executable, repo_root, request)
+}
+
 fn stop_existing_sidecar_for_output_dir(
     state: &tauri::State<'_, ReadonlySidecarProcesses>,
     output_dir: &PathBuf,
@@ -142,9 +218,7 @@ fn stop_existing_sidecar_for_output_dir(
 
 fn stop_child(child: Option<Child>) {
     if let Some(mut child) = child {
-        child
-            .kill()
-            .ok();
+        child.kill().ok();
         let _ = child.wait();
     }
 }
@@ -152,10 +226,12 @@ fn stop_child(child: Option<Child>) {
 fn main() {
     tauri::Builder::default()
         .manage(ReadonlySidecarProcesses::default())
+        .manage(WorkflowTaskExecutionState::default())
         .invoke_handler(tauri::generate_handler![
             start_readonly_sidecar,
             stop_readonly_sidecar,
-            submit_config_command
+            submit_config_command,
+            execute_workflow_task
         ])
         .run(tauri::generate_context!())
         .expect("error while running AtomReasonX application");
@@ -229,33 +305,280 @@ fn run_config_command_runtime(
                 .unwrap_or_else(|| "unknown".to_string())
         ));
     }
-    serde_json::from_str(&stdout).map_err(|error| {
-        format!("config command runtime returned invalid JSON: {error}")
-    })
+    serde_json::from_str(&stdout)
+        .map_err(|error| format!("config command runtime returned invalid JSON: {error}"))
 }
 
-fn wait_for_config_command_output(mut child: Child) -> Result<Output, String> {
+fn validate_workflow_task_execution_request(
+    request: serde_json::Value,
+) -> Result<WorkflowTaskExecutionRequest, String> {
+    if contains_forbidden_credential_fragment(&request) {
+        return Err("workflow task execution request contains credential-shaped input".to_string());
+    }
+    let parsed: WorkflowTaskExecutionRequest = serde_json::from_value(request)
+        .map_err(|error| format!("workflow task execution request is invalid: {error}"))?;
+    if parsed.schema_version != OPERATOR_TASK_EXECUTION_REQUEST_SCHEMA_VERSION {
+        return Err("workflow task execution request schema_version is not supported".to_string());
+    }
+    if !safe_nomad_task_id(&parsed.task_id) {
+        return Err("workflow task execution request task_id is unsafe".to_string());
+    }
+    if parsed.ledger_path != DEFAULT_OPERATOR_TASK_LEDGER_PATH {
+        return Err("workflow task execution ledger path is not supported".to_string());
+    }
+    let expected_target = format!("{}{}", NOMAD_EXECUTION_TARGET_PREFIX, parsed.task_id);
+    if parsed.target_data_library_path != expected_target {
+        return Err("workflow task execution target path is not supported".to_string());
+    }
+    if !parsed.authorize_live_provider_calls {
+        return Err(
+            "workflow task execution requires explicit live-call authorization".to_string(),
+        );
+    }
+    if parsed.execution_contract != OPERATOR_TASK_EXECUTION_SCHEMA_VERSION {
+        return Err("workflow task execution contract is not supported".to_string());
+    }
+    Ok(parsed)
+}
+
+fn run_workflow_task_execution(
+    executable: PathBuf,
+    repo_root: PathBuf,
+    request: WorkflowTaskExecutionRequest,
+) -> Result<WorkflowTaskExecutionReport, String> {
+    let mut command = Command::new(executable);
+    command
+        .args([
+            "workflow-task",
+            "execute",
+            "--task-id",
+            &request.task_id,
+            "--ledger",
+            &request.ledger_path,
+            "--authorize-live-provider-calls",
+            "--target",
+            &request.target_data_library_path,
+        ])
+        .current_dir(&repo_root)
+        .env("SPIROSEARCH_REPOSITORY_ROOT", &repo_root)
+        .env_remove("SPIROSEARCH_CONFIG_ROOT")
+        .env_remove("MATERIALS_PROJECT_API_KEY")
+        .env_remove("SPIROCTL_PATH")
+        .env_remove("SPIROSEARCH_PYTHON")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    remove_credential_shaped_env(&mut command);
+    let child = command
+        .spawn()
+        .map_err(|error| format!("failed to start workflow task execution: {error}"))?;
+    let output = wait_for_child_output(
+        child,
+        WORKFLOW_TASK_EXECUTION_TIMEOUT,
+        "workflow task execution",
+    )?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if !output.status.success() {
+        return Err(format!(
+            "workflow task execution failed with exit code {}",
+            output
+                .status
+                .code()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
+        ));
+    }
+    let report: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|error| format!("workflow task execution returned invalid JSON: {error}"))?;
+    validate_workflow_task_execution_report(report, &request)
+}
+
+fn validate_workflow_task_execution_report(
+    report: serde_json::Value,
+    request: &WorkflowTaskExecutionRequest,
+) -> Result<WorkflowTaskExecutionReport, String> {
+    if contains_forbidden_credential_fragment(&report) {
+        return Err("workflow task execution report contains credential-shaped output".to_string());
+    }
+    let report: WorkflowTaskExecutionReport = serde_json::from_value(report)
+        .map_err(|error| format!("workflow task execution report is invalid: {error}"))?;
+    if report.schema_version != OPERATOR_TASK_EXECUTION_SCHEMA_VERSION {
+        return Err("workflow task execution report schema_version is not supported".to_string());
+    }
+    if report.task_id != request.task_id
+        || report.action_type != "start_nomad_sync"
+        || report.provider != "nomad_perla_psc"
+        || report.execution_status != "source_snapshot_written"
+        || report.write_authorization_scope != "source_snapshot_only"
+    {
+        return Err(
+            "workflow task execution report does not match the requested NOMAD task".to_string(),
+        );
+    }
+    if report.target_data_library_path != request.target_data_library_path {
+        return Err("workflow task execution report target does not match request".to_string());
+    }
+    let expected_manifest = format!("{}/source-manifest.json", request.target_data_library_path);
+    if report.source_manifest_path != expected_manifest {
+        return Err(
+            "workflow task execution report manifest path does not match target".to_string(),
+        );
+    }
+    if report.provider_cache_written
+        || report.local_backend_written
+        || report.scoring_written
+        || report.experiment_written
+    {
+        return Err("workflow task execution report writer flags must be false".to_string());
+    }
+    if !report.live_calls_authorized {
+        return Err(
+            "workflow task execution report live_calls_authorized must be true".to_string(),
+        );
+    }
+    for value in [
+        &report.admission_hash,
+        &report.provider_response_hash,
+        &report.raw_search_hash,
+        &report.raw_archive_hash,
+    ] {
+        if !is_sha256_hex(value) {
+            return Err("workflow task execution report hash field is invalid".to_string());
+        }
+    }
+    if !safe_nomad_target_path(&report.target_data_library_path)
+        || report.started_at.trim().is_empty()
+        || !is_archive_status(&report.archive_status)
+        || report
+            .review_reasons
+            .iter()
+            .any(|item| item.trim().is_empty())
+    {
+        return Err("workflow task execution report field value is invalid".to_string());
+    }
+    Ok(report)
+}
+
+fn wait_for_config_command_output(child: Child) -> Result<Output, String> {
+    wait_for_child_output(
+        child,
+        CONFIG_COMMAND_RUNTIME_TIMEOUT,
+        "config command runtime",
+    )
+}
+
+fn wait_for_child_output(
+    mut child: Child,
+    timeout: Duration,
+    process_name: &str,
+) -> Result<Output, String> {
     let started = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(_)) => {
                 return child
                     .wait_with_output()
-                    .map_err(|error| format!("failed to collect config command runtime output: {error}"));
+                    .map_err(|error| format!("failed to collect {process_name} output: {error}"));
             }
             Ok(None) => {
-                if started.elapsed() >= CONFIG_COMMAND_RUNTIME_TIMEOUT {
+                if started.elapsed() >= timeout {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err("config command runtime timed out".to_string());
+                    return Err(format!("{process_name} timed out"));
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
             Err(error) => {
-                return Err(format!("failed to poll config command runtime: {error}"));
+                return Err(format!("failed to poll {process_name}: {error}"));
             }
         }
     }
+}
+
+fn safe_nomad_task_id(value: &str) -> bool {
+    let Some(suffix) = value.strip_prefix("task-start_nomad_sync-") else {
+        return false;
+    };
+    !suffix.is_empty()
+        && suffix.len() <= 16
+        && suffix != "api_key"
+        && suffix
+            .chars()
+            .all(|item| item.is_ascii_lowercase() || item.is_ascii_digit())
+}
+
+fn safe_nomad_target_path(value: &str) -> bool {
+    value.starts_with(NOMAD_EXECUTION_TARGET_PREFIX)
+        && !value.contains('\\')
+        && !value.contains(':')
+        && !value.contains("//")
+        && !value.contains("/../")
+        && !value.ends_with("/..")
+}
+
+fn is_archive_status(value: &str) -> bool {
+    matches!(
+        value,
+        "available"
+            | "empty"
+            | "unavailable"
+            | "rate_limited"
+            | "schema_unrecognized"
+            | "not_requested"
+    )
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .chars()
+            .all(|item| item.is_ascii_digit() || ('a'..='f').contains(&item))
+}
+
+fn acquire_workflow_task_execution_guard<'a>(
+    state: &'a WorkflowTaskExecutionState,
+    task_id: &str,
+) -> Result<WorkflowTaskExecutionGuard<'a>, String> {
+    let mut running = state
+        .running_task_ids
+        .lock()
+        .map_err(|_| "workflow task execution state is poisoned".to_string())?;
+    if !running.insert(task_id.to_string()) {
+        return Err("workflow task execution is already in progress".to_string());
+    }
+    Ok(WorkflowTaskExecutionGuard {
+        task_id: task_id.to_string(),
+        state,
+    })
+}
+
+fn remove_credential_shaped_env(command: &mut Command) {
+    for (key, _) in std::env::vars() {
+        let lower = key.to_ascii_lowercase();
+        if lower.contains("api_key")
+            || lower.contains("token")
+            || lower.contains("secret")
+            || lower.contains("credential")
+            || lower == "authorization"
+        {
+            command.env_remove(key);
+        }
+    }
+}
+
+fn contains_forbidden_credential_fragment(value: &serde_json::Value) -> bool {
+    let blob = value.to_string();
+    let lower = blob.to_ascii_lowercase();
+    [
+        "api_key",
+        "readonly_token",
+        "bearer ",
+        "mp-secret",
+        "spiroctl_path",
+        "spiroctl.exe",
+    ]
+    .iter()
+    .any(|item| lower.contains(item))
 }
 
 fn pythonpath_with_repo_src(repo_root: &PathBuf) -> String {
@@ -324,7 +647,10 @@ fn resolve_repository_root() -> Result<PathBuf, String> {
 }
 
 fn validate_repository_root(candidate: &PathBuf) -> bool {
-    candidate.join("data").join("source_registry.json").is_file()
+    candidate
+        .join("data")
+        .join("source_registry.json")
+        .is_file()
         && candidate.join("src").join("spirosearch").is_dir()
 }
 
@@ -353,6 +679,16 @@ fn resolve_spiroctl_path(app: &tauri::AppHandle) -> PathBuf {
     resolve_bundled_spiroctl_path(app).unwrap_or_else(|| PathBuf::from("spiroctl"))
 }
 
+fn resolve_workflow_execution_spiroctl_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    if cfg!(debug_assertions) {
+        if let Some(path) = resolve_spiroctl_env_override() {
+            return Ok(path);
+        }
+    }
+    resolve_bundled_spiroctl_path(app)
+        .ok_or_else(|| "workflow task execution requires bundled spiroctl".to_string())
+}
+
 fn resolve_spiroctl_env_override() -> Option<PathBuf> {
     std::env::var("SPIROCTL_PATH")
         .ok()
@@ -376,14 +712,22 @@ fn resolve_bundled_spiroctl_path(app: &tauri::AppHandle) -> Option<PathBuf> {
         }
     }
     if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-        candidates.push(PathBuf::from(manifest_dir).join("binaries").join(&artifact_name));
+        candidates.push(
+            PathBuf::from(manifest_dir)
+                .join("binaries")
+                .join(&artifact_name),
+        );
     }
 
     candidates.into_iter().find(|path| path.is_file())
 }
 
 fn bundled_spiroctl_artifact_name() -> String {
-    let extension = if cfg!(target_os = "windows") { ".exe" } else { "" };
+    let extension = if cfg!(target_os = "windows") {
+        ".exe"
+    } else {
+        ""
+    };
     format!("spiroctl-{}{}", bundled_spiroctl_target_triple(), extension)
 }
 
@@ -576,5 +920,203 @@ mod tests {
         ] {
             assert!(!is_config_command_action(action_type));
         }
+    }
+
+    #[test]
+    fn validates_fixed_workflow_task_execution_request() {
+        let request = serde_json::json!({
+            "schema_version": "v35.operator_task_execution_request.v1",
+            "task_id": "task-start_nomad_sync-ab12cd",
+            "ledger_path": "data/lib/operator_tasks/operator-task-ledger.jsonl",
+            "target_data_library_path": "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd",
+            "authorize_live_provider_calls": true,
+            "execution_contract": "v35.operator_task_execution.v1"
+        });
+
+        let parsed = validate_workflow_task_execution_request(request)
+            .expect("fixed request should validate");
+
+        assert_eq!(parsed.task_id, "task-start_nomad_sync-ab12cd");
+        assert!(parsed.authorize_live_provider_calls);
+    }
+
+    #[test]
+    fn rejects_mutable_or_secret_shaped_workflow_task_execution_request() {
+        let base = fixed_workflow_task_execution_request_json();
+        let mut cases = Vec::new();
+        cases.push({
+            let mut value = base.clone();
+            value["ledger_path"] =
+                serde_json::json!("data/lib/provider_cache/operator-task-ledger.jsonl");
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["target_data_library_path"] =
+                serde_json::json!("data/lib/nomad_perla_psc/snapshots/../escape");
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["authorize_live_provider_calls"] = serde_json::json!(false);
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["task_id"] = serde_json::json!("task-start_nomad_sync-api_key");
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["api_key"] = serde_json::json!("mp-secret");
+            value
+        });
+
+        for case in cases {
+            assert!(validate_workflow_task_execution_request(case).is_err());
+        }
+    }
+
+    #[test]
+    fn validates_fixed_workflow_task_execution_report() {
+        let request = fixed_workflow_task_execution_request();
+        let report = validate_workflow_task_execution_report(
+            fixed_workflow_task_execution_report_json(),
+            &request,
+        )
+        .expect("fixed report should validate");
+
+        assert_eq!(report.schema_version, "v35.operator_task_execution.v1");
+        assert_eq!(report.task_id, "task-start_nomad_sync-ab12cd");
+        assert_eq!(report.provider, "nomad_perla_psc");
+        assert_eq!(report.execution_status, "source_snapshot_written");
+        assert_eq!(report.write_authorization_scope, "source_snapshot_only");
+        assert!(report.live_calls_authorized);
+        assert!(!report.provider_cache_written);
+        assert!(!report.local_backend_written);
+        assert!(!report.scoring_written);
+        assert!(!report.experiment_written);
+        assert_eq!(report.normalized_record_count, 1);
+    }
+
+    #[test]
+    fn rejects_workflow_task_execution_report_writer_flags() {
+        let request = fixed_workflow_task_execution_request();
+        let mut report = fixed_workflow_task_execution_report_json();
+        report["provider_cache_written"] = serde_json::json!(true);
+
+        assert!(validate_workflow_task_execution_report(report, &request).is_err());
+    }
+
+    #[test]
+    fn rejects_workflow_task_execution_report_schema_drift() {
+        let request = fixed_workflow_task_execution_request();
+        let base = fixed_workflow_task_execution_report_json();
+        let mut cases = Vec::new();
+        cases.push({
+            let mut value = base.clone();
+            value["extra"] = serde_json::json!(true);
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["archive_status"] = serde_json::json!("accepted");
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["normalized_record_count"] = serde_json::json!(-1);
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["review_reasons"] = serde_json::json!([123]);
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["review_reasons"] = serde_json::json!([""]);
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["provider_response_hash"] = serde_json::json!(
+                "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            );
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["source_manifest_path"] = serde_json::json!(
+                "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/../source-manifest.json"
+            );
+            value
+        });
+
+        for case in cases {
+            assert!(validate_workflow_task_execution_report(case, &request).is_err());
+        }
+    }
+
+    #[test]
+    fn workflow_task_execution_guard_rejects_same_task_reentry() {
+        let state = WorkflowTaskExecutionState::default();
+        let first = acquire_workflow_task_execution_guard(&state, "task-start_nomad_sync-ab12cd")
+            .expect("first guard should be acquired");
+
+        assert!(
+            acquire_workflow_task_execution_guard(&state, "task-start_nomad_sync-ab12cd").is_err()
+        );
+        assert!(
+            acquire_workflow_task_execution_guard(&state, "task-start_nomad_sync-ef34gh").is_ok()
+        );
+
+        drop(first);
+        assert!(
+            acquire_workflow_task_execution_guard(&state, "task-start_nomad_sync-ab12cd").is_ok()
+        );
+    }
+
+    fn fixed_workflow_task_execution_request() -> WorkflowTaskExecutionRequest {
+        validate_workflow_task_execution_request(fixed_workflow_task_execution_request_json())
+            .expect("request should validate")
+    }
+
+    fn fixed_workflow_task_execution_request_json() -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": "v35.operator_task_execution_request.v1",
+            "task_id": "task-start_nomad_sync-ab12cd",
+            "ledger_path": "data/lib/operator_tasks/operator-task-ledger.jsonl",
+            "target_data_library_path": "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd",
+            "authorize_live_provider_calls": true,
+            "execution_contract": "v35.operator_task_execution.v1"
+        })
+    }
+
+    fn fixed_workflow_task_execution_report_json() -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": "v35.operator_task_execution.v1",
+            "task_id": "task-start_nomad_sync-ab12cd",
+            "action_type": "start_nomad_sync",
+            "provider": "nomad_perla_psc",
+            "admission_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "execution_status": "source_snapshot_written",
+            "write_authorization_scope": "source_snapshot_only",
+            "live_calls_authorized": true,
+            "provider_cache_written": false,
+            "local_backend_written": false,
+            "scoring_written": false,
+            "experiment_written": false,
+            "started_at": "2026-07-24T00:00:00Z",
+            "target_data_library_path": "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd",
+            "source_manifest_path": "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/source-manifest.json",
+            "normalized_record_count": 1,
+            "provider_response_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "raw_search_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "raw_archive_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "archive_status": "available",
+            "review_required": false,
+            "review_reasons": []
+        })
     }
 }

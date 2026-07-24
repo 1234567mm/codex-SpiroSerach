@@ -6,6 +6,7 @@ import { createWorkbenchCommandDispatcher, type WorkbenchCommandAdapter } from "
 import { createRuntimeWorkbenchCommandAdapter } from "./adapters/tauri-command-adapter";
 import { projectSourceSettingsCommandResult } from "./adapters/source-settings-command-projection";
 import { projectWorkflowCommandTaskResult } from "./adapters/workflow-command-task-projection";
+import { createTauriWorkflowTaskExecutor } from "./adapters/workflow-task-execution-adapter";
 import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import {
   buildReadonlyRunRecentOutputDirs,
@@ -20,6 +21,7 @@ import type { AtomReasonXCommandResult, AtomReasonXWorkspaceState } from "./cont
 
 const baseWorkspace = fixture as unknown as AtomReasonXWorkspaceState;
 const commandAdapter = createRuntimeWorkbenchCommandAdapter();
+const runtimeWorkflowTaskExecutor = createTauriWorkflowTaskExecutor();
 
 const AtomReasonXRoot: React.FC = () => {
   const [showSettings, setShowSettings] = React.useState(false);
@@ -79,6 +81,7 @@ const AtomReasonXRoot: React.FC = () => {
       expectedTargetVersion: String(visibleWorkspace.source_settings.config_version),
     }))
     : undefined;
+  const workflowTaskExecutor = visibleWorkspace && !runtimeReadAdapter.readOnly ? runtimeWorkflowTaskExecutor : undefined;
 
   if (workspaceState.status === "loading") {
     return <div className="app-shell app-shell-loading">Loading AtomReasonX workspace</div>;
@@ -117,6 +120,7 @@ const AtomReasonXRoot: React.FC = () => {
       readonlyRecentOutputDirs={readonlyRecentOutputDirEntries}
       onApplyReadonlyRunOutputDir={applyReadonlyRunOutputDir}
       commandDispatcher={commandDispatcher}
+      workflowTaskExecutor={workflowTaskExecutor}
     />
   );
 };

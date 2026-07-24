@@ -205,6 +205,9 @@ class TestFixtureStructure(unittest.TestCase):
         workflow_projection = (
             REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-projection.ts"
         ).read_text(encoding="utf-8")
+        workflow_execution = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-task-execution-adapter.ts"
+        ).read_text(encoding="utf-8")
         workflow_contract = (
             REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-contract.ts"
         ).read_text(encoding="utf-8")
@@ -225,6 +228,8 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("read-only-artifact-adapter", projection)
         self.assertNotIn("ReadOnlyRunAPI", workflow_projection)
         self.assertNotIn("read-only-artifact-adapter", workflow_projection)
+        self.assertNotIn("ReadOnlyRunAPI", workflow_execution)
+        self.assertNotIn("read-only-artifact-adapter", workflow_execution)
         self.assertNotIn("ReadOnlyRunAPI", workflow_contract)
         self.assertNotIn("read-only-artifact-adapter", workflow_contract)
         self.assertNotIn("read-only-artifact-adapter", workflow)
@@ -260,6 +265,66 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("stdout={}", rust)
         self.assertNotIn("pythonPath", main_ts)
         self.assertNotIn("SPIROSEARCH_PYTHON", main_ts)
+        self.assertNotIn("tauri-plugin-shell", rust)
+
+    def test_workflow_task_execution_bridge_is_fixed_shape(self) -> None:
+        main_ts = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "main.tsx").read_text(
+            encoding="utf-8",
+        )
+        app_shell = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "AppShell.tsx").read_text(
+            encoding="utf-8",
+        )
+        workflow = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "WorkflowView.tsx").read_text(
+            encoding="utf-8",
+        )
+        adapter = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-task-execution-adapter.ts"
+        ).read_text(encoding="utf-8")
+        rust = (REPO_ROOT / "frontend" / "atomreasonx" / "src-tauri" / "src" / "main.rs").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("createTauriWorkflowTaskExecutor", main_ts)
+        self.assertIn("!runtimeReadAdapter.readOnly ? runtimeWorkflowTaskExecutor : undefined", main_ts)
+        self.assertIn("workflowTaskExecutor={workflowTaskExecutor}", app_shell)
+        self.assertIn("workflowTaskExecutor", workflow)
+        self.assertIn("canExecuteWorkflowTask", workflow)
+        self.assertIn("execute(task)", workflow)
+        self.assertIn('"execute_workflow_task"', adapter)
+        self.assertIn("buildWorkflowTaskExecutionRequest", adapter)
+        self.assertIn("validateOperatorTaskExecutionReport", adapter)
+        self.assertIn("data/lib/operator_tasks/operator-task-ledger.jsonl", adapter)
+        self.assertIn("data/lib/nomad_perla_psc/snapshots/run-", adapter)
+        self.assertIn("authorize_live_provider_calls: true", adapter)
+        self.assertIn("v35.operator_task_execution.v1", adapter)
+        self.assertIn("execute_workflow_task", rust)
+        self.assertIn("WorkflowTaskExecutionState", rust)
+        self.assertIn("acquire_workflow_task_execution_guard", rust)
+        self.assertIn("workflow task execution is already in progress", rust)
+        self.assertIn("#[serde(deny_unknown_fields)]", rust)
+        self.assertIn("validate_workflow_task_execution_request", rust)
+        self.assertIn("run_workflow_task_execution", rust)
+        self.assertIn("validate_workflow_task_execution_report", rust)
+        self.assertIn("resolve_workflow_execution_spiroctl_path", rust)
+        self.assertIn("workflow task execution requires bundled spiroctl", rust)
+        self.assertIn("cfg!(debug_assertions)", rust)
+        self.assertIn('.env_remove("SPIROCTL_PATH")', rust)
+        self.assertIn("remove_credential_shaped_env", rust)
+        self.assertIn("serde_json::from_value(report)", rust)
+        self.assertIn("normalized_record_count: u64", rust)
+        self.assertIn("review_reasons: Vec<String>", rust)
+        self.assertIn('"workflow-task"', rust)
+        self.assertIn('"execute"', rust)
+        self.assertIn('"--authorize-live-provider-calls"', rust)
+        self.assertIn("workflow task execution failed with exit code", rust)
+        self.assertIn("provider_cache_written", rust)
+        self.assertIn("local_backend_written", rust)
+        self.assertIn("scoring_written", rust)
+        self.assertIn("experiment_written", rust)
+        self.assertNotIn("SPIROCTL_PATH", main_ts)
+        self.assertNotIn("SPIROCTL_PATH", app_shell)
+        self.assertNotIn("readonly_token", adapter)
+        self.assertNotIn("api_key=", adapter)
         self.assertNotIn("tauri-plugin-shell", rust)
 
     def test_source_settings_command_projection_is_ui_local_and_secret_free(self) -> None:
@@ -464,6 +529,9 @@ class TestCommandResultTypes(unittest.TestCase):
         self.assertIn("interface SourceProviderConnectionProbeReport", types)
         self.assertIn("provider_probe?: SourceProviderConnectionProbeReport;", types)
         self.assertIn("schema_version: \"v35.source_provider_connection_probe.v1\";", types)
+        self.assertIn("interface OperatorTaskExecutionReport", types)
+        self.assertIn("schema_version: \"v35.operator_task_execution.v1\";", types)
+        self.assertIn("write_authorization_scope: \"source_snapshot_only\";", types)
 
 
 class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):

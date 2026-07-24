@@ -64,6 +64,8 @@ Check the diff for:
 - Frontend assumptions about hard-coded output names.
 - Frontend command adapters importing read-only artifact APIs.
 - AtomReasonX package-lock entries without package versions.
+- AtomReasonX Tauri/Rust changes without `atomreasonx-tauri-msvc` checks or
+  without a precise note when WiX MSI bundling is the only remaining blocker.
 - Scoring paths that read raw provider payloads or provider confidence.
 - Unrelated docs, cache, output, or dependency churn.
 

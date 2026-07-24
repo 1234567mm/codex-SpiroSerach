@@ -48,6 +48,7 @@ data/lib/**/*.db
 # AtomReasonX frontend build artifacts
 frontend/atomreasonx/node_modules/
 frontend/atomreasonx/dist/
+frontend/atomreasonx/src-tauri/gen/
 frontend/atomreasonx/src-tauri/target/
 frontend/atomreasonx/.vitest/
 frontend/atomreasonx/src-tauri/binaries/*

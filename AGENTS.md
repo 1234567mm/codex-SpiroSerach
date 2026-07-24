@@ -65,6 +65,8 @@ Use repository skills when their trigger applies:
 - `contract-debugging` for failing tests, schemas, payloads, and boundary issues
 - `artifact-validation` for schemas, manifests, JSONL, cache indexes, and viewer
   inputs
+- `atomreasonx-tauri-msvc` for AtomReasonX Tauri/Rust desktop checks, Windows
+  MSVC linker setup, sidecar packaging, WiX bundling, and generated Tauri files
 - `review-ship` before claiming completion, merging, pushing, or cleanup
 - `context-handoff`, `find-skills`, `grilling`, `domain-modeling`,
   `grill-with-docs`, `to-spec`, `to-tickets`, and `upstream-skill-sync` for

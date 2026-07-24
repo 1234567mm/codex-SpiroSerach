@@ -166,6 +166,31 @@ export interface SourceProviderConnectionProbeReport {
   error_message?: string;
 }
 
+export interface OperatorTaskExecutionReport {
+  schema_version: "v35.operator_task_execution.v1";
+  task_id: string;
+  action_type: "start_nomad_sync";
+  provider: "nomad_perla_psc";
+  admission_hash: string;
+  execution_status: "source_snapshot_written";
+  write_authorization_scope: "source_snapshot_only";
+  live_calls_authorized: true;
+  provider_cache_written: false;
+  local_backend_written: false;
+  scoring_written: false;
+  experiment_written: false;
+  started_at: string;
+  target_data_library_path: string;
+  source_manifest_path: string;
+  normalized_record_count: number;
+  provider_response_hash: string;
+  raw_search_hash: string;
+  raw_archive_hash: string;
+  archive_status: "available" | "empty" | "unavailable" | "rate_limited" | "schema_unrecognized" | "not_requested";
+  review_required: boolean;
+  review_reasons: string[];
+}
+
 export interface AtomReasonXSourceProfilesState {
   schema_version: "v35.atomreasonx_source_profiles.v1";
   producer_version: string;
@@ -198,6 +223,10 @@ export interface HtlOperatorTaskSummary {
   execution_started: false;
   created_at: string | null;
   config: Record<string, unknown>;
+  admission_status?: "admitted";
+  admission_hash?: string;
+  ledger_path?: string;
+  admission_source?: "operator_task_ledger";
 }
 
 export interface AtomReasonXWorkflowCommandTaskArtifact extends HtlOperatorTaskSummary {

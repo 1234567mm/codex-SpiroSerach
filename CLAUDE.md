@@ -71,6 +71,8 @@ Project capabilities in `.codex/skills/` define required repository workflows:
   provider boundary failures.
 - `artifact-validation` for JSON artifacts, manifests, JSONL, indexes, and
   artifact viewer inputs.
+- `atomreasonx-tauri-msvc` for AtomReasonX Tauri/Rust desktop checks, Windows
+  MSVC linker setup, sidecar packaging, WiX bundling, and generated Tauri files.
 - `review-ship` before completion, merge, push, or worktree cleanup.
 - `context-handoff` for checkpoints and cross-session handoff.
 - `find-skills` for discovering, comparing, or installing project skills.

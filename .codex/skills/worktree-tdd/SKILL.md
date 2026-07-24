@@ -17,6 +17,8 @@ This is a functional workflow skill. It is not tied to any roadmap, phase, or pl
   governance, boundaries, and test gates still control execution.
 - Documentation-only edits usually do not need this skill unless they are part
   of a larger behavior change or require isolated integration.
+- Use `atomreasonx-tauri-msvc` when AtomReasonX Tauri, Rust bridge, sidecar
+  packaging, Windows linker, or desktop build behavior is in scope.
 
 ## Repository Defaults
 
@@ -122,6 +124,17 @@ For AtomReasonX frontend work, prefer Windows-safe npm commands:
 Set-Location frontend/atomreasonx
 npm.cmd test
 npm.cmd run build
+```
+
+For AtomReasonX Tauri/Rust desktop work, use the MSVC wrapper scripts exposed
+through npm:
+
+```powershell
+Set-Location frontend/atomreasonx
+npm.cmd run tauri:fmt
+npm.cmd run tauri:test
+npm.cmd run tauri:build:app
+npm.cmd run tauri:build
 ```
 
 If npm reports `Invalid Version`, inspect `package-lock.json` for package
