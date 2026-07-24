@@ -43,6 +43,7 @@ import {
   createRuntimeWorkbenchCommandAdapter,
 } from "../adapters/tauri-command-adapter";
 import { projectSourceSettingsCommandResult } from "../adapters/source-settings-command-projection";
+import { projectWorkflowCommandTaskResult } from "../adapters/workflow-command-task-projection";
 import {
   createLoadingWorkbenchWorkspaceState,
   loadWorkbenchWorkspace,
@@ -68,6 +69,11 @@ const COMMAND_CONTROL_MODULES = import.meta.glob<string>("../components/{Workflo
   query: "?raw",
 });
 const MAIN_MODULE = import.meta.glob<string>("../main.tsx", {
+  eager: true,
+  import: "default",
+  query: "?raw",
+});
+const APP_SHELL_MODULE = import.meta.glob<string>("../AppShell.tsx", {
   eager: true,
   import: "default",
   query: "?raw",
@@ -447,6 +453,7 @@ describe("AtomReasonX contract fixtures", () => {
     expect(mainSource).toContain("readonlyRecentOutputDirs");
     expect(mainSource).toContain("buildReadonlyRunRecentOutputDirs");
     expect(mainSource).toContain("createRuntimeWorkbenchReadAdapter");
+    expect(mainSource).toContain("projectWorkflowCommandTaskResult");
     expect(mainSource).toContain("readonlyRunConfig");
     expect(mainSource).toContain("onApplyReadonlyRunOutputDir");
     expect(mainSource).toContain("workspaceState.status === \"error\"");
@@ -471,6 +478,18 @@ describe("AtomReasonX contract fixtures", () => {
     expect(settingsSource).not.toContain("open(");
     expect(settingsSource).not.toContain("readonly_token");
     expect(settingsSource).not.toContain("spiroctlPath");
+  });
+
+  it("wires workflow operator tasks through workflow view without read-side imports", () => {
+    const workflowSource = Object.entries(COMMAND_CONTROL_MODULES)
+      .find(([path]) => path.includes("WorkflowView"))?.[1] ?? "";
+    const appShellSource = Object.values(APP_SHELL_MODULE)[0] ?? "";
+
+    expect(workflowSource).toContain("operatorTasks");
+    expect(workflowSource).toContain("operator-task-list");
+    expect(appShellSource).toContain("operatorTasks={workspace.operator_tasks}");
+    expect(workflowSource).not.toContain("workbench-read-adapter");
+    expect(workflowSource).not.toContain("read-only-artifact-adapter");
   });
 
   it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {
@@ -1148,6 +1167,7 @@ describe("AtomReasonX contract fixtures", () => {
     const commands = workspace.command_actions.map(action => action.action_type);
 
     expect(workspace.source_coverage.lane).toBe("htl_only");
+    expect(workspace.operator_tasks).toEqual([]);
     expect(providers).toContain("nomad_perla_psc");
     expect(providers).toContain("local_paper_vault");
     expect(commands).toContain("start_nomad_sync");
@@ -1438,7 +1458,7 @@ describe("AtomReasonX contract fixtures", () => {
     expect(JSON.stringify(calls[0].args)).not.toContain("api_key");
   });
 
-  it("keeps non-config workflow commands queued until their command transport slice exists", async () => {
+  it("queues known workflow commands as explicit local operator tasks without invoking Tauri", async () => {
     const workflowAction = (fixture as unknown as AtomReasonXWorkspaceState).command_actions
       .find(item => item.action_type === "start_nomad_sync");
     let invokeCount = 0;
@@ -1460,9 +1480,242 @@ describe("AtomReasonX contract fixtures", () => {
     expect(result).toMatchObject({
       schema_version: "v23.action_result.v1",
       action_type: "start_nomad_sync",
+      status: "accepted",
+      reason_code: "operator_task_queued",
+      output_artifacts: [{
+        kind: "workflow_command_task",
+        schema_version: "v35.operator_task.v1",
+        action_type: "start_nomad_sync",
+        provider: "nomad_perla_psc",
+        provider_scope: "source",
+        status: "queued",
+        queue_scope: "operator_local",
+        declared_effects: ["provider_sync_jobs"],
+        writes_authorized: false,
+        execution_started: false,
+      }],
+    });
+    expect(JSON.stringify(result)).not.toContain("api_key");
+    expect(JSON.stringify(result)).not.toContain("provider_cache_records");
+  });
+
+  it("queues every fixture workflow command action through the explicit operator task path", async () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const adapter = createRuntimeWorkbenchCommandAdapter({
+      invoke: async <T,>(): Promise<T> => {
+        throw new Error("fixture workflow command should not reach Tauri config bridge");
+      },
+    });
+
+    for (const action of workspace.command_actions) {
+      const result = await adapter.submit(buildWorkbenchCommandRequest(
+        action.action_type,
+        buildWorkflowCommandPayload(action),
+        { idempotencyKey: `workflow-${action.action_type}`, expectedTargetVersion: "0" },
+      )) as AtomReasonXCommandResult;
+
+      expect(result.status, action.action_type).toBe("accepted");
+      expect(result.reason_code, action.action_type).toBe("operator_task_queued");
+      expect(result.output_artifacts[0], action.action_type).toMatchObject({
+        kind: "workflow_command_task",
+        action_type: action.action_type,
+        provider: action.provider ?? (action.action_type.endsWith("_nomad_sync") ? "nomad_perla_psc" : null),
+        provider_scope: action.provider_scope ?? "source",
+        declared_effects: action.declared_effects,
+        writes_authorized: false,
+        execution_started: false,
+      });
+    }
+
+    const tamperedResult = await adapter.submit(buildWorkbenchCommandRequest(
+      "import_hopv15_snapshot",
+      {
+        provider: "materials_project",
+        provider_scope: "model",
+        declared_effects: ["sqlite_write", "provider_cache_records"],
+        api_key: "mp-secret",
+        manifest_path: "D:\\private\\hopv15.json",
+      },
+      { idempotencyKey: "api_key=mp-secret", expectedTargetVersion: "0" },
+    )) as AtomReasonXCommandResult;
+    expect(tamperedResult.audit.declared_effects).toEqual(["source_import_tasks"]);
+    expect(tamperedResult.output_artifacts[0]).toMatchObject({
+      kind: "workflow_command_task",
+      action_type: "import_hopv15_snapshot",
+      provider: "hopv15",
+      provider_scope: "source",
+      declared_effects: ["source_import_tasks"],
+    });
+    expect(JSON.stringify(tamperedResult.output_artifacts)).not.toContain("mp-secret");
+    expect(JSON.stringify(tamperedResult.output_artifacts)).not.toContain("api_key");
+    expect(JSON.stringify(tamperedResult.output_artifacts)).not.toContain("D:\\private");
+  });
+
+  it("keeps unknown workflow-shaped commands pending instead of accepting arbitrary tasks", async () => {
+    let invokeCount = 0;
+    const adapter = createRuntimeWorkbenchCommandAdapter({
+      invoke: async <T,>(): Promise<T> => {
+        invokeCount += 1;
+        throw new Error("unknown command should not reach Tauri config bridge");
+      },
+    });
+    const request = buildWorkbenchCommandRequest(
+      "provider_execution",
+      {
+        provider: "nomad_perla_psc",
+        declared_effects: ["provider_cache"],
+        api_key: "mp-secret",
+      },
+      { idempotencyKey: "unknown-workflow-1" },
+    );
+
+    const result = await adapter.submit(request);
+
+    expect(invokeCount).toBe(0);
+    expect(result).toMatchObject({
+      schema_version: "v23.action_result.v1",
+      action_type: "provider_execution",
       status: "queued",
       reason_code: "transport_pending",
+      output_artifacts: [],
     });
+    expect((result as AtomReasonXCommandResult).audit.declared_effects).toEqual([]);
+    expect(JSON.stringify(result)).not.toContain("mp-secret");
+    expect(JSON.stringify(result)).not.toContain("api_key");
+  });
+
+  it("projects workflow task results into a UI-local operator task queue without duplicates", async () => {
+    const workspace = JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState;
+    const workflowAction = workspace.command_actions.find(item => item.action_type === "start_nomad_sync");
+    const adapter = createRuntimeWorkbenchCommandAdapter();
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "nomad-sync-task-1",
+      expectedTargetVersion: "0",
+    });
+
+    expect(workflowAction).toBeDefined();
+    const result = await submitWorkflowCommandAction(dispatcher, workflowAction!) as AtomReasonXCommandResult;
+    const workflowTask = result.output_artifacts[0];
+    const resultWithDuplicateArtifact = {
+      ...result,
+      output_artifacts: [workflowTask!, workflowTask!],
+      audit: {
+        ...result.audit,
+        output_artifacts: [workflowTask!, workflowTask!],
+      },
+    } satisfies AtomReasonXCommandResult;
+    const resultWithHostileConfig = {
+      ...result,
+      output_artifacts: [{
+        ...workflowTask!,
+        config: {
+          api_key: "mp-secret",
+          local_path: "D:\\private\\snapshot.json",
+          doi_list: ["10.1000/example"],
+        },
+        created_at: "D:\\private\\snapshot.json",
+      }],
+      audit: {
+        ...result.audit,
+        output_artifacts: [{
+          ...workflowTask!,
+          config: {
+            api_key: "mp-secret",
+            local_path: "D:\\private\\snapshot.json",
+            doi_list: ["10.1000/example"],
+          },
+          created_at: "D:\\private\\snapshot.json",
+        }],
+      },
+    } as AtomReasonXCommandResult;
+    const resultWithTamperedMetadata = {
+      ...result,
+      output_artifacts: [{
+        ...workflowTask!,
+        provider: "materials_project",
+        provider_scope: "model",
+        declared_effects: ["sqlite_write", "provider_cache_records"],
+      }],
+      audit: {
+        ...result.audit,
+        output_artifacts: [{
+          ...workflowTask!,
+          provider: "materials_project",
+          provider_scope: "model",
+          declared_effects: ["sqlite_write", "provider_cache_records"],
+        }],
+      },
+    } as AtomReasonXCommandResult;
+    const resultWithUnsafeTaskId = {
+      ...result,
+      output_artifacts: [{
+        ...workflowTask!,
+        task_id: "task-start_nomad_sync-api_key",
+      }],
+      audit: {
+        ...result.audit,
+        output_artifacts: [{
+          ...workflowTask!,
+          task_id: "task-start_nomad_sync-api_key",
+        }],
+      },
+    } as AtomReasonXCommandResult;
+    const projected = projectWorkflowCommandTaskResult(workspace, result);
+    const projectedFromDuplicateArtifact = projectWorkflowCommandTaskResult(workspace, resultWithDuplicateArtifact);
+    const projectedFromHostileConfig = projectWorkflowCommandTaskResult(workspace, resultWithHostileConfig);
+    const rejectedTamperedMetadata = projectWorkflowCommandTaskResult(workspace, resultWithTamperedMetadata);
+    const rejectedUnsafeTaskId = projectWorkflowCommandTaskResult(workspace, resultWithUnsafeTaskId);
+    const duplicate = projectWorkflowCommandTaskResult(projected, result);
+
+    expect(workspace.operator_tasks).toEqual([]);
+    expect(projected).not.toBe(workspace);
+    expect(projected.operator_tasks).toHaveLength(1);
+    expect(projectedFromDuplicateArtifact.operator_tasks).toHaveLength(1);
+    expect(projectedFromHostileConfig.operator_tasks).toHaveLength(1);
+    expect(rejectedTamperedMetadata).toBe(workspace);
+    expect(rejectedUnsafeTaskId).toBe(workspace);
+    expect(projected.operator_tasks[0]).toMatchObject({
+      schema_version: "v35.operator_task.v1",
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      status: "queued",
+      queue_scope: "operator_local",
+      declared_effects: ["provider_sync_jobs"],
+      writes_authorized: false,
+      execution_started: false,
+    });
+    expect(projected.operator_tasks[0].config).toMatchObject({
+      transport: "operator_task_queue",
+      runtime_writes: false,
+    });
+    expect(duplicate).toBe(projected);
+    expect(JSON.stringify(projectedFromHostileConfig.operator_tasks)).not.toContain("mp-secret");
+    expect(JSON.stringify(projectedFromHostileConfig.operator_tasks)).not.toContain("D:\\private");
+    expect(JSON.stringify(projectedFromHostileConfig.operator_tasks)).not.toContain("10.1000/example");
+    expect(JSON.stringify(projected.operator_tasks)).not.toContain("api_key");
+    expect(JSON.stringify(projected.operator_tasks)).not.toContain("readonly_token");
+  });
+
+  it("does not project non-accepted workflow task artifacts into the operator queue", async () => {
+    const workspace = JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState;
+    const workflowAction = workspace.command_actions.find(item => item.action_type === "start_nomad_sync");
+    const adapter = createRuntimeWorkbenchCommandAdapter();
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "nomad-sync-task-rejected",
+      expectedTargetVersion: "0",
+    });
+
+    expect(workflowAction).toBeDefined();
+    const result = await submitWorkflowCommandAction(dispatcher, workflowAction!) as AtomReasonXCommandResult;
+    const queuedResult = {
+      ...result,
+      status: "queued",
+      reason_code: "transport_pending",
+    } satisfies AtomReasonXCommandResult;
+    const projected = projectWorkflowCommandTaskResult(workspace, queuedResult);
+
+    expect(projected).toBe(workspace);
+    expect(projected.operator_tasks).toEqual([]);
   });
 
   it("keeps command controls free of read-side adapter imports", () => {

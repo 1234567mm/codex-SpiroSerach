@@ -1,10 +1,14 @@
-import type {
-  AtomReasonXCommandResult,
-} from "../contracts/types";
+import type { AtomReasonXCommandResult } from "../contracts/types";
 import type {
   WorkbenchCommandAdapter,
   WorkbenchCommandRequest,
 } from "./command-adapter";
+import {
+  WORKFLOW_COMMAND_ACTION_TYPES,
+  WORKFLOW_OPERATOR_TASK_SCHEMA_VERSION,
+  buildWorkflowTaskConfig,
+  getWorkflowCommandTaskDefinition,
+} from "./workflow-command-task-contract";
 
 export type TauriCommandInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -24,6 +28,9 @@ export const createTauriConfigCommandAdapter = ({
   invoke = defaultTauriInvoke,
 }: TauriConfigCommandAdapterOptions = {}): WorkbenchCommandAdapter => ({
   async submit(request) {
+    if (WORKFLOW_COMMAND_ACTION_TYPES.has(request.action_type)) {
+      return buildWorkflowTaskCommandResult(request);
+    }
     if (!CONFIG_COMMAND_ACTION_TYPES.has(request.action_type)) {
       return buildQueuedCommandResult(request);
     }
@@ -31,6 +38,51 @@ export const createTauriConfigCommandAdapter = ({
     return validateCommandResult(result);
   },
 });
+
+export const buildWorkflowTaskCommandResult = (
+  request: WorkbenchCommandRequest,
+): AtomReasonXCommandResult => {
+  const definition = getWorkflowCommandTaskDefinition(request.action_type);
+  if (!definition) {
+    return buildQueuedCommandResult(request);
+  }
+  const declaredEffects = [...definition.declared_effects];
+  const task = {
+    kind: "workflow_command_task" as const,
+    schema_version: WORKFLOW_OPERATOR_TASK_SCHEMA_VERSION,
+    task_id: workflowTaskId(definition.action_type, request.idempotency_key),
+    action_type: definition.action_type,
+    provider: definition.provider,
+    provider_scope: definition.provider_scope,
+    status: "queued" as const,
+    queue_scope: "operator_local" as const,
+    declared_effects: declaredEffects,
+    writes_authorized: false as const,
+    execution_started: false as const,
+    created_at: null,
+    config: buildWorkflowTaskConfig(),
+  };
+  return {
+    schema_version: "v23.action_result.v1",
+    request_id: task.task_id,
+    action_type: request.action_type,
+    status: "accepted",
+    idempotency_key: request.idempotency_key,
+    actor_id: request.actor.actor_id,
+    reason_code: "operator_task_queued",
+    message: "Workflow command was recorded as a local operator task.",
+    output_artifacts: [task],
+    audit: {
+      idempotency_key: request.idempotency_key,
+      expected_source_version: request.preconditions.expected_target_version,
+      declared_effects: declaredEffects,
+      changed_fields: [],
+      validation_state: "queued",
+      config_version: 0,
+      output_artifacts: [task],
+    },
+  };
+};
 
 export const createRuntimeWorkbenchCommandAdapter = (
   options: TauriConfigCommandAdapterOptions = {},
@@ -51,7 +103,7 @@ export const buildQueuedCommandResult = (
   audit: {
     idempotency_key: request.idempotency_key,
     expected_source_version: request.preconditions.expected_target_version,
-    declared_effects: Object.keys(request.payload),
+    declared_effects: [],
     changed_fields: [],
     validation_state: "queued",
     config_version: 0,
@@ -108,3 +160,20 @@ const defaultTauriInvoke: TauriCommandInvoke = async (command, args) => {
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === "object" && value !== null && !Array.isArray(value)
 );
+
+const workflowTaskId = (actionType: string, idempotencyKey: string): string => (
+  `task-${safeTaskToken(actionType)}-${workflowTaskHash(idempotencyKey)}`
+);
+
+const safeTaskToken = (value: string): string => (
+  value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "unknown"
+);
+
+const workflowTaskHash = (value: string): string => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+};

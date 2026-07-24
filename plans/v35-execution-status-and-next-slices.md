@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `1ffa0c3`
+Latest implementation HEAD before this status update: `e410a4c`
 Date: 2026-07-24
 
 ## Goal
@@ -54,15 +54,16 @@ The current branch contains these V35 execution commits:
 | `11404b6` | P3 PubChemQC Python bridge report-body closure hardening | Adds schema-pinned PubChemQC Python oracle and Go-vs-Python parser parity reports, requiring `status=pass`, oracle/parser identity, record-count agreement, and accepted-field coverage before a ready snapshot can pass closure. |
 | `e38687d` | Agent targeted verification guardrails | Adds hygiene sentinels and documents milestone-gate/targeted-reverification rules so review fixes rerun the affected checks without shrinking the V35 goal. |
 | `1ffa0c3` | P2 Materials Project operator command transport | Routes AtomReasonX source config commands through a fixed Tauri bridge to Python `ConfigCommandPlane`, while non-config workflow actions remain queued and read-only/runtime writer boundaries stay separate. |
-| current slice | P1 AtomReasonX source-settings command projection | Projects accepted source config command results into the UI-local workbench state, preserves readonly/no-command mode, ignores rejected/queued/non-source/stale results, and keeps source-setting projection secret-free. |
+| `e410a4c` | P1 AtomReasonX source-settings command projection | Projects accepted source config command results into the UI-local workbench state, preserves readonly/no-command mode, ignores rejected/queued/non-source/stale results, and keeps source-setting projection secret-free. |
+| current slice | P1 AtomReasonX workflow operator task queue | Converts known NOMAD/import/workflow commands into explicit UI-local `workflow_command_task` artifacts with `writes_authorized=false` and `execution_started=false`; unknown commands remain `transport_pending`, and no provider cache, SQLite, scoring, experiment, download, or live provider write path is invoked. |
 
 ## Current Data Source Status
 
 | Source | Current state | Next required closure |
 | --- | --- | --- |
 | PubChem | Go shadow ready; source settings remain separate from model provider settings. | Later live transport hardening and rate-limit telemetry. |
-| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts, can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure, the desktop command slice executes config-plane actions through a fixed Tauri bridge with persistent idempotency replay, and the current UI slice projects accepted source-setting command results back into workbench state without secrets or provider facts. | Next transport work should add explicit operator flows for NOMAD sync/import commands; provider cache, SQLite, scoring, and experiment writes remain out of this command slice. |
-| NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. | Keep archive fallback conservative; add live sync transport only behind explicit operator command. |
+| Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts, can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure, the desktop command slice executes config-plane actions through a fixed Tauri bridge with persistent idempotency replay, and AtomReasonX projects accepted source-setting command results back into workbench state without secrets or provider facts. | Next source-provider transport work can add read-only live probe ergonomics and later explicit write-authorized import/execution admission; provider cache, SQLite, scoring, and experiment writes remain out of the current operator-task queue. |
+| NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. AtomReasonX now records known NOMAD sync controls as local operator tasks, but does not execute downloads or mutate local data. | Keep archive fallback conservative; add live sync execution only behind explicit operator command authorization and a separate data-library write contract. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
 | PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts; ready snapshots now require schema-valid Python oracle and parser parity report bodies. | Full dataset acquisition, real parser parity, Python oracle output, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
@@ -174,6 +175,10 @@ Recent gates run during this checkpoint:
 - `npm.cmd run build` in `frontend/atomreasonx` passed after the AtomReasonX source-settings command projection slice.
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 27 tests after the AtomReasonX source-settings command projection slice; sandboxed `.venv` Python remained blocked by local `uv` trampoline permissions.
 - Noether found a P1 stale accepted result ordering risk during review; the projection now ignores source effects with `config_version` older than the visible `source_settings.config_version`, and targeted frontend/Python reruns above covered the fix. Broader gates were intentionally omitted because the fix is UI-local TypeScript projection plus source-contract assertions only.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 45 Vitest tests after the workflow operator task queue slice, including every fixture workflow action, non-accepted projection rejection, duplicate task rejection, payload-poisoning hardening, and hostile artifact config sanitization.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the workflow operator task queue slice.
+- `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 28 tests after the workflow operator task queue slice; sandboxed `.venv` Python remained blocked by local `uv` trampoline permissions.
+- Herschel found no blocking spec issues and suggested low-cost direct behavior coverage; Dalton found P1/P2 boundary hardening issues around loose artifact projection and payload-controlled operator metadata. The fix moved workflow metadata into an allowlist contract, hashes task ids instead of embedding raw idempotency keys, rebuilds safe task config, and fails closed on mismatched schema/status/queue/action/provider/effects. Targeted Vitest, build, and Python contract reruns above covered the review fixes; Dalton re-reviewed and approved the slice.
 
 ## Remaining Work
 
@@ -217,8 +222,9 @@ Recent gates run during this checkpoint:
    requires a Rust desktop build environment with MSVC `link.exe` and `rustfmt`.
 3. Keep read transport side-effect free. Config command transport is now
    separate and idempotent for source/model settings; workflow commands such as
-   NOMAD sync and snapshot imports must get their own explicit transport slice
-   and remain queued until then.
+   NOMAD sync and snapshot imports now have an explicit UI-local operator task
+   queue, but execution, download, cache write, SQLite write, scoring rebuild,
+   and experiment write authorization remain future slices.
 4. Go must not become a second SQLite/provider-cache writer until schema
    ownership and write authorization are explicit.
 
@@ -246,10 +252,11 @@ Recommended next large stage:
 
 Alternative if prioritizing operator workflow:
 
-1. Add a native desktop directory picker for the existing readonly output-dir
-   settings entry, without adding any command credentials, executable-path
-   input, provider sync, scoring rebuild, cache write, SQLite write, or
-   experiment write surface.
+1. Promote the UI-local workflow operator task queue into a backend-owned task
+   ledger with explicit write authorization, starting with positive HTL NOMAD
+   sync/import admission and data-library staging. The executor must still keep
+   provider sync, scoring rebuild, cache write, SQLite write, and experiment
+   write surfaces separate until their contracts are reviewed.
 2. Full installer verification for bundled sidecar packaging now requires the
    local Rust desktop toolchain closure: install `rustfmt` plus MSVC Build Tools
    with the C++ linker, then rerun `cargo fmt --check`, `cargo test`, and

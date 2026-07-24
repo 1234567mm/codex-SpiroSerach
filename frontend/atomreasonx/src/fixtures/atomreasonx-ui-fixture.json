@@ -884,6 +884,7 @@
       }
     }
   ],
+  "operator_tasks": [],
   "workflow": {
     "schema_version": "v33c.htl_workflow.v1",
     "lane": "htl_only",

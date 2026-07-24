@@ -1,5 +1,6 @@
 import type {
   AtomReasonXCommandEffectArtifact,
+  AtomReasonXCommandOutputArtifact,
   AtomReasonXCommandResult,
   AtomReasonXWorkspaceState,
   SourceConfigStatusEntry,
@@ -52,7 +53,7 @@ export const projectSourceSettingsCommandResult = (
 };
 
 const isSourceConfigEffect = (
-  effect: AtomReasonXCommandEffectArtifact,
+  effect: AtomReasonXCommandOutputArtifact,
 ): effect is AtomReasonXCommandEffectArtifact & { provider: string } => (
   effect.kind === "config_command_effect"
   && effect.provider_scope === "source"

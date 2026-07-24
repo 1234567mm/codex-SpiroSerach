@@ -1,6 +1,6 @@
 import React from "react";
 import type { WorkbenchCommandDispatcher } from "../adapters/command-adapter";
-import type { HtlWorkbenchCommandAction, HtlWorkflowPreview } from "../contracts/types";
+import type { HtlOperatorTaskSummary, HtlWorkbenchCommandAction, HtlWorkflowPreview } from "../contracts/types";
 
 export const buildWorkflowCommandPayload = (action: HtlWorkbenchCommandAction): Record<string, unknown> => ({
   provider: action.provider ?? null,
@@ -24,8 +24,9 @@ export const submitWorkflowCommandAction = (
 export const WorkflowView: React.FC<{
   workflow: HtlWorkflowPreview;
   commandActions: HtlWorkbenchCommandAction[];
+  operatorTasks?: HtlOperatorTaskSummary[];
   commandDispatcher?: WorkbenchCommandDispatcher;
-}> = ({ workflow, commandActions, commandDispatcher }) => {
+}> = ({ workflow, commandActions, operatorTasks = [], commandDispatcher }) => {
   return (
     <section className="workflow-view">
       <div className="section-header">
@@ -56,6 +57,17 @@ export const WorkflowView: React.FC<{
           </button>
         ))}
       </div>
+      {operatorTasks.length > 0 && (
+        <div className="operator-task-list">
+          {operatorTasks.map(task => (
+            <div key={task.task_id} className="operator-task-row">
+              <strong>{task.action_type}</strong>
+              <span>{task.status}</span>
+              <span>{task.provider ?? "workspace"}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 };

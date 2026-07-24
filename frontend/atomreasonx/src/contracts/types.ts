@@ -185,6 +185,30 @@ export interface AtomReasonXCommandEffectArtifact {
   config_version: number;
 }
 
+export interface HtlOperatorTaskSummary {
+  schema_version: "v35.operator_task.v1";
+  task_id: string;
+  action_type: string;
+  provider: string | null;
+  provider_scope: ConfigProviderScope;
+  status: "queued";
+  queue_scope: "operator_local";
+  declared_effects: string[];
+  writes_authorized: false;
+  execution_started: false;
+  created_at: string | null;
+  config: Record<string, unknown>;
+}
+
+export interface AtomReasonXWorkflowCommandTaskArtifact extends HtlOperatorTaskSummary {
+  kind: "workflow_command_task";
+  provider_probe?: never;
+}
+
+export type AtomReasonXCommandOutputArtifact =
+  | AtomReasonXCommandEffectArtifact
+  | AtomReasonXWorkflowCommandTaskArtifact;
+
 export interface AtomReasonXCommandResult {
   schema_version: string;
   request_id: string;
@@ -194,7 +218,7 @@ export interface AtomReasonXCommandResult {
   actor_id: string;
   reason_code: string;
   message: string;
-  output_artifacts: AtomReasonXCommandEffectArtifact[];
+  output_artifacts: AtomReasonXCommandOutputArtifact[];
   audit: {
     idempotency_key: string;
     expected_source_version: string;
@@ -202,7 +226,7 @@ export interface AtomReasonXCommandResult {
     changed_fields: string[];
     validation_state: string;
     config_version: number;
-    output_artifacts: AtomReasonXCommandEffectArtifact[];
+    output_artifacts: AtomReasonXCommandOutputArtifact[];
   };
 }
 
@@ -290,6 +314,7 @@ export interface AtomReasonXWorkspaceState {
   source_profiles: AtomReasonXSourceProfilesState;
   source_coverage: HtlSourceCoverageMatrix;
   sync_jobs: HtlSyncJobSummary[];
+  operator_tasks: HtlOperatorTaskSummary[];
   workflow: HtlWorkflowPreview;
   command_actions: HtlWorkbenchCommandAction[];
   _provisional: boolean;

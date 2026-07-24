@@ -78,6 +78,8 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertEqual(actions["import_doi_list"]["input_fields"], ["doi_list", "reason"])
         self.assertNotIn("input_fields", actions["start_nomad_sync"])
         self.assertIn("EvidenceQualityPolicy", self.fixture["workflow"]["gates"])
+        self.assertIn("operator_tasks", self.fixture)
+        self.assertEqual(self.fixture["operator_tasks"], [])
 
     def test_v35_source_profiles_cover_configured_and_rendered_data_sources(self) -> None:
         source_settings_ids = {
@@ -199,6 +201,12 @@ class TestFixtureStructure(unittest.TestCase):
         projection = (
             REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "source-settings-command-projection.ts"
         ).read_text(encoding="utf-8")
+        workflow_projection = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-projection.ts"
+        ).read_text(encoding="utf-8")
+        workflow_contract = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-contract.ts"
+        ).read_text(encoding="utf-8")
         workflow = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "WorkflowView.tsx").read_text(
             encoding="utf-8",
         )
@@ -214,6 +222,10 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("read-only-artifact-adapter", tauri_adapter)
         self.assertNotIn("ReadOnlyRunAPI", projection)
         self.assertNotIn("read-only-artifact-adapter", projection)
+        self.assertNotIn("ReadOnlyRunAPI", workflow_projection)
+        self.assertNotIn("read-only-artifact-adapter", workflow_projection)
+        self.assertNotIn("ReadOnlyRunAPI", workflow_contract)
+        self.assertNotIn("read-only-artifact-adapter", workflow_contract)
         self.assertNotIn("read-only-artifact-adapter", workflow)
         self.assertNotIn("read-only-artifact-adapter", settings)
         self.assertNotIn("command-adapter", database)
@@ -232,6 +244,7 @@ class TestFixtureStructure(unittest.TestCase):
 
         self.assertIn("createRuntimeWorkbenchCommandAdapter", main_ts)
         self.assertIn("projectSourceSettingsCommandResult", main_ts)
+        self.assertIn("projectWorkflowCommandTaskResult", main_ts)
         self.assertIn("visibleWorkspace.source_settings.config_version", main_ts)
         self.assertIn("!runtimeReadAdapter.readOnly", main_ts)
         self.assertIn('"submit_config_command"', adapter)
@@ -260,6 +273,55 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("localStorage", projection)
         self.assertNotIn("fetch(", projection)
         self.assertNotIn("api_key=", projection)
+
+    def test_workflow_command_task_queue_is_explicit_and_write_blocked(self) -> None:
+        types = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "contracts" / "types.ts").read_text(
+            encoding="utf-8",
+        )
+        adapter = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "tauri-command-adapter.ts"
+        ).read_text(encoding="utf-8")
+        projection = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-projection.ts"
+        ).read_text(encoding="utf-8")
+        contract = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-contract.ts"
+        ).read_text(encoding="utf-8")
+        workflow = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "components" / "WorkflowView.tsx").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("interface HtlOperatorTaskSummary", types)
+        self.assertIn('kind: "workflow_command_task";', types)
+        self.assertIn("operator_tasks: HtlOperatorTaskSummary[];", types)
+        self.assertIn("WORKFLOW_COMMAND_TASK_DEFINITIONS", contract)
+        self.assertIn("WORKFLOW_COMMAND_ACTION_TYPES", contract)
+        self.assertIn("getWorkflowCommandTaskDefinition", contract)
+        self.assertIn("buildWorkflowTaskConfig", contract)
+        self.assertIn("buildWorkflowTaskCommandResult", adapter)
+        self.assertIn("WORKFLOW_COMMAND_ACTION_TYPES", adapter)
+        self.assertIn("getWorkflowCommandTaskDefinition", adapter)
+        self.assertIn("workflowTaskHash", adapter)
+        self.assertIn("writes_authorized: false", adapter)
+        self.assertIn("execution_started: false", adapter)
+        self.assertIn("operator_task_queued", adapter)
+        self.assertNotIn("request.payload.provider", adapter)
+        self.assertNotIn("request.payload.provider_scope", adapter)
+        self.assertNotIn("request.payload.declared_effects", adapter)
+        self.assertNotIn("Object.keys(request.payload)", adapter)
+        self.assertNotIn("safeTaskToken(request.idempotency_key)", adapter)
+        self.assertIn("projectWorkflowCommandTaskResult", projection)
+        self.assertIn('result.status !== "accepted"', projection)
+        self.assertIn("WORKFLOW_OPERATOR_TASK_SCHEMA_VERSION", projection)
+        self.assertIn("workflowTaskMatchesDefinition", projection)
+        self.assertIn("safeTaskIdForAction", projection)
+        self.assertIn("buildWorkflowTaskConfig", projection)
+        self.assertNotIn("config: { ...artifact.config }", projection)
+        self.assertNotIn("created_at: artifact.created_at", projection)
+        self.assertIn("operatorTasks", workflow)
+        self.assertNotIn("fetch(", projection)
+        self.assertNotIn("localStorage", projection)
+        self.assertNotIn("provider_cache_records", adapter)
 
     def test_config_runtime_uses_repo_config_root_and_persistent_replay_ledger(self) -> None:
         runtime = (
@@ -389,8 +451,10 @@ class TestCommandResultTypes(unittest.TestCase):
         types = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "contracts" / "types.ts").read_text(
             encoding="utf-8",
         )
-        self.assertIn("output_artifacts: AtomReasonXCommandEffectArtifact[];", types)
+        self.assertIn("output_artifacts: AtomReasonXCommandOutputArtifact[];", types)
         self.assertIn("kind: \"config_command_effect\";", types)
+        self.assertIn("kind: \"workflow_command_task\";", types)
+        self.assertIn("operator_tasks: HtlOperatorTaskSummary[];", types)
         self.assertIn("source_settings: AtomReasonXSourceSettingsState;", types)
         self.assertIn("source_profiles: AtomReasonXSourceProfilesState;", types)
         self.assertIn("blocking_review_count: number;", types)

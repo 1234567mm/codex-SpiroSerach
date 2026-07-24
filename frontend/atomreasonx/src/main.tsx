@@ -5,6 +5,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { createWorkbenchCommandDispatcher, type WorkbenchCommandAdapter } from "./adapters/command-adapter";
 import { createRuntimeWorkbenchCommandAdapter } from "./adapters/tauri-command-adapter";
 import { projectSourceSettingsCommandResult } from "./adapters/source-settings-command-projection";
+import { projectWorkflowCommandTaskResult } from "./adapters/workflow-command-task-projection";
 import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import {
   buildReadonlyRunRecentOutputDirs,
@@ -65,7 +66,8 @@ const AtomReasonXRoot: React.FC = () => {
       if (visibleWorkspace && isAtomReasonXCommandResult(result)) {
         setProjectedWorkspace(current => {
           const base = current ?? visibleWorkspace;
-          const next = projectSourceSettingsCommandResult(base, result);
+          const withSourceSettings = projectSourceSettingsCommandResult(base, result);
+          const next = projectWorkflowCommandTaskResult(withSourceSettings, result);
           return next === base ? current : next;
         });
       }

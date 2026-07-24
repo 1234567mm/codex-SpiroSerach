@@ -64,6 +64,7 @@ export const AppShell: React.FC<{
             <WorkflowView
               workflow={workspace.workflow}
               commandActions={workspace.command_actions}
+              operatorTasks={workspace.operator_tasks}
               commandDispatcher={commandDispatcher}
             />
           </div>
