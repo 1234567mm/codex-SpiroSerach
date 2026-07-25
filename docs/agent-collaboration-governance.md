@@ -19,6 +19,21 @@ applicable instructions conflict and the higher-priority intent is unclear,
 stop and ask. Discover the repository root, branch, HEAD, worktrees, and status
 at runtime; recorded values are context, not authority.
 
+## Reference Migration
+
+User-provided official APIs, datasets, and open-source repositories are durable
+project inputs, not disposable chat context. When such references are relevant
+to implementation, record their URL, revision if known, license/terms status if
+known, and the intended migration pattern in the active plan or governance note
+before proceeding far enough for context compaction to lose them.
+
+Prefer migration or adapter alignment with the official interface or proven
+architecture shape over re-inventing a local substitute. Direct code transfer
+requires exact revision, license compatibility, attribution, and parity tests.
+When copying is unsafe or unnecessary, implement the pattern in local style and
+document why. In all cases, SpiroSearch provider, review, scoring, artifact,
+authorization, and scientific fail-closed boundaries remain authoritative.
+
 ## Worktree Lifecycle
 
 1. **Inspect.** Resolve the repository root, record the start SHA, current
@@ -103,6 +118,12 @@ belongs in versioned scripts and CI, with hooks acting only as convenient
 wrappers. Agents must inspect hook failures, must not bypass them silently, and
 must not install, replace, or disable hooks without explicit authority. Hooks
 must never auto-merge or auto-push.
+
+Repository hygiene checks should include lightweight sentinels for durable
+process guardrails such as context-budget handoff, quality-preserving targeted
+verification, and user-provided reference migration. These sentinels do not
+replace judgment, but they make sure the rules continue to trigger instead of
+remaining forgotten documentation.
 
 ## Memory Layers
 

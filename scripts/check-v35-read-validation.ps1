@@ -413,6 +413,12 @@ Invoke-SpiroctlExpectJson 'Materials Cloud closure requirements are machine-read
     'materials_cloud'
 ) 'v35.source_closure_requirements.v1' 'materials_cloud' 'inputs_required'
 
+Invoke-SpiroctlExpectJson 'NOMAD closure requirements are machine-readable' @(
+    'source-closure',
+    'requirements',
+    'nomad_perla_psc'
+) 'v35.source_closure_requirements.v1' 'nomad_perla_psc' 'inputs_required'
+
 $previousMaterialsProjectKey = $env:MATERIALS_PROJECT_API_KEY
 try {
     Remove-Item Env:MATERIALS_PROJECT_API_KEY -ErrorAction SilentlyContinue

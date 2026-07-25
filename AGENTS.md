@@ -84,6 +84,32 @@ Prefer the smallest verifiable change. Do not pre-read unrelated files, invent
 extra process, or run broad checks unless the current task or observed risk
 requires it.
 
+## External References
+
+When the user provides an official API, dataset, or open-source project as a
+reference, record it in the active plan or governance notes before the context
+can be lost. Development should migrate or adapt the referenced interface or
+architecture when license, terms, and SpiroSearch trust boundaries allow it;
+do not casually re-invent a local substitute. If direct replacement is not
+safe, document why and implement the closest compatible adapter.
+
+Current durable references include:
+
+- NOMAD Solar Cells GUI:
+  `https://nomad-lab.eu/prod/v1/staging/gui/search/solarcells`
+- NOMAD API analysis/OpenAPI GUI:
+  `https://nomad-lab.eu/prod/v1/staging/gui/analyze/apis`
+- FAIRmat NOMAD perovskite database:
+  `https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database`
+- DeepSeek-Reasonix:
+  `https://github.com/esengine/DeepSeek-Reasonix`
+- Cherry Studio:
+  `https://github.com/CherryHQ/cherry-studio`
+- API for Cherry Studio:
+  `https://github.com/tufeiping/api-for-cherrystudio`
+- OpenAI Codex:
+  `https://github.com/openai/codex`
+
 Before committing, run or account for the project hygiene hook:
 
 ```powershell

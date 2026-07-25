@@ -36,6 +36,12 @@ suite. Record the verification scope and why omitted broad gates remain covered.
 Documentation-only changes may use document-specific checks instead. Never
 record a fixed test count in governance or prompts.
 
+Choose verification with engineering judgment. Keep checks that prove the
+changed behavior, durable contracts, source integrity, authorization, review
+fail-closed paths, and secret/path boundaries. Skip redundant reruns when a
+fresh broader gate already covers unchanged surfaces and the current diff is
+bounded; record the verification scope instead of running tests as ceremony.
+
 Changes to model evaluation, surrogate, acquisition, replay, scikit-learn, or
 BoTorch paths also require the applicable optional dependency gate:
 
@@ -60,6 +66,33 @@ and remove only that known generated file when appropriate.
 - `ScoringView` exposes eligible facts only.
 - Legacy `models.py`, `v4.py`, and `screening_v31.py` migrate through adapters;
   do not remove them as an incidental refactor.
+
+## Reference Migration Policy
+
+User-provided official APIs, datasets, and open-source repositories are durable
+architecture inputs. Record them in the active plan before relying on them so
+context compaction cannot erase the source. Prefer migrating or adapting the
+official interface and proven architecture shape over inventing a parallel
+local design, as long as license, terms, attribution, and SpiroSearch
+provider/review/scoring/artifact boundaries allow it. If direct migration is
+not safe, document the reason and build the closest compatible adapter.
+
+Current required references:
+
+- NOMAD Solar Cells GUI:
+  `https://nomad-lab.eu/prod/v1/staging/gui/search/solarcells`
+- NOMAD API analysis/OpenAPI GUI:
+  `https://nomad-lab.eu/prod/v1/staging/gui/analyze/apis`
+- FAIRmat NOMAD perovskite database:
+  `https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database`
+- DeepSeek-Reasonix:
+  `https://github.com/esengine/DeepSeek-Reasonix`
+- Cherry Studio:
+  `https://github.com/CherryHQ/cherry-studio`
+- API for Cherry Studio:
+  `https://github.com/tufeiping/api-for-cherrystudio`
+- OpenAI Codex:
+  `https://github.com/openai/codex`
 
 ## Skill Routing
 

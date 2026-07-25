@@ -69,6 +69,13 @@ Before staging, classify the final diff:
 State the class in the completion report. This is a quality-preserving budget,
 not permission to skip a required gate.
 
+Use judgment to avoid duplicate validation. A fresh broad gate can remain valid
+for unchanged surfaces; after bounded fixes, rerun the focused behavior or
+contract gate that owns the edited files plus hygiene/diff checks. Do not rerun
+unrelated Python, Go, frontend, Rust, or packaging suites just to satisfy
+ceremony. Escalate only when the diff crosses a shared boundary, changes
+dependency/build behavior, or makes the omitted surface plausibly affected.
+
 ## Review Focus
 
 Check the diff for:
@@ -87,6 +94,9 @@ Check the diff for:
 - Unrelated docs, cache, output, or dependency churn.
 - Test churn that duplicates existing coverage without proving a new behavior,
   contract, boundary, or faster local failure.
+- User-provided reference materials missing from the active plan, or local
+  implementations that invent substitutes instead of migrating/adapting the
+  official interface when that is legally and technically safe.
 
 Read the full relevant diff before commenting. Do not flag issues already addressed in the diff. Prefer fix-first handling: apply obvious mechanical fixes directly, but ask before risky, architectural, destructive, or judgment-heavy changes.
 

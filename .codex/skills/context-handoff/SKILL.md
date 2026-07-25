@@ -32,6 +32,10 @@ before continuing through the hook/hygiene gate.
    future workflow, such as test deduplication, gate selection, external
    architecture reference policy, linker/build pitfalls, or trust-boundary
    rules.
+   User-provided official APIs, datasets, and open-source repositories are
+   mandatory handoff material when they shape implementation; include their URLs
+   and whether the next step is direct migration, adapter alignment, or local
+   reimplementation due to license/terms or boundary constraints.
 3. Apply the quality-preserving test budget from `worktree-tdd` and
    `review-ship`: keep tests that prove behavior, contracts, source integrity,
    authorization, fail-closed scientific data, and secret/path boundaries; merge

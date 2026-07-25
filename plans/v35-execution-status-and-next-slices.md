@@ -2,8 +2,8 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `e1458f2`
-Date: 2026-07-24
+Latest implementation HEAD before this status update: `2285e0b`
+Date: 2026-07-25
 
 ## Goal
 
@@ -25,8 +25,20 @@ contracts, and secret/path boundaries remain mandatory.
 
 ## External Architecture References
 
-External repositories are reference inputs, not authority to replace
-SpiroSearch's evidence gates.
+External repositories, official APIs, and user-provided dataset references are
+durable migration inputs, not disposable chat context. Record them here before
+implementation so context compaction cannot erase them. Prefer migrating or
+adapting the official interface and proven architecture shape over inventing a
+parallel local substitute, as long as license, terms, attribution, and
+SpiroSearch provider/review/scoring/artifact boundaries allow it. If direct
+replacement is unsafe, document why and implement the closest compatible
+adapter.
+
+Do not use a single global percentage to describe V35 completion. Track each
+source or subsystem by usable closure stage instead: official interface
+alignment, source snapshot integrity, review/promotion readiness, authorized
+cache/SQLite/scoring writes, and AtomReasonX operator usability. This avoids
+claiming progress that is only a guardrail rather than a usable data flow.
 
 - `openai/codex` is usable as an Apache-2.0 architecture reference for local
   agent CLI layering, explicit approvals, sandbox boundaries, and single
@@ -36,10 +48,24 @@ SpiroSearch's evidence gates.
   agent-shell reference: configuration-driven command allowlists, MCP/skill
   extensibility, gated tool execution, and CLI/desktop parity all map cleanly
   onto SpiroSearch's sidecar and command-plane direction.
-- `tufeiping/api-for-cherrystudio` / Cherry Studio style API surfaces are useful
-  only as conceptual input for a unified model/RAG/knowledge facade with
-  secret-free frontend state. Do not copy code or wholesale replace modules
-  unless license compatibility is reviewed for the exact source revision.
+- `CherryHQ/cherry-studio` and `tufeiping/api-for-cherrystudio` are reference
+  inputs for model/provider configuration UX, local knowledge/RAG facades,
+  provider routing, and secret-free frontend state. Use their architecture and
+  API shape only after exact license/revision review; do not copy product
+  behavior or secret-handling assumptions blindly.
+- NOMAD Solar Cells GUI
+  `https://nomad-lab.eu/prod/v1/staging/gui/search/solarcells` is the operator
+  reference surface for the solar-cell search workflow. Treat it as UI/query
+  behavior evidence, not as the API endpoint itself.
+- NOMAD API analysis/OpenAPI GUI
+  `https://nomad-lab.eu/prod/v1/staging/gui/analyze/apis` is the primary
+  reference for official NOMAD v1 REST/OpenAPI semantics. SpiroSearch NOMAD
+  migration should align with official endpoints such as `/entries/query` and
+  `/entries/archive/query` before adding local abstractions.
+- `FAIRmat-NFDI/nomad-perovskite-solar-cells-database` is the FAIRmat/NFDI
+  perovskite schema/plugin reference. Use it for schema, parser, field alias,
+  and attribution alignment; do not treat the repository as a data mirror or
+  copy source without exact revision/license notes.
 
 ## Completed Commits
 
@@ -89,7 +115,8 @@ The current branch contains these V35 execution commits:
 | `e1458f2` | P2 NOMAD workflow task execution snapshot | Adds `spiroctl workflow-task execute --task-id ... --ledger ... --authorize-live-provider-calls --target ...` as an explicitly authorized source-snapshot writer for admitted NOMAD tasks. It writes raw search/archive payloads, normalized provider-response records, validation summary, and a V35 source manifest under `data/lib/nomad_perla_psc/snapshots/`; it still does not write provider cache, SQLite, scoring, review, or experiments. |
 | `7221f90` | P2 AtomReasonX workflow task execution bridge | Wires admission-backed NOMAD operator tasks to a fixed Tauri `execute_workflow_task` bridge that builds `spiroctl workflow-task execute` requests with the default operator ledger, deterministic NOMAD snapshot target, explicit live-call authorization, strict execution-report validation, native same-task single-flight, and no WebView executable path or token surface. Local queued tasks remain non-executable until ledger admission evidence is present. |
 | `d400016` | P2 AtomReasonX NOMAD persisted execution restore | Adds read-only persisted restore for admitted NOMAD execution snapshots: Go reloads ledger-bound source manifests and validation summaries, `spiroctl workflow-task restore --ledger ...` emits a strict restore report, Tauri exposes a fixed no-argument restore bridge, and AtomReasonX projects restored task summaries during normal runtime workspace load. Provider cache, SQLite, scoring, review promotion, and experiment writes remain untouched. |
-| current checkpoint | P2 AtomReasonX workflow task handoff status | Distinguishes local queued, ledger-admitted, current-session snapshot, restored snapshot, and review-blocked NOMAD operator task rows in the workflow surface using frontend provenance markers so operators cannot confuse pre-admission tasks, freshly executed evidence, restored evidence, or closure/review blockers. This is UI-only state classification and does not add provider cache, SQLite, scoring, review-promotion, or experiment writers. |
+| `2285e0b` | P2 AtomReasonX workflow task handoff status | Distinguishes local queued, ledger-admitted, current-session snapshot, restored snapshot, and review-blocked NOMAD operator task rows in the workflow surface using frontend provenance markers so operators cannot confuse pre-admission tasks, freshly executed evidence, restored evidence, or closure/review blockers. This is UI-only state classification and does not add provider cache, SQLite, scoring, review-promotion, or experiment writers. |
+| current dirty checkpoint | P3 NOMAD source-closure promotion gate | Adds machine-readable `source-closure requirements nomad_perla_psc` and blocks NOMAD operator execution snapshots from promotion until official-interface source evidence, validation summary hashes, review resolution, source-snapshot-only authorization, and record license/citation attribution are all satisfied. This gates SpiroSearch promotion around official NOMAD-derived snapshots; it does not modify NOMAD, replace the official API, or add provider cache, SQLite, scoring, review-promotion, frontend, or experiment writers. |
 
 ## Current Data Source Status
 
@@ -97,7 +124,7 @@ The current branch contains these V35 execution commits:
 | --- | --- | --- |
 | PubChem | Go shadow ready; source settings remain separate from model provider settings. | Later live transport hardening and rate-limit telemetry. |
 | Materials Project | Go shadow ready; API key is configured through source settings and redacted in backend/runtime outputs; `source-provider test-connection materials_project` exposes a sanitized read-only probe contract; AtomReasonX has the source-scoped command/result contract; Python `ConfigCommandPlane` now emits matching sanitized `provider_probe` artifacts, can hand backend-owned keys to a fixed Go `spiroctl` probe runner without renderer key exposure, the desktop command slice executes config-plane actions through a fixed Tauri bridge with persistent idempotency replay, and AtomReasonX projects accepted source-setting command results back into workbench state without secrets or provider facts. | Next source-provider transport work can add read-only live probe ergonomics and later explicit write-authorized import/execution admission; provider cache, SQLite, scoring, and experiment writes remain out of the current operator-task queue. |
-| NOMAD PERLA PSC | Go shadow ready for HTL search/archive parity; archive rate limiting and schema-unrecognized cases route to review. AtomReasonX records known NOMAD sync controls as local operator tasks, Go admits them to an append-only ledger, the CLI has an explicitly authorized execution path that writes a quarantined/pending source snapshot only, the desktop bridge can invoke that path only for admission-backed ledger tasks through a fixed no-token/no-executable-path command surface, the UI projects returned execution reports/manifests back into the operator task list, and reopened runtime sessions can restore those persisted execution reports read-only from ledger plus source-manifest evidence. | Keep archive fallback conservative; add closure/review promotion gates before provider cache, SQLite, scoring, or experiment writes. |
+| NOMAD PERLA PSC | Official-interface migration is partially complete: Go uses NOMAD v1 REST-style `/entries/query` and `/entries/archive/query` paths for HTL search/archive shadow parity; archive rate limiting and schema-unrecognized cases route to review. AtomReasonX records known NOMAD sync controls as local operator tasks, Go admits them to an append-only ledger, the CLI has an explicitly authorized execution path that writes a quarantined/pending source snapshot only, the desktop bridge can invoke that path only for admission-backed ledger tasks through a fixed no-token/no-executable-path command surface, the UI projects returned execution reports/manifests back into the operator task list, and reopened runtime sessions can restore those persisted execution reports read-only from ledger plus source-manifest evidence. Current dirty work adds a closure gate tying validation-summary hashes and writer flags back to the generated snapshot. | Next closure is not more custom NOMAD design: finish official NOMAD/OpenAPI and FAIRmat plugin alignment notes, then add review/promotion so accepted snapshots can move to provider cache, SQLite/local backend, scoring, or experiments only through explicit future writer authorization. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
 | PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts; ready snapshots now require schema-valid Python oracle and parser parity report bodies. | Full dataset acquisition, real parser parity, Python oracle output, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
@@ -111,6 +138,8 @@ The current branch contains these V35 execution commits:
 
 Recent gates run during this checkpoint:
 
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after adding NOMAD source-closure requirements/readiness coverage for execution snapshots, review blockers, and writer-scope drift.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after adding `source-closure requirements nomad_perla_psc` to the V35 read-validation script.
 - `npm.cmd test` in `frontend/atomreasonx` first failed after adding the workflow task handoff status test because the workflow rows did not distinguish `local queued`, `admitted`, `restored snapshot`, or `review blocked`; it then passed with 53 Vitest tests after adding bounded UI classification. A read-only review found that `restored snapshot` was ambiguous with current-session execution; after adding explicit frontend `handoff_source` provenance for current-session execution versus restore projection, `npm.cmd test` passed again with 53 tests.
 - `npm.cmd run build` in `frontend/atomreasonx` passed after the workflow task handoff status UI slice, then passed again after the provenance-marker review fix. A final read-only review found no P0/P1 blockers and two P2 restore-boundary hardening items; after strict nested restored-task config allowlisting and direct rejection coverage for `handoff_source: "current_session_execution"` in restore payloads, `npm.cmd test` passed with 53 Vitest tests and `npm.cmd run build` passed again.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_context_budget_script.ps1` passed after adding the 70% proactive context warning and retaining the 80% hard handoff gate.
@@ -285,9 +314,10 @@ Recent gates run during this checkpoint:
 1. The P3 closure-readiness gate is now machine-checkable, but real data
    closure remains open. `source-snapshot validate` proves manifest and record
    integrity; `source-closure validate` is the production/scientific admission
-   gate and currently blocks PubChemQC and Materials Cloud fixtures.
-   `source-closure requirements pubchemqc|materials_cloud` now reports the
-   exact operator inputs/evidence still required, and
+   gate and currently blocks PubChemQC, Materials Cloud, and unpromoted NOMAD
+   execution snapshots. `source-closure requirements
+   pubchemqc|materials_cloud|nomad_perla_psc` now reports the exact operator
+   inputs/evidence still required, and
    `schemas/source-closure-requirements.schema.json` pins that report contract.
 2. PubChemQC full snapshot import remains open. Do not claim Go replacement
    until dataset-size handling, parser parity, Python oracle comparison,
@@ -305,6 +335,11 @@ Recent gates run during this checkpoint:
    The current repository fixture remains metadata-only and closure-blocked.
 4. NOMAD PERLA live archive behavior remains conservative. Rate limit,
    archive-unavailable, and schema-unrecognized cases must stay review-routed.
+   The next implementation should be official-interface migration work, not
+   custom reinvention: align the query/archive payloads and parser field aliases
+   with NOMAD API/OpenAPI and the FAIRmat perovskite plugin, then implement an
+   explicit review-promotion path before any cache, SQLite, scoring, or
+   experiment writer is introduced.
 5. Crossref/OpenAlex and literature metadata Go parity are future slices, not
    blockers for current data-source P3.
 

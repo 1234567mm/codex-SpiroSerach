@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"spirosearch/internal/providercache"
 )
 
 func TestClosureReadinessBlocksPubChemQCFixture(t *testing.T) {
@@ -78,6 +80,138 @@ func TestClosureReadinessBlocksMaterialsCloudMetadataOnlyFixture(t *testing.T) {
 		if !containsString(report.Reasons, reason) {
 			t.Fatalf("expected reason %q in %#v", reason, report.Reasons)
 		}
+	}
+}
+
+func TestClosureReadinessBlocksNomadExecutionSnapshotBeforeReviewPromotion(t *testing.T) {
+	dir := t.TempDir()
+	writeNomadExecutionSnapshot(t, dir, false, "available")
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Ready {
+		t.Fatalf("NOMAD execution snapshot must not be closure ready before review promotion: %#v", report)
+	}
+	for _, reason := range []string{
+		"quarantine_status_not_ready",
+		"nomad_review_promotion_missing",
+	} {
+		if !containsString(report.Reasons, reason) {
+			t.Fatalf("expected reason %q in %#v", reason, report.Reasons)
+		}
+	}
+}
+
+func TestClosureReadinessRoutesNomadExecutionReviewAndWriterDriftToBlockers(t *testing.T) {
+	dir := t.TempDir()
+	writeNomadExecutionSnapshot(t, dir, true, "rate_limited")
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, reason := range []string{
+		"nomad_archive_not_available",
+		"nomad_review_required",
+		"nomad_review_reasons_unresolved",
+	} {
+		if !containsString(report.Reasons, reason) {
+			t.Fatalf("expected reason %q in %#v", reason, report.Reasons)
+		}
+	}
+
+	replaceSnapshotFile(t, dir, "validation-summary.json", []byte(`{
+  "schema_version": "v35.operator_task_execution.v1",
+  "task_id": "task-start_nomad_sync-ab12cd",
+  "action_type": "start_nomad_sync",
+  "provider": "nomad_perla_psc",
+  "admission_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "execution_status": "source_snapshot_written",
+  "write_authorization_scope": "source_snapshot_only",
+  "live_calls_authorized": true,
+  "provider_cache_written": true,
+  "local_backend_written": false,
+  "scoring_written": false,
+  "experiment_written": false,
+  "started_at": "2026-07-25T00:00:00Z",
+  "target_data_library_path": "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd",
+  "source_manifest_path": "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/source-manifest.json",
+  "normalized_record_count": 1,
+  "provider_response_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "raw_search_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "raw_archive_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "archive_status": "available",
+  "review_required": false,
+  "review_reasons": []
+}`))
+	manifest, err = LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err = BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(report.Reasons, "nomad_source_snapshot_only_authorization_invalid") {
+		t.Fatalf("expected writer drift rejection, got %#v", report.Reasons)
+	}
+}
+
+func TestClosureReadinessRejectsNomadValidationSummaryHashDrift(t *testing.T) {
+	dir := t.TempDir()
+	writeNomadExecutionSnapshot(t, dir, false, "available")
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := nomadExecutionValidationSummary{
+		SchemaVersion:           "v35.operator_task_execution.v1",
+		TaskID:                  "task-start_nomad_sync-ab12cd",
+		ActionType:              "start_nomad_sync",
+		Provider:                nomadPerlaProvider,
+		AdmissionHash:           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ExecutionStatus:         "source_snapshot_written",
+		WriteAuthorizationScope: "source_snapshot_only",
+		LiveCallsAuthorized:     true,
+		StartedAt:               "2026-07-25T00:00:00Z",
+		TargetDataLibraryPath:   "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd",
+		SourceManifestPath:      "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/source-manifest.json",
+		NormalizedRecordCount:   1,
+		ProviderResponseHash:    manifestRoleStableHash(t, dir, manifest, "normalized_records", 0),
+		RawSearchHash:           "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		RawArchiveHash:          manifestRoleStableHash(t, dir, manifest, "raw_archive", -1),
+		ArchiveStatus:           "available",
+		ReviewRequired:          false,
+		ReviewReasons:           []string{},
+	}
+	raw, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaceSnapshotFile(t, dir, "validation-summary.json", raw)
+
+	manifest, err = LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(report.Reasons, "nomad_validation_summary_invalid") {
+		t.Fatalf("expected summary hash drift rejection, got %#v", report.Reasons)
 	}
 }
 
@@ -648,6 +782,185 @@ func writeClosureReadyMaterialsCloudSnapshotWithMutation(
 	if err := os.WriteFile(filepath.Join(dir, "source-manifest.json"), rawManifest, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeNomadExecutionSnapshot(t *testing.T, dir string, reviewRequired bool, archiveStatus string) {
+	t.Helper()
+	reviewReasons := []string{}
+	if reviewRequired {
+		reviewReasons = []string{"archive_rate_limited"}
+	}
+	record := map[string]any{
+		"contract_version": "v1.provider_response",
+		"response_id":      "nomad-response-1",
+		"provider":         nomadPerlaProvider,
+		"query":            "positive_htl_perovskite",
+		"normalized": map[string]any{
+			"entry_id":          "mock_entry_spiro_exec_001",
+			"pce_percent":       21.3,
+			"review_required":   reviewRequired,
+			"review_reasons":    reviewReasons,
+			"archive_status":    archiveStatus,
+			"license":           "CC-BY-4.0",
+			"required_citation": "NOMAD PERLA PSC public records",
+		},
+		"source_url":   "https://nomad-lab.eu/prod/v1/api/v1/entries/query",
+		"retrieved_at": "2026-07-25T00:00:00Z",
+		"license_hint": "NOMAD public API terms",
+		"raw_hash":     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"confidence":   0.61,
+		"trust_level":  "T2_public_repository",
+	}
+	recordsValue := []map[string]any{record}
+	rawSearch := map[string]any{"data": []any{map[string]any{"entry_id": "mock_entry_spiro_exec_001"}}}
+	rawArchive := map[string]any{"data": []any{map[string]any{"archive": map[string]any{"metadata": map[string]any{"datasets": []any{map[string]any{"license": "CC-BY-4.0"}}}}}}}
+	providerResponseHash, err := providercache.StableHash(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawSearchHash, err := providercache.StableHash(rawSearch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawArchiveHash, err := providercache.StableHash(rawArchive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := json.MarshalIndent(recordsValue, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	validationSummary, err := json.MarshalIndent(map[string]any{
+		"schema_version":            "v35.operator_task_execution.v1",
+		"task_id":                   "task-start_nomad_sync-ab12cd",
+		"action_type":               "start_nomad_sync",
+		"provider":                  nomadPerlaProvider,
+		"admission_hash":            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"execution_status":          "source_snapshot_written",
+		"write_authorization_scope": "source_snapshot_only",
+		"live_calls_authorized":     true,
+		"provider_cache_written":    false,
+		"local_backend_written":     false,
+		"scoring_written":           false,
+		"experiment_written":        false,
+		"started_at":                "2026-07-25T00:00:00Z",
+		"target_data_library_path":  "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd",
+		"source_manifest_path":      "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/source-manifest.json",
+		"normalized_record_count":   1,
+		"provider_response_hash":    providerResponseHash,
+		"raw_search_hash":           rawSearchHash,
+		"raw_archive_hash":          rawArchiveHash,
+		"archive_status":            archiveStatus,
+		"review_required":           reviewRequired,
+		"review_reasons":            reviewReasons,
+	}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawSearchBody, err := json.MarshalIndent(rawSearch, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawArchiveBody, err := json.MarshalIndent(rawArchive, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{
+		"raw/nomad-search.json":   rawSearchBody,
+		"raw/nomad-archive.json":  rawArchiveBody,
+		"normalized-records.json": records,
+		"validation-summary.json": validationSummary,
+	}
+	roles := map[string]string{
+		"raw/nomad-search.json":   "raw_search",
+		"raw/nomad-archive.json":  "raw_archive",
+		"normalized-records.json": "normalized_records",
+		"validation-summary.json": "validation_summary",
+	}
+	snapshotFiles := make([]File, 0, len(files))
+	for _, relativePath := range []string{
+		"raw/nomad-search.json",
+		"raw/nomad-archive.json",
+		"normalized-records.json",
+		"validation-summary.json",
+	} {
+		content := files[relativePath]
+		fullPath := filepath.Join(dir, filepath.FromSlash(relativePath))
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fullPath, content, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(content)
+		snapshotFiles = append(snapshotFiles, File{
+			RelativePath: relativePath,
+			Bytes:        int64(len(content)),
+			SHA256:       hex.EncodeToString(digest[:]),
+			Role:         roles[relativePath],
+		})
+	}
+	notes := "Synthetic NOMAD execution snapshot for closure gate tests."
+	manifest := Manifest{
+		SchemaVersion:         SchemaVersion,
+		SourceID:              nomadPerlaProvider,
+		DatasetDOI:            "nomad_perla_psc:operator_task:task-start_nomad_sync-ab12cd",
+		DatasetVersion:        "v35.operator_task_execution.task-start_nomad_sync-ab12cd",
+		RetrievedAt:           "2026-07-25T00:00:00Z",
+		SourceURL:             "https://nomad-lab.eu/prod/v1/api/v1/entries/query",
+		LicenseHint:           "NOMAD public API terms",
+		RequiredCitation:      "NOMAD PERLA PSC public records; preserve record-level DOI, license, and NOMAD attribution from source payloads.",
+		Files:                 snapshotFiles,
+		Importer:              Importer{Name: "spiroctl-workflow-task-execute", Version: "v35.operator_task_execution.v1", NormalizerVersion: "nomad-perla-psc-go-shadow-v1"},
+		NormalizedRecordCount: 1,
+		QuarantineStatus:      "pending_import",
+		Notes:                 &notes,
+	}
+	rawManifest, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "source-manifest.json"), rawManifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func manifestRoleStableHash(t *testing.T, dir string, manifest Manifest, role string, arrayIndex int) string {
+	t.Helper()
+	var relativePath string
+	for _, file := range manifest.Files {
+		if file.Role == role {
+			if relativePath != "" {
+				t.Fatalf("duplicate role %s", role)
+			}
+			relativePath = file.RelativePath
+		}
+	}
+	if relativePath == "" {
+		t.Fatalf("missing role %s", role)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(relativePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	var payload any
+	if err := decoder.Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if arrayIndex >= 0 {
+		values, ok := payload.([]any)
+		if !ok || arrayIndex >= len(values) {
+			t.Fatalf("role %s payload does not contain array index %d", role, arrayIndex)
+		}
+		payload = values[arrayIndex]
+	}
+	hash, err := providercache.StableHash(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hash
 }
 
 func replaceSnapshotFile(t *testing.T, dir string, relativePath string, content []byte) {

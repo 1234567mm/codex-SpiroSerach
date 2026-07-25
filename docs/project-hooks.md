@@ -23,6 +23,9 @@ The hygiene check is intentionally local and fast. It currently verifies:
 - `.qoder/` stays ignored and untracked,
 - project skills have valid frontmatter and UI metadata,
 - governance entry documents decode as strict UTF-8,
+- agent entry/governance/skills retain user-provided reference migration
+  guardrails so official API and open-source references are not lost after
+  context compaction,
 - `reasonix.toml` routes skills only through `.codex/skills`,
 - AtomReasonX lockfile package entries have valid versions,
 - AtomReasonX command adapters do not import read-only artifact APIs.

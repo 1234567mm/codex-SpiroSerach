@@ -145,12 +145,15 @@ gate in status or commit notes.
 ## External Architecture References
 
 Reference repositories can influence architecture, but copying is not the
-default implementation path. Before absorbing external code or patterns:
+default implementation path. User-provided official APIs, datasets, and
+open-source repositories must be recorded in the active plan before relying on
+them so context compaction cannot erase the migration target. Before absorbing
+external code or patterns:
 
 - record the repository, revision if known, license, and exact pattern being
   used;
-- prefer reimplementing the architecture shape in local style over copying
-  source files;
+- prefer migrating or adapting the official interface and proven architecture
+  shape over inventing a local substitute;
 - keep SpiroSearch provider/review/scoring/artifact boundaries authoritative;
 - do not replace a proven local module wholesale unless parity tests, data
   contracts, and license review are already in the slice.
@@ -158,6 +161,10 @@ default implementation path. Before absorbing external code or patterns:
 If the reference only suggests a UI or command-plane pattern, implement the
 local equivalent and cite it in docs or plans; do not import product-specific
 behavior or secret-handling assumptions.
+
+Current durable references include NOMAD Solar Cells/API GUI,
+FAIRmat-NFDI/nomad-perovskite-solar-cells-database, esengine/DeepSeek-Reasonix,
+CherryHQ/cherry-studio, tufeiping/api-for-cherrystudio, and openai/codex.
 
 ## Generated Files
 

@@ -270,7 +270,7 @@ func TestSourceClosureValidateAcceptsMaterialsCloudSingleRecordScientificBundle(
 }
 
 func TestSourceClosureRequirementsEmitsMachineReadableBacklog(t *testing.T) {
-	for _, sourceID := range []string{"pubchemqc", "materials_cloud"} {
+	for _, sourceID := range []string{"pubchemqc", "materials_cloud", "nomad_perla_psc"} {
 		t.Run(sourceID, func(t *testing.T) {
 			output, err := captureStdout(func() error {
 				return run([]string{"source-closure", "requirements", sourceID})
@@ -599,6 +599,17 @@ func TestWorkflowTaskExecuteWritesNomadSourceSnapshotWithExplicitAuthorization(t
 	}
 	if err := run([]string{"source-snapshot", "validate", report.SourceManifestPath}); err != nil {
 		t.Fatalf("source-snapshot validate failed for execution output: %v", err)
+	}
+	closureOutput, closureErr := captureStdout(func() error {
+		return run([]string{"source-closure", "validate", report.SourceManifestPath})
+	})
+	if closureErr == nil || !strings.Contains(closureErr.Error(), "nomad_review_promotion_missing") {
+		t.Fatalf("expected NOMAD closure promotion block, err=%v output=%s", closureErr, closureOutput)
+	}
+	if !strings.Contains(closureOutput, `"source_id":"nomad_perla_psc"`) ||
+		!strings.Contains(closureOutput, `"nomad_review_promotion_missing"`) ||
+		!strings.Contains(closureOutput, `"ready":false`) {
+		t.Fatalf("NOMAD closure output did not expose the promotion blocker: %s", closureOutput)
 	}
 	summaryBody, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(target), "validation-summary.json"))
 	if err != nil {

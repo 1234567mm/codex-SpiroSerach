@@ -53,6 +53,29 @@ func TestClosureRequirementsReportForMaterialsCloud(t *testing.T) {
 	}
 }
 
+func TestClosureRequirementsReportForNomadPerlaPSC(t *testing.T) {
+	report, err := BuildClosureRequirementsReport(nomadPerlaProvider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.SchemaVersion != ClosureRequirementsSchemaVersion ||
+		report.SourceID != nomadPerlaProvider ||
+		report.Status != "inputs_required" {
+		t.Fatalf("report identity mismatch: %#v", report)
+	}
+	for _, code := range []string{
+		"nomad_operator_execution_snapshot",
+		"nomad_validation_summary",
+		"nomad_review_resolution",
+		"nomad_source_snapshot_only_authorization",
+		"nomad_record_license_attribution",
+	} {
+		if !hasRequirementCode(report, code) {
+			t.Fatalf("missing NOMAD requirement %q in %#v", code, report.Requirements)
+		}
+	}
+}
+
 func TestClosureRequirementsRejectsUnknownSource(t *testing.T) {
 	if _, err := BuildClosureRequirementsReport("unknown"); err == nil {
 		t.Fatalf("expected unknown source rejection")

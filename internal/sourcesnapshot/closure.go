@@ -1,9 +1,16 @@
 package sourcesnapshot
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
+
+	"spirosearch/internal/providercache"
 )
 
 const (
@@ -15,16 +22,20 @@ const (
 var (
 	closureRequirementCategories = closureSetOf(
 		"checksum",
+		"authorization",
 		"license",
 		"operator_input",
 		"parity",
 		"parser_boundary",
 		"record_content",
+		"review_gate",
 		"units",
 	)
 	closureRequirementStatuses = closureSetOf("inputs_required")
-	closureRequirementSources  = closureSetOf(pubchemqcProvider, materialsCloudProvider)
+	closureRequirementSources  = closureSetOf(pubchemqcProvider, materialsCloudProvider, nomadPerlaProvider)
 )
+
+const nomadPerlaProvider = "nomad_perla_psc"
 
 type ClosureRequirement struct {
 	Code        string   `json:"code"`
@@ -87,6 +98,18 @@ func BuildClosureRequirementsReport(sourceID string) (ClosureRequirementsReport,
 		report.Notes = []string{
 			"Materials Cloud is heterogeneous archive infrastructure, not a Materials Project-style summary API in this slice.",
 			"Python may remain the parser bridge for AiiDA, CIF, pymatgen, or chemistry-heavy record formats.",
+		}
+	case nomadPerlaProvider:
+		report.Requirements = []ClosureRequirement{
+			requirement("nomad_operator_execution_snapshot", "operator_input", "An admitted NOMAD operator-task execution snapshot must exist under data/lib/nomad_perla_psc/snapshots and stay bound to its ledger admission hash.", "source-snapshot", "operator_task_ledger"),
+			requirement("nomad_validation_summary", "checksum", "The source manifest must list a validation summary whose task id, source manifest path, hashes, archive status, and writer flags match the operator execution contract.", "source-closure", "review_gate"),
+			requirement("nomad_review_resolution", "review_gate", "Rate-limited, archive-unavailable, schema-unrecognized, or other review_required snapshots must be resolved before promotion.", "source-closure", "review_gate"),
+			requirement("nomad_source_snapshot_only_authorization", "authorization", "NOMAD execution may only authorize source-snapshot writes; provider cache, SQLite/local backend, scoring, and experiment writer flags must remain false.", "source-closure", "operator_task_execution"),
+			requirement("nomad_record_license_attribution", "license", "Record-level DOI, license, and NOMAD attribution must remain available before facts can leave quarantine.", "source-closure", "artifact_policy"),
+		}
+		report.Notes = []string{
+			"NOMAD operator execution snapshots are acquisition evidence, not provider cache or scoring inputs.",
+			"Promotion to cache, SQLite, scoring, review, or experiments requires a separate explicit writer gate after this closure report passes.",
 		}
 	default:
 		return ClosureRequirementsReport{}, fmt.Errorf("source closure requirements are not defined for source_id=%s", sourceID)
@@ -251,6 +274,8 @@ func evaluateClosureReadiness(dir string, manifest Manifest, records []map[strin
 		evaluatePubChemQCClosure(dir, manifest, records, evidence, add)
 	case materialsCloudProvider:
 		evaluateMaterialsCloudClosure(dir, manifest, records, evidence, add)
+	case nomadPerlaProvider:
+		evaluateNomadPerlaClosure(dir, manifest, records, add)
 	}
 
 	sort.Strings(report.Reasons)
@@ -259,6 +284,222 @@ func evaluateClosureReadiness(dir string, manifest Manifest, records []map[strin
 		report.ClosureGateStatus = "pass"
 	}
 	return report
+}
+
+type nomadExecutionValidationSummary struct {
+	SchemaVersion           string   `json:"schema_version"`
+	TaskID                  string   `json:"task_id"`
+	ActionType              string   `json:"action_type"`
+	Provider                string   `json:"provider"`
+	AdmissionHash           string   `json:"admission_hash"`
+	ExecutionStatus         string   `json:"execution_status"`
+	WriteAuthorizationScope string   `json:"write_authorization_scope"`
+	LiveCallsAuthorized     bool     `json:"live_calls_authorized"`
+	ProviderCacheWritten    bool     `json:"provider_cache_written"`
+	LocalBackendWritten     bool     `json:"local_backend_written"`
+	ScoringWritten          bool     `json:"scoring_written"`
+	ExperimentWritten       bool     `json:"experiment_written"`
+	StartedAt               string   `json:"started_at"`
+	TargetDataLibraryPath   string   `json:"target_data_library_path"`
+	SourceManifestPath      string   `json:"source_manifest_path"`
+	NormalizedRecordCount   int      `json:"normalized_record_count"`
+	ProviderResponseHash    string   `json:"provider_response_hash"`
+	RawSearchHash           string   `json:"raw_search_hash"`
+	RawArchiveHash          string   `json:"raw_archive_hash"`
+	ArchiveStatus           string   `json:"archive_status"`
+	ReviewRequired          bool     `json:"review_required"`
+	ReviewReasons           []string `json:"review_reasons"`
+}
+
+func evaluateNomadPerlaClosure(dir string, manifest Manifest, records []map[string]any, add func(string)) {
+	if manifest.Importer.Name != "spiroctl-workflow-task-execute" ||
+		manifest.Importer.Version != "v35.operator_task_execution.v1" ||
+		manifest.Importer.NormalizerVersion != "nomad-perla-psc-go-shadow-v1" {
+		add("nomad_operator_execution_snapshot_missing")
+	}
+	if manifest.QuarantineStatus != "ready" {
+		add("nomad_review_promotion_missing")
+	}
+	if manifestFileRoles(manifest)["raw_search"] == 0 {
+		add("raw_search_missing")
+	}
+	for _, record := range records {
+		if stringField(record, "provider") != nomadPerlaProvider {
+			add("nomad_provider_response_missing")
+		}
+		normalized, ok := record["normalized"].(map[string]any)
+		if !ok {
+			add("nomad_provider_response_missing")
+			continue
+		}
+		if boolField(normalized, "review_required", false) {
+			add("nomad_review_required")
+		}
+		if reasons, ok := normalized["review_reasons"].([]any); ok && len(reasons) > 0 {
+			add("nomad_review_reasons_unresolved")
+		}
+		if stringField(normalized, "license") == "" || stringField(normalized, "required_citation") == "" {
+			add("nomad_record_license_attribution_missing")
+		}
+	}
+	if strings.TrimSpace(dir) == "" {
+		return
+	}
+	summary, err := loadNomadExecutionValidationSummary(dir, manifest)
+	if err != nil {
+		add("nomad_validation_summary_invalid")
+		return
+	}
+	if summary.SchemaVersion != "v35.operator_task_execution.v1" ||
+		summary.ActionType != "start_nomad_sync" ||
+		summary.Provider != nomadPerlaProvider ||
+		summary.ExecutionStatus != "source_snapshot_written" ||
+		summary.NormalizedRecordCount != len(records) ||
+		manifest.DatasetDOI != "nomad_perla_psc:operator_task:"+summary.TaskID ||
+		manifest.DatasetVersion != "v35.operator_task_execution."+summary.TaskID ||
+		summary.TargetDataLibraryPath == "" ||
+		summary.SourceManifestPath != summary.TargetDataLibraryPath+"/source-manifest.json" ||
+		summary.LiveCallsAuthorized != true ||
+		!isSHA256(summary.AdmissionHash) ||
+		!isSHA256(summary.ProviderResponseHash) ||
+		!isSHA256(summary.RawSearchHash) ||
+		!isSHA256(summary.RawArchiveHash) {
+		add("nomad_validation_summary_invalid")
+	}
+	if err := validateNomadSummaryHashes(dir, manifest, records, summary); err != nil {
+		add("nomad_validation_summary_invalid")
+	}
+	if summary.WriteAuthorizationScope != "source_snapshot_only" ||
+		summary.ProviderCacheWritten ||
+		summary.LocalBackendWritten ||
+		summary.ScoringWritten ||
+		summary.ExperimentWritten {
+		add("nomad_source_snapshot_only_authorization_invalid")
+	}
+	if summary.ArchiveStatus != "available" {
+		add("nomad_archive_not_available")
+	}
+	if summary.ReviewRequired {
+		add("nomad_review_required")
+	}
+	if len(summary.ReviewReasons) > 0 {
+		add("nomad_review_reasons_unresolved")
+	}
+}
+
+func validateNomadSummaryHashes(
+	dir string,
+	manifest Manifest,
+	records []map[string]any,
+	summary nomadExecutionValidationSummary,
+) error {
+	if len(records) != 1 {
+		return fmt.Errorf("nomad normalized record count = %d", len(records))
+	}
+	rawSearch, err := loadManifestRoleJSON(dir, manifest, "raw_search")
+	if err != nil {
+		return err
+	}
+	rawArchive, err := loadManifestRoleJSON(dir, manifest, "raw_archive")
+	if err != nil {
+		return err
+	}
+	providerResponseHash, err := providercache.StableHash(records[0])
+	if err != nil {
+		return err
+	}
+	rawSearchHash, err := providercache.StableHash(rawSearch)
+	if err != nil {
+		return err
+	}
+	rawArchiveHash, err := providercache.StableHash(rawArchive)
+	if err != nil {
+		return err
+	}
+	if providerResponseHash != summary.ProviderResponseHash ||
+		rawSearchHash != summary.RawSearchHash ||
+		rawArchiveHash != summary.RawArchiveHash {
+		return errors.New("nomad validation summary hashes do not match manifest files")
+	}
+	return nil
+}
+
+func loadManifestRoleJSON(dir string, manifest Manifest, role string) (any, error) {
+	var candidates []string
+	for _, file := range manifest.Files {
+		if file.Role == role {
+			candidates = append(candidates, file.RelativePath)
+		}
+	}
+	if len(candidates) != 1 {
+		return nil, fmt.Errorf("manifest role %s count = %d", role, len(candidates))
+	}
+	path, err := JoinSafe(dir, candidates[0])
+	if err != nil {
+		return nil, err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var payload any
+	if err := decoder.Decode(&payload); err != nil {
+		return nil, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil {
+		return nil, fmt.Errorf("manifest role %s has trailing JSON", role)
+	} else if !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func loadNomadExecutionValidationSummary(dir string, manifest Manifest) (nomadExecutionValidationSummary, error) {
+	var candidates []string
+	for _, file := range manifest.Files {
+		if file.Role == "validation_summary" {
+			candidates = append(candidates, file.RelativePath)
+		}
+	}
+	if len(candidates) != 1 {
+		return nomadExecutionValidationSummary{}, fmt.Errorf("nomad validation summary count = %d", len(candidates))
+	}
+	path, err := JoinSafe(dir, candidates[0])
+	if err != nil {
+		return nomadExecutionValidationSummary{}, err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nomadExecutionValidationSummary{}, err
+	}
+	var summary nomadExecutionValidationSummary
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&summary); err != nil {
+		return nomadExecutionValidationSummary{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil {
+		return nomadExecutionValidationSummary{}, fmt.Errorf("nomad validation summary has trailing JSON")
+	} else if !errors.Is(err, io.EOF) {
+		return nomadExecutionValidationSummary{}, err
+	}
+	return summary, nil
+}
+
+func isSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, ch := range value {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 func validateSharedClosureEvidence(evidence ClosureEvidence, manifest Manifest, add func(string)) {

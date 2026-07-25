@@ -52,9 +52,9 @@ param([string]$RepositoryRoot)
 Write-Output 'PASS: context budget hook fixture passed.'
 exit 0
 '@
-    Set-Utf8File (Join-Path $root 'AGENTS.md') "# Agents`n"
-    Set-Utf8File (Join-Path $root 'CLAUDE.md') "# Claude`nUse a milestone gate, then targeted reverification for bounded review fixes.`n"
-    Set-Utf8File (Join-Path $root 'docs\agent-collaboration-governance.md') "# Governance`nUse broad gates as milestone evidence and report verification scope.`n"
+    Set-Utf8File (Join-Path $root 'AGENTS.md') "# Agents`n## External References`nNOMAD API analysis/OpenAPI GUI`nCherryHQ/cherry-studio`nopenai/codex`n"
+    Set-Utf8File (Join-Path $root 'CLAUDE.md') "# Claude`nUse a milestone gate, then targeted reverification for bounded review fixes.`n## Reference Migration Policy`n"
+    Set-Utf8File (Join-Path $root 'docs\agent-collaboration-governance.md') "# Governance`nUse broad gates as milestone evidence and report verification scope.`n## Reference Migration`n"
     Set-Utf8File (Join-Path $root 'docs\ai-collaboration-instruction-templates.md') "# Templates`n"
     Set-Utf8File (Join-Path $root 'docs\project-hooks.md') "# Project Hooks`nUse check-context-budget.ps1 with SPIRO_CONTEXT_USAGE_PERCENT and SPIRO_CONTEXT_HANDOFF_PATH.`n"
     Set-Utf8File (Join-Path $root 'plans\v35-execution-status-and-next-slices.md') "# V35`nOperational addendum: roughly 80% context usage requires fewer duplicate tests and a quality-preserving test budget.`n"
@@ -62,9 +62,9 @@ exit 0
     Set-Utf8File (Join-Path $root '.codex\skills\example\agents\openai.yaml') "interface:`n  display_name: Example`n"
     Set-Utf8File (Join-Path $root '.codex\skills\context-handoff\SKILL.md') "---`nname: context-handoff`ndescription: Context handoff skill`n---`n# Context Handoff`n## Context Budget Trigger`nAt 80% context usage, run check-context-budget.ps1.`n"
     Set-Utf8File (Join-Path $root '.codex\skills\context-handoff\agents\openai.yaml') "interface:`n  display_name: Context Handoff`n"
-    Set-Utf8File (Join-Path $root '.codex\skills\review-ship\SKILL.md') "---`nname: review-ship`ndescription: Review ship skill`n---`n# Review Ship`nUse targeted reverification.`n## Review-Fix Verification Record`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\review-ship\SKILL.md') "---`nname: review-ship`ndescription: Review ship skill`n---`n# Review Ship`nUse targeted reverification.`n## Review-Fix Verification Record`nUser-provided reference`n"
     Set-Utf8File (Join-Path $root '.codex\skills\review-ship\agents\openai.yaml') "interface:`n  display_name: Review Ship`n"
-    Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\SKILL.md') "---`nname: worktree-tdd`ndescription: Worktree TDD skill`n---`n## Targeted Reverification`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\SKILL.md') "---`nname: worktree-tdd`ndescription: Worktree TDD skill`n---`n## Targeted Reverification`n## External Architecture References`nCherryHQ/cherry-studio`n"
     Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\agents\openai.yaml') "interface:`n  display_name: Worktree TDD`n"
     Set-Utf8File (Join-Path $root '.codex\skills\codebase-memory-mcp\SKILL.md') "---`nname: codebase-memory-mcp`ndescription: Codebase memory skill`n---`n## Discovery Budget`n"
     Set-Utf8File (Join-Path $root '.codex\skills\codebase-memory-mcp\agents\openai.yaml') "interface:`n  display_name: Codebase Memory`n"

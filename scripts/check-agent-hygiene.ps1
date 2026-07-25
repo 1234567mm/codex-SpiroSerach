@@ -303,19 +303,23 @@ foreach ($relativePath in $governanceFiles) {
 $processGuardrails = @(
     @{
         RelativePath = 'CLAUDE.md'
-        RequiredText = @('milestone gate', 'targeted reverification')
+        RequiredText = @('milestone gate', 'targeted reverification', 'Reference Migration Policy')
     },
     @{
         RelativePath = 'docs\agent-collaboration-governance.md'
-        RequiredText = @('broad gates as milestone evidence', 'verification scope')
+        RequiredText = @('broad gates as milestone evidence', 'verification scope', 'Reference Migration')
+    },
+    @{
+        RelativePath = 'AGENTS.md'
+        RequiredText = @('External References', 'NOMAD API analysis/OpenAPI GUI', 'CherryHQ/cherry-studio', 'openai/codex')
     },
     @{
         RelativePath = '.codex\skills\review-ship\SKILL.md'
-        RequiredText = @('targeted reverification', 'Review-Fix Verification Record')
+        RequiredText = @('targeted reverification', 'Review-Fix Verification Record', 'User-provided reference')
     },
     @{
         RelativePath = '.codex\skills\worktree-tdd\SKILL.md'
-        RequiredText = @('Targeted Reverification')
+        RequiredText = @('Targeted Reverification', 'External Architecture References', 'CherryHQ/cherry-studio')
     },
     @{
         RelativePath = '.codex\skills\codebase-memory-mcp\SKILL.md'

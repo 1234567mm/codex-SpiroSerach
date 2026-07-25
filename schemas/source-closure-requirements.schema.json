@@ -13,7 +13,7 @@
   ],
   "properties": {
     "schema_version": { "const": "v35.source_closure_requirements.v1" },
-    "source_id": { "enum": ["pubchemqc", "materials_cloud"] },
+    "source_id": { "enum": ["pubchemqc", "materials_cloud", "nomad_perla_psc"] },
     "status": { "enum": ["inputs_required"] },
     "requirements": {
       "type": "array",
@@ -39,12 +39,14 @@
         },
         "category": {
           "enum": [
+            "authorization",
             "checksum",
             "license",
             "operator_input",
             "parity",
             "parser_boundary",
             "record_content",
+            "review_gate",
             "units"
           ]
         },
