@@ -10,6 +10,7 @@ import {
   createTauriWorkflowTaskExecutor,
   projectWorkflowTaskExecutionReport,
 } from "./adapters/workflow-task-execution-adapter";
+import { createTauriWorkflowTaskRestoreReader } from "./adapters/workflow-task-restore-adapter";
 import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import {
   buildReadonlyRunRecentOutputDirs,
@@ -29,6 +30,9 @@ import type {
 const baseWorkspace = fixture as unknown as AtomReasonXWorkspaceState;
 const commandAdapter = createRuntimeWorkbenchCommandAdapter();
 const runtimeWorkflowTaskExecutor = createTauriWorkflowTaskExecutor();
+const runtimeWorkflowTaskRestoreReader = hasTauriInvoke()
+  ? createTauriWorkflowTaskRestoreReader()
+  : undefined;
 
 const AtomReasonXRoot: React.FC = () => {
   const [showSettings, setShowSettings] = React.useState(false);
@@ -41,6 +45,7 @@ const AtomReasonXRoot: React.FC = () => {
   const runtimeReadAdapter = React.useMemo(() => createRuntimeWorkbenchReadAdapter({
     baseWorkspace,
     readonlyOutputDir,
+    workflowTaskRestoreReader: runtimeWorkflowTaskRestoreReader,
   }), [readonlyOutputDir]);
   const readonlyRunConfig = React.useMemo(
     () => buildReadonlyRunOperatorConfig(readonlyOutputDir),
@@ -162,3 +167,9 @@ const isAtomReasonXCommandResult = (value: unknown): value is AtomReasonXCommand
   && (value as { schema_version?: unknown }).schema_version === "v23.action_result.v1"
   && Array.isArray((value as { output_artifacts?: unknown }).output_artifacts)
 );
+
+function hasTauriInvoke(): boolean {
+  return typeof (globalThis as {
+    __TAURI__?: { core?: { invoke?: unknown } };
+  }).__TAURI__?.core?.invoke === "function";
+}

@@ -54,6 +54,13 @@ import {
   projectWorkflowTaskExecutionReport,
   validateOperatorTaskExecutionReport,
 } from "../adapters/workflow-task-execution-adapter";
+import {
+  OPERATOR_TASK_RESTORE_SCHEMA_VERSION,
+  createTauriWorkflowTaskRestoreReader,
+  projectWorkflowTaskRestoreReport,
+  type OperatorTaskRestoreReport,
+  validateOperatorTaskRestoreReport,
+} from "../adapters/workflow-task-restore-adapter";
 import { projectSourceSettingsCommandResult } from "../adapters/source-settings-command-projection";
 import { projectWorkflowCommandTaskResult } from "../adapters/workflow-command-task-projection";
 import {
@@ -90,6 +97,47 @@ const APP_SHELL_MODULE = import.meta.glob<string>("../AppShell.tsx", {
   eager: true,
   import: "default",
   query: "?raw",
+});
+
+const executionReportForTask = (
+  task: Pick<AtomReasonXWorkspaceState["operator_tasks"][number], "task_id" | "admission_hash">,
+  overrides: Partial<OperatorTaskExecutionReport> = {},
+): OperatorTaskExecutionReport => ({
+  schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+  task_id: task.task_id,
+  action_type: "start_nomad_sync",
+  provider: "nomad_perla_psc",
+  admission_hash: task.admission_hash ?? "a".repeat(64),
+  execution_status: "source_snapshot_written",
+  write_authorization_scope: "source_snapshot_only",
+  live_calls_authorized: true,
+  provider_cache_written: false,
+  local_backend_written: false,
+  scoring_written: false,
+  experiment_written: false,
+  started_at: "2026-07-25T00:00:00Z",
+  target_data_library_path: `data/lib/nomad_perla_psc/snapshots/run-${task.task_id}`,
+  source_manifest_path: `data/lib/nomad_perla_psc/snapshots/run-${task.task_id}/source-manifest.json`,
+  normalized_record_count: 2,
+  provider_response_hash: "b".repeat(64),
+  raw_search_hash: "c".repeat(64),
+  raw_archive_hash: "d".repeat(64),
+  archive_status: "available",
+  review_required: false,
+  review_reasons: [],
+  ...overrides,
+});
+
+const restoreReportForTasks = (
+  restored_tasks: AtomReasonXWorkspaceState["operator_tasks"],
+): OperatorTaskRestoreReport => ({
+  schema_version: OPERATOR_TASK_RESTORE_SCHEMA_VERSION,
+  read_authorization_scope: "operator_task_snapshots_readonly",
+  provider_cache_written: false,
+  local_backend_written: false,
+  scoring_written: false,
+  experiment_written: false,
+  restored_tasks,
 });
 
 describe("AtomReasonX contract fixtures", () => {
@@ -1822,6 +1870,73 @@ describe("AtomReasonX contract fixtures", () => {
     expect(JSON.stringify(projected.operator_tasks)).not.toContain("spiroctl.exe");
   });
 
+  it("restores persisted NOMAD execution reports during runtime workspace load", async () => {
+    const workspace = JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState;
+    const workflowAction = workspace.command_actions.find(item => item.action_type === "start_nomad_sync");
+    const adapter = createRuntimeWorkbenchCommandAdapter();
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "nomad-sync-restore-report",
+      expectedTargetVersion: "0",
+    });
+    const result = await submitWorkflowCommandAction(dispatcher, workflowAction!) as AtomReasonXCommandResult;
+    const queued = projectWorkflowCommandTaskResult(workspace, result).operator_tasks[0];
+    const restoredTask = {
+      ...queued,
+      admission_status: "admitted" as const,
+      admission_hash: "a".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+      execution_report: executionReportForTask({
+        task_id: queued.task_id,
+        admission_hash: "a".repeat(64),
+      }),
+    };
+    const restoreReport = restoreReportForTasks([restoredTask]);
+    const runtime = createRuntimeWorkbenchReadAdapter({
+      baseWorkspace: workspace,
+      workflowTaskRestoreReader: {
+        async restore() {
+          return validateOperatorTaskRestoreReport(restoreReport);
+        },
+      },
+    });
+    const restoreCalls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const tauriRestorer = createTauriWorkflowTaskRestoreReader({
+      invoke: async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
+        restoreCalls.push({ command, args });
+        return restoreReport as T;
+      },
+    });
+
+    const loaded = await runtime.adapter.loadWorkspace();
+    const nativeRestore = await tauriRestorer.restore();
+    const duplicateProjection = projectWorkflowTaskRestoreReport({
+      ...loaded,
+      operator_tasks: [queued, ...loaded.operator_tasks],
+    }, validateOperatorTaskRestoreReport(restoreReport));
+
+    expect(runtime.readOnly).toBe(false);
+    expect(loaded.operator_tasks).toHaveLength(1);
+    expect(loaded.operator_tasks[0].execution_report).toMatchObject({
+      schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+      source_manifest_path: restoredTask.execution_report.source_manifest_path,
+      provider_cache_written: false,
+      local_backend_written: false,
+      scoring_written: false,
+      experiment_written: false,
+    });
+    expect(canExecuteWorkflowTask(loaded.operator_tasks[0])).toBe(false);
+    expect(duplicateProjection.operator_tasks).toHaveLength(1);
+    expect(nativeRestore.restored_tasks).toHaveLength(1);
+    expect(restoreCalls).toEqual([{ command: "restore_workflow_tasks", args: undefined }]);
+    expect(JSON.stringify(restoreCalls)).not.toContain("ledger");
+    expect(JSON.stringify(restoreCalls)).not.toContain("spiroctl");
+    expect(loaded.knowledge_library).toEqual(workspace.knowledge_library);
+    expect(JSON.stringify(loaded.operator_tasks)).not.toContain("api_key");
+    expect(JSON.stringify(loaded.operator_tasks)).not.toContain("readonly_token");
+    expect(JSON.stringify(loaded.operator_tasks)).not.toContain("spiroctl.exe");
+  });
+
   it("rejects execution reports that drift from the schema contract", () => {
     const request = {
       schema_version: "v35.operator_task_execution_request.v1" as const,
@@ -1865,6 +1980,52 @@ describe("AtomReasonX contract fixtures", () => {
       { ...report, source_manifest_path: "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/../source-manifest.json" },
     ]) {
       expect(() => validateOperatorTaskExecutionReport(mutated, request)).toThrow();
+    }
+  });
+
+  it("rejects restore reports that drift from the readonly restore contract", () => {
+    const task = {
+      schema_version: "v35.operator_task.v1" as const,
+      task_id: "task-start_nomad_sync-ab12cd",
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      provider_scope: "source" as const,
+      status: "queued" as const,
+      queue_scope: "operator_local" as const,
+      declared_effects: ["provider_sync_jobs"],
+      writes_authorized: false as const,
+      execution_started: false as const,
+      created_at: null,
+      config: {
+        transport: "operator_task_queue",
+        runtime_writes: false,
+        config_source: "workflow_command_allowlist",
+      },
+      admission_status: "admitted" as const,
+      admission_hash: "a".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+      execution_report: executionReportForTask({
+        task_id: "task-start_nomad_sync-ab12cd",
+        admission_hash: "a".repeat(64),
+      }),
+    };
+    const report = restoreReportForTasks([task]);
+
+    expect(validateOperatorTaskRestoreReport(report)).toMatchObject(report);
+    for (const mutated of [
+      { ...report, extra: true },
+      { ...report, provider_cache_written: true },
+      { ...report, restored_tasks: [{ ...task, api_key: "mp-secret" }] },
+      {
+        ...report,
+        restored_tasks: [{
+          ...task,
+          execution_report: { ...task.execution_report, admission_hash: "e".repeat(64) },
+        }],
+      },
+    ]) {
+      expect(() => validateOperatorTaskRestoreReport(mutated)).toThrow();
     }
   });
 

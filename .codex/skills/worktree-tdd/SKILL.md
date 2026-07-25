@@ -87,6 +87,27 @@ git worktree add D:\tmp\<repo>-<topic> -b codex/<topic> main
   touches shared runtime/serialization/scoring/provider boundaries, invalidates
   earlier test evidence, or the previous full gate is stale for the final diff.
 
+## Test Deduplication
+
+Tests are quality evidence, not progress theater. Add or keep tests that prove
+usable behavior, durable contracts, or trust boundaries; merge or delete tests
+that only repeat the same assertion at the same layer.
+
+Hard keep:
+
+- provider, source snapshot, closure, manifest/hash, and schema contracts;
+- authorization boundaries for provider cache, SQLite, scoring, experiments,
+  source snapshots, live provider calls, and command bridges;
+- secret and executable-path non-exposure at frontend/native/runtime boundaries;
+- cross-language schema version, allowlist, and payload-shape compatibility;
+- fail-closed behavior for quarantined or incomplete scientific data.
+
+Prefer one behavior test plus one drift sentinel over many string sentinels.
+Use table-driven cases for malformed payloads and secret fragments instead of
+duplicating whole test bodies. When a higher-level contract already proves the
+same invariant, keep the higher-signal test and remove the duplicate unless the
+lower-level test gives a faster, clearer failure for the owning module.
+
 ## Targeted Reverification
 
 After review feedback, write down the verification slice before running it:
@@ -103,6 +124,40 @@ Use examples, not ceremony: a Go-only closure fix usually needs the focused Go
 package and V35 validation script; an AtomReasonX fixture fix usually needs
 Vitest and build; a Python command-plane fix usually needs the focused Python
 contract bundle. Run the full gate when the category is unclear.
+
+## Gate Classes
+
+Name the gate class before running commands:
+
+- `smoke`: one package, one CLI path, or one Vitest test file proving the local
+  edit shape.
+- `contract`: schema, manifest, cross-language allowlist, or command bridge
+  compatibility for the touched boundary.
+- `slice`: all focused checks for the current feature slice, including build
+  when TypeScript or Rust packaging behavior changed.
+- `milestone`: V35 validation script, full Python gate, full Go gate, or Tauri
+  app build when the change crosses shared runtime boundaries.
+
+Use the lowest class that proves the current diff. Escalate one class at a time
+when the impact is broader than expected. Do not call a smoke check a milestone
+gate in status or commit notes.
+
+## External Architecture References
+
+Reference repositories can influence architecture, but copying is not the
+default implementation path. Before absorbing external code or patterns:
+
+- record the repository, revision if known, license, and exact pattern being
+  used;
+- prefer reimplementing the architecture shape in local style over copying
+  source files;
+- keep SpiroSearch provider/review/scoring/artifact boundaries authoritative;
+- do not replace a proven local module wholesale unless parity tests, data
+  contracts, and license review are already in the slice.
+
+If the reference only suggests a UI or command-plane pattern, implement the
+local equivalent and cite it in docs or plans; do not import product-specific
+behavior or secret-handling assumptions.
 
 ## Generated Files
 

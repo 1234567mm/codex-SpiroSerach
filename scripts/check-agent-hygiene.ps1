@@ -74,6 +74,47 @@ if (-not [IO.Directory]::Exists($Root)) {
     exit 1
 }
 
+$configuredHooksPath = & git -C $Root config --get core.hooksPath 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($configuredHooksPath | Select-Object -First 1))) {
+    Add-Violation 'Git core.hooksPath must be configured to .githooks so repository hook checks actually run.'
+}
+else {
+    $hookPathValue = (($configuredHooksPath | Select-Object -First 1).ToString()).Trim()
+    if ([IO.Path]::IsPathRooted($hookPathValue)) {
+        $resolvedHookPath = [IO.Path]::GetFullPath($hookPathValue)
+    }
+    else {
+        $resolvedHookPath = [IO.Path]::GetFullPath((Join-Path $Root $hookPathValue))
+    }
+    $expectedHookPath = [IO.Path]::GetFullPath((Join-Path $Root '.githooks'))
+    if ($resolvedHookPath.TrimEnd('\', '/') -cne $expectedHookPath.TrimEnd('\', '/')) {
+        Add-Violation "Git core.hooksPath must point to .githooks; current value is '$hookPathValue'."
+    }
+}
+
+$preCommitHook = Join-Path $Root '.githooks\pre-commit'
+if (-not [IO.File]::Exists($preCommitHook)) {
+    Add-Violation '.githooks/pre-commit is missing; context-budget and hygiene checks will not trigger on commit.'
+}
+
+$contextBudgetChecker = Join-Path $Root 'scripts\check-context-budget.ps1'
+if (-not [IO.File]::Exists($contextBudgetChecker)) {
+    Add-Violation 'scripts/check-context-budget.ps1 is missing; context-budget guardrails must be executable.'
+}
+else {
+    try {
+        $contextBudgetOutput = & $contextBudgetChecker -RepositoryRoot $Root 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            foreach ($line in $contextBudgetOutput) {
+                Add-Violation "context-budget hook failed: $line"
+            }
+        }
+    }
+    catch {
+        Add-Violation "context-budget hook failed: $($_.Exception.Message)"
+    }
+}
+
 if ([IO.File]::Exists((Join-Path $Root 'uv.lock'))) {
     Add-Violation 'uv.lock must not exist at the repository root.'
 }

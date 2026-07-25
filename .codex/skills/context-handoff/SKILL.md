@@ -14,6 +14,37 @@ Use this skill when the user asks to save progress, restore context, resume work
   exact branch, worktree, and verification state.
 - Global context or compression skills may help compact the text, but the
   repository return contract still defines what must be preserved.
+- Use proactively when conversation/context usage is near 80% and the work is
+  still active. Finish any command already needed for correctness, then save a
+  concise handoff before continuing or before compaction.
+
+## Context Budget Trigger
+
+At roughly 80% context usage:
+
+1. Capture current git state, changed files, commands already run, and the next
+   concrete action.
+2. Record durable lessons in the relevant project skill or plan when they affect
+   future workflow, such as test deduplication, gate selection, external
+   architecture reference policy, linker/build pitfalls, or trust-boundary
+   rules.
+3. Apply the quality-preserving test budget from `worktree-tdd` and
+   `review-ship`: keep tests that prove behavior, contracts, source integrity,
+   authorization, fail-closed scientific data, and secret/path boundaries; merge
+   or avoid tests that only duplicate the same assertion at the same layer.
+4. Do not reduce scope, skip required gates, or mark work complete merely
+   because context is high. The handoff preserves quality; it does not replace
+   verification.
+
+Executable guard: `scripts/check-context-budget.ps1` is called by
+`scripts/check-agent-hygiene.ps1`, and the repository pre-commit hook delegates
+to hygiene when Git `core.hooksPath` points at `.githooks`. Hygiene verifies
+that hook configuration so this rule does not remain documentation-only. With
+no context percentage supplied, it verifies the static guardrails remain
+configured. When an agent or wrapper can measure context, set
+`SPIRO_CONTEXT_USAGE_PERCENT` or pass `-ContextUsagePercent`; at 80 or above,
+also set `SPIRO_CONTEXT_HANDOFF_PATH` or pass `-HandoffPath` to a repository
+handoff under `docs/` or `plans/`.
 
 ## Save Context
 

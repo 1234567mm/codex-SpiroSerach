@@ -7,10 +7,19 @@ without explicit authority.
 ## Current Hook
 
 `.githooks/pre-commit` delegates to `scripts/check-agent-hygiene.ps1`.
+Enable the versioned hook path in each working copy with:
+
+```powershell
+git config core.hooksPath .githooks
+```
 
 The hygiene check is intentionally local and fast. It currently verifies:
 
+- Git `core.hooksPath` points at `.githooks`, so commit-time checks actually
+  trigger,
 - root `uv.lock` is absent,
+- `scripts/check-context-budget.ps1` is present and passes its static hook
+  configuration checks,
 - `.qoder/` stays ignored and untracked,
 - project skills have valid frontmatter and UI metadata,
 - governance entry documents decode as strict UTF-8,
@@ -28,6 +37,10 @@ The hygiene check is intentionally local and fast. It currently verifies:
   APIs, and read-only artifact adapters must not dispatch command actions.
 - Verification check: when AtomReasonX changes, run both `npm.cmd test` and
   `npm.cmd run build`; PowerShell may block `npm.ps1`.
+- Context budget check: `scripts/check-context-budget.ps1` is executed by
+  hygiene/pre-commit. If `SPIRO_CONTEXT_USAGE_PERCENT` is 80 or higher, the
+  script requires `SPIRO_CONTEXT_HANDOFF_PATH` to point at a strict UTF-8
+  handoff under `docs/` or `plans/`.
 
 ## Manual Pre-Ship Commands
 
@@ -35,6 +48,14 @@ The hygiene check is intentionally local and fast. It currently verifies:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-agent-hygiene.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
 git diff --check
 Test-Path uv.lock
+```
+
+For an explicit 80% context-budget gate:
+
+```powershell
+$env:SPIRO_CONTEXT_USAGE_PERCENT='80'
+$env:SPIRO_CONTEXT_HANDOFF_PATH='plans\<handoff-file>.md'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-context-budget.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
 ```
 
 For V33C/V34 frontend changes:

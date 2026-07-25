@@ -208,6 +208,9 @@ class TestFixtureStructure(unittest.TestCase):
         workflow_execution = (
             REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-task-execution-adapter.ts"
         ).read_text(encoding="utf-8")
+        workflow_restore = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-task-restore-adapter.ts"
+        ).read_text(encoding="utf-8")
         workflow_contract = (
             REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-command-task-contract.ts"
         ).read_text(encoding="utf-8")
@@ -230,6 +233,8 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("read-only-artifact-adapter", workflow_projection)
         self.assertNotIn("ReadOnlyRunAPI", workflow_execution)
         self.assertNotIn("read-only-artifact-adapter", workflow_execution)
+        self.assertNotIn("ReadOnlyRunAPI", workflow_restore)
+        self.assertNotIn("read-only-artifact-adapter", workflow_restore)
         self.assertNotIn("ReadOnlyRunAPI", workflow_contract)
         self.assertNotIn("read-only-artifact-adapter", workflow_contract)
         self.assertNotIn("read-only-artifact-adapter", workflow)
@@ -280,11 +285,19 @@ class TestFixtureStructure(unittest.TestCase):
         adapter = (
             REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-task-execution-adapter.ts"
         ).read_text(encoding="utf-8")
+        restore_adapter = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "workflow-task-restore-adapter.ts"
+        ).read_text(encoding="utf-8")
         rust = (REPO_ROOT / "frontend" / "atomreasonx" / "src-tauri" / "src" / "main.rs").read_text(
             encoding="utf-8",
         )
+        readonly_runtime = (
+            REPO_ROOT / "frontend" / "atomreasonx" / "src" / "adapters" / "readonly-run-workbench-adapter.ts"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("createTauriWorkflowTaskExecutor", main_ts)
+        self.assertIn("createTauriWorkflowTaskRestoreReader", main_ts)
+        self.assertIn("workflowTaskRestoreReader", main_ts)
         self.assertIn("!runtimeReadAdapter.readOnly ? runtimeWorkflowTaskExecutor : undefined", main_ts)
         self.assertIn("workflowTaskExecutor={workflowTaskExecutor}", app_shell)
         self.assertIn("workflowTaskExecutor", workflow)
@@ -297,14 +310,21 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertIn("data/lib/nomad_perla_psc/snapshots/run-", adapter)
         self.assertIn("authorize_live_provider_calls: true", adapter)
         self.assertIn("v35.operator_task_execution.v1", adapter)
+        self.assertIn('"restore_workflow_tasks"', restore_adapter)
+        self.assertIn("v35.operator_task_restore.v1", restore_adapter)
+        self.assertIn("projectWorkflowTaskRestoreReport", readonly_runtime)
+        self.assertIn("workflowTaskRestoreReader.restore()", readonly_runtime)
         self.assertIn("execute_workflow_task", rust)
+        self.assertIn("restore_workflow_tasks", rust)
         self.assertIn("WorkflowTaskExecutionState", rust)
         self.assertIn("acquire_workflow_task_execution_guard", rust)
         self.assertIn("workflow task execution is already in progress", rust)
         self.assertIn("#[serde(deny_unknown_fields)]", rust)
         self.assertIn("validate_workflow_task_execution_request", rust)
         self.assertIn("run_workflow_task_execution", rust)
+        self.assertIn("run_workflow_task_restore", rust)
         self.assertIn("validate_workflow_task_execution_report", rust)
+        self.assertIn("validate_workflow_task_restore_report", rust)
         self.assertIn("resolve_workflow_execution_spiroctl_path", rust)
         self.assertIn("workflow task execution requires bundled spiroctl", rust)
         self.assertIn("cfg!(debug_assertions)", rust)
@@ -324,7 +344,9 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertNotIn("SPIROCTL_PATH", main_ts)
         self.assertNotIn("SPIROCTL_PATH", app_shell)
         self.assertNotIn("readonly_token", adapter)
+        self.assertNotIn("readonly_token", restore_adapter)
         self.assertNotIn("api_key=", adapter)
+        self.assertNotIn("api_key=", restore_adapter)
         self.assertNotIn("tauri-plugin-shell", rust)
 
     def test_source_settings_command_projection_is_ui_local_and_secret_free(self) -> None:
@@ -563,10 +585,16 @@ class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):
         go_execution = (REPO_ROOT / "internal" / "workflowtask" / "execution.go").read_text(
             encoding="utf-8",
         )
+        go_restore = (REPO_ROOT / "internal" / "workflowtask" / "restore.go").read_text(
+            encoding="utf-8",
+        )
         schema = (REPO_ROOT / "schemas" / "operator-task-admission.schema.json").read_text(
             encoding="utf-8",
         )
         execution_schema = (REPO_ROOT / "schemas" / "operator-task-execution.schema.json").read_text(
+            encoding="utf-8",
+        )
+        restore_schema = (REPO_ROOT / "schemas" / "operator-task-restore.schema.json").read_text(
             encoding="utf-8",
         )
         cli = (REPO_ROOT / "cmd" / "spiroctl" / "main.go").read_text(encoding="utf-8")
@@ -580,9 +608,12 @@ class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):
         self.assertIn("v35.operator_task_admission.v1", schema)
         self.assertIn("v35.operator_task_execution.v1", go_execution)
         self.assertIn("v35.operator_task_execution.v1", execution_schema)
+        self.assertIn("v35.operator_task_restore.v1", go_restore)
+        self.assertIn("v35.operator_task_restore.v1", restore_schema)
         self.assertIn("workflow-task", cli)
         self.assertIn("admit", cli)
         self.assertIn("execute", cli)
+        self.assertIn("restore", cli)
         self.assertIn("--authorize-live-provider-calls", cli)
         self.assertIn("source_snapshot_only", go_execution)
         self.assertIn('"provider_cache_written"', execution_schema)

@@ -227,6 +227,46 @@ function Invoke-SpiroctlExpectProviderProbe {
     }
 }
 
+function Invoke-SpiroctlExpectWorkflowRestore {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    Write-Output "==> $Name"
+    $processStart = New-Object System.Diagnostics.ProcessStartInfo
+    $processStart.FileName = 'go'
+    $processStart.Arguments = Join-ProcessArguments (@('run', './cmd/spiroctl') + $Arguments)
+    $processStart.WorkingDirectory = (Get-Location).Path
+    $processStart.UseShellExecute = $false
+    $processStart.RedirectStandardOutput = $true
+    $processStart.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($processStart)
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+        throw "$Name failed with exit code $($process.ExitCode). Stdout: $stdout Stderr: $stderr"
+    }
+    try {
+        $report = $stdout | ConvertFrom-Json
+    }
+    catch {
+        throw "$Name did not emit JSON on stdout. Stdout: $stdout Stderr: $stderr"
+    }
+    if ($report.schema_version -ne 'v35.operator_task_restore.v1') {
+        throw "$Name emitted unexpected schema_version: $($report.schema_version)"
+    }
+    if ($report.read_authorization_scope -ne 'operator_task_snapshots_readonly') {
+        throw "$Name emitted unexpected read_authorization_scope: $($report.read_authorization_scope)"
+    }
+    foreach ($flag in @('provider_cache_written', 'local_backend_written', 'scoring_written', 'experiment_written')) {
+        if ($report.$flag -ne $false) {
+            throw "$Name emitted writer flag $flag=true. Report: $stdout"
+        }
+    }
+}
+
 function Get-V35SourceSnapshotManifestPaths {
     param([Parameter(Mandatory = $true)][string]$Root)
 
@@ -311,6 +351,9 @@ Assert-SchemaConst 'schemas/operator-task-admission.schema.json' `
 Assert-SchemaConst 'schemas/operator-task-execution.schema.json' `
     'schema_version' `
     'v35.operator_task_execution.v1'
+Assert-SchemaConst 'schemas/operator-task-restore.schema.json' `
+    'schema_version' `
+    'v35.operator_task_restore.v1'
 
 Invoke-Go 'Go read/validation package tests' @(
     'test',
@@ -384,6 +427,13 @@ finally {
         $env:MATERIALS_PROJECT_API_KEY = $previousMaterialsProjectKey
     }
 }
+
+Invoke-SpiroctlExpectWorkflowRestore 'Workflow task persisted execution restore is machine-readable and read-only' @(
+    'workflow-task',
+    'restore',
+    '--ledger',
+    'data/lib/operator_tasks/operator-task-ledger.jsonl'
+)
 
 Invoke-Spiroctl 'provider cache fixture validation' @(
     'provider-cache',

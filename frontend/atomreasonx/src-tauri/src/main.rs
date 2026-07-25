@@ -20,6 +20,8 @@ const MINIMUM_READONLY_TOKEN_LENGTH: usize = 16;
 const OPERATOR_TASK_EXECUTION_REQUEST_SCHEMA_VERSION: &str =
     "v35.operator_task_execution_request.v1";
 const OPERATOR_TASK_EXECUTION_SCHEMA_VERSION: &str = "v35.operator_task_execution.v1";
+const OPERATOR_TASK_RESTORE_SCHEMA_VERSION: &str = "v35.operator_task_restore.v1";
+const OPERATOR_TASK_RESTORE_READ_SCOPE: &str = "operator_task_snapshots_readonly";
 const DEFAULT_OPERATOR_TASK_LEDGER_PATH: &str =
     "data/lib/operator_tasks/operator-task-ledger.jsonl";
 const NOMAD_EXECUTION_TARGET_PREFIX: &str = "data/lib/nomad_perla_psc/snapshots/run-";
@@ -110,6 +112,40 @@ struct WorkflowTaskExecutionReport {
     archive_status: String,
     review_required: bool,
     review_reasons: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowTaskRestoreReport {
+    schema_version: String,
+    read_authorization_scope: String,
+    provider_cache_written: bool,
+    local_backend_written: bool,
+    scoring_written: bool,
+    experiment_written: bool,
+    restored_tasks: Vec<RestoredWorkflowTask>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct RestoredWorkflowTask {
+    schema_version: String,
+    task_id: String,
+    action_type: String,
+    provider: String,
+    provider_scope: String,
+    status: String,
+    queue_scope: String,
+    declared_effects: Vec<String>,
+    writes_authorized: bool,
+    execution_started: bool,
+    created_at: Option<String>,
+    config: serde_json::Map<String, serde_json::Value>,
+    admission_status: String,
+    admission_hash: String,
+    ledger_path: String,
+    admission_source: String,
+    execution_report: WorkflowTaskExecutionReport,
 }
 
 #[tauri::command]
@@ -204,6 +240,13 @@ fn execute_workflow_task(
     run_workflow_task_execution(executable, repo_root, request)
 }
 
+#[tauri::command]
+fn restore_workflow_tasks(app: tauri::AppHandle) -> Result<WorkflowTaskRestoreReport, String> {
+    let repo_root = resolve_repository_root()?;
+    let executable = resolve_spiroctl_path(&app);
+    run_workflow_task_restore(executable, repo_root)
+}
+
 fn stop_existing_sidecar_for_output_dir(
     state: &tauri::State<'_, ReadonlySidecarProcesses>,
     output_dir: &PathBuf,
@@ -231,7 +274,8 @@ fn main() {
             start_readonly_sidecar,
             stop_readonly_sidecar,
             submit_config_command,
-            execute_workflow_task
+            execute_workflow_task,
+            restore_workflow_tasks
         ])
         .run(tauri::generate_context!())
         .expect("error while running AtomReasonX application");
@@ -393,6 +437,51 @@ fn run_workflow_task_execution(
     validate_workflow_task_execution_report(report, &request)
 }
 
+fn run_workflow_task_restore(
+    executable: PathBuf,
+    repo_root: PathBuf,
+) -> Result<WorkflowTaskRestoreReport, String> {
+    let mut command = Command::new(executable);
+    command
+        .args([
+            "workflow-task",
+            "restore",
+            "--ledger",
+            DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+        ])
+        .current_dir(&repo_root)
+        .env("SPIROSEARCH_REPOSITORY_ROOT", &repo_root)
+        .env_remove("SPIROSEARCH_CONFIG_ROOT")
+        .env_remove("MATERIALS_PROJECT_API_KEY")
+        .env_remove("SPIROSEARCH_PYTHON")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    remove_credential_shaped_env(&mut command);
+    let child = command
+        .spawn()
+        .map_err(|error| format!("failed to start workflow task restore: {error}"))?;
+    let output = wait_for_child_output(
+        child,
+        CONFIG_COMMAND_RUNTIME_TIMEOUT,
+        "workflow task restore",
+    )?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if !output.status.success() {
+        return Err(format!(
+            "workflow task restore failed with exit code {}",
+            output
+                .status
+                .code()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
+        ));
+    }
+    let report: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|error| format!("workflow task restore returned invalid JSON: {error}"))?;
+    validate_workflow_task_restore_report(report)
+}
+
 fn validate_workflow_task_execution_report(
     report: serde_json::Value,
     request: &WorkflowTaskExecutionRequest,
@@ -457,6 +546,69 @@ fn validate_workflow_task_execution_report(
         return Err("workflow task execution report field value is invalid".to_string());
     }
     Ok(report)
+}
+
+fn validate_workflow_task_restore_report(
+    report: serde_json::Value,
+) -> Result<WorkflowTaskRestoreReport, String> {
+    if contains_forbidden_credential_fragment(&report) {
+        return Err("workflow task restore report contains credential-shaped output".to_string());
+    }
+    let report: WorkflowTaskRestoreReport = serde_json::from_value(report)
+        .map_err(|error| format!("workflow task restore report is invalid: {error}"))?;
+    if report.schema_version != OPERATOR_TASK_RESTORE_SCHEMA_VERSION
+        || report.read_authorization_scope != OPERATOR_TASK_RESTORE_READ_SCOPE
+        || report.provider_cache_written
+        || report.local_backend_written
+        || report.scoring_written
+        || report.experiment_written
+    {
+        return Err("workflow task restore report metadata is invalid".to_string());
+    }
+    for task in &report.restored_tasks {
+        validate_restored_workflow_task(task)?;
+    }
+    Ok(report)
+}
+
+fn validate_restored_workflow_task(task: &RestoredWorkflowTask) -> Result<(), String> {
+    if task.schema_version != "v35.operator_task.v1"
+        || !safe_nomad_task_id(&task.task_id)
+        || task.action_type != "start_nomad_sync"
+        || task.provider != "nomad_perla_psc"
+        || task.provider_scope != "source"
+        || task.status != "queued"
+        || task.queue_scope != "operator_local"
+        || task.declared_effects.as_slice() != ["provider_sync_jobs"]
+        || task.writes_authorized
+        || task.execution_started
+        || task.created_at.is_some()
+        || task.config.get("transport").and_then(|value| value.as_str())
+            != Some("operator_task_queue")
+        || task.config.get("runtime_writes").and_then(|value| value.as_bool()) != Some(false)
+        || task.config.get("config_source").and_then(|value| value.as_str())
+            != Some("workflow_command_allowlist")
+        || task.admission_status != "admitted"
+        || !is_sha256_hex(&task.admission_hash)
+        || task.ledger_path != DEFAULT_OPERATOR_TASK_LEDGER_PATH
+        || task.admission_source != "operator_task_ledger"
+        || task.execution_report.task_id != task.task_id
+        || task.execution_report.admission_hash != task.admission_hash
+    {
+        return Err("restored workflow task metadata is invalid".to_string());
+    }
+    let request = WorkflowTaskExecutionRequest {
+        schema_version: OPERATOR_TASK_EXECUTION_REQUEST_SCHEMA_VERSION.to_string(),
+        task_id: task.task_id.clone(),
+        ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH.to_string(),
+        target_data_library_path: format!("{}{}", NOMAD_EXECUTION_TARGET_PREFIX, task.task_id),
+        authorize_live_provider_calls: true,
+        execution_contract: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION.to_string(),
+    };
+    let report_value = serde_json::to_value(&task.execution_report)
+        .map_err(|error| format!("failed to revalidate restored execution report: {error}"))?;
+    validate_workflow_task_execution_report(report_value, &request)?;
+    Ok(())
 }
 
 fn wait_for_config_command_output(child: Child) -> Result<Output, String> {
@@ -1000,6 +1152,53 @@ mod tests {
     }
 
     #[test]
+    fn validates_fixed_workflow_task_restore_report() {
+        let report = validate_workflow_task_restore_report(fixed_workflow_task_restore_report_json())
+            .expect("restore report should validate");
+
+        assert_eq!(report.schema_version, "v35.operator_task_restore.v1");
+        assert_eq!(
+            report.read_authorization_scope,
+            "operator_task_snapshots_readonly"
+        );
+        assert_eq!(report.restored_tasks.len(), 1);
+        assert_eq!(
+            report.restored_tasks[0].execution_report.source_manifest_path,
+            "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd/source-manifest.json"
+        );
+        assert!(!report.provider_cache_written);
+        assert!(!report.local_backend_written);
+        assert!(!report.scoring_written);
+        assert!(!report.experiment_written);
+    }
+
+    #[test]
+    fn rejects_workflow_task_restore_report_schema_drift() {
+        let base = fixed_workflow_task_restore_report_json();
+        let mut cases = Vec::new();
+        cases.push({
+            let mut value = base.clone();
+            value["extra"] = serde_json::json!(true);
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["provider_cache_written"] = serde_json::json!(true);
+            value
+        });
+        cases.push({
+            let mut value = base.clone();
+            value["restored_tasks"][0]["execution_report"]["admission_hash"] =
+                serde_json::json!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+            value
+        });
+
+        for case in cases {
+            assert!(validate_workflow_task_restore_report(case).is_err());
+        }
+    }
+
+    #[test]
     fn rejects_workflow_task_execution_report_writer_flags() {
         let request = fixed_workflow_task_execution_request();
         let mut report = fixed_workflow_task_execution_report_json();
@@ -1117,6 +1316,40 @@ mod tests {
             "archive_status": "available",
             "review_required": false,
             "review_reasons": []
+        })
+    }
+
+    fn fixed_workflow_task_restore_report_json() -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": "v35.operator_task_restore.v1",
+            "read_authorization_scope": "operator_task_snapshots_readonly",
+            "provider_cache_written": false,
+            "local_backend_written": false,
+            "scoring_written": false,
+            "experiment_written": false,
+            "restored_tasks": [{
+                "schema_version": "v35.operator_task.v1",
+                "task_id": "task-start_nomad_sync-ab12cd",
+                "action_type": "start_nomad_sync",
+                "provider": "nomad_perla_psc",
+                "provider_scope": "source",
+                "status": "queued",
+                "queue_scope": "operator_local",
+                "declared_effects": ["provider_sync_jobs"],
+                "writes_authorized": false,
+                "execution_started": false,
+                "created_at": null,
+                "config": {
+                    "transport": "operator_task_queue",
+                    "runtime_writes": false,
+                    "config_source": "workflow_command_allowlist"
+                },
+                "admission_status": "admitted",
+                "admission_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "ledger_path": "data/lib/operator_tasks/operator-task-ledger.jsonl",
+                "admission_source": "operator_task_ledger",
+                "execution_report": fixed_workflow_task_execution_report_json()
+            }]
         })
     }
 }

@@ -96,7 +96,7 @@ func runWithDependencies(
 		return runWorkflowTask(args, nomadTransportFactory)
 	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -251,6 +251,17 @@ func runWorkflowTask(args []string, nomadTransportFactory nomadTransportFactoryF
 		}
 		return json.NewEncoder(os.Stdout).Encode(record)
 	}
+	if len(args) == 4 && args[1] == "restore" && args[2] == "--ledger" {
+		root, err := workflowTaskRepositoryRoot()
+		if err != nil {
+			return err
+		}
+		report, err := workflowtask.RestoreExecutedNomadTasks(root, args[3])
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(report)
+	}
 	if len(args) == 9 &&
 		args[1] == "execute" &&
 		args[2] == "--task-id" &&
@@ -275,7 +286,7 @@ func runWorkflowTask(args []string, nomadTransportFactory nomadTransportFactoryF
 		}
 		return json.NewEncoder(os.Stdout).Encode(report)
 	}
-	return fmt.Errorf("usage: spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir>")
+	return fmt.Errorf("usage: spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl>")
 }
 
 func workflowTaskRepositoryRoot() (string, error) {

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/operator-task-restore.schema.json",
+  "title": "OperatorTaskRestoreReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "read_authorization_scope",
+    "provider_cache_written",
+    "local_backend_written",
+    "scoring_written",
+    "experiment_written",
+    "restored_tasks"
+  ],
+  "properties": {
+    "schema_version": { "const": "v35.operator_task_restore.v1" },
+    "read_authorization_scope": { "const": "operator_task_snapshots_readonly" },
+    "provider_cache_written": { "const": false },
+    "local_backend_written": { "const": false },
+    "scoring_written": { "const": false },
+    "experiment_written": { "const": false },
+    "restored_tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "task_id",
+          "action_type",
+          "provider",
+          "provider_scope",
+          "status",
+          "queue_scope",
+          "declared_effects",
+          "writes_authorized",
+          "execution_started",
+          "created_at",
+          "config",
+          "admission_status",
+          "admission_hash",
+          "ledger_path",
+          "admission_source",
+          "execution_report"
+        ],
+        "properties": {
+          "schema_version": { "const": "v35.operator_task.v1" },
+          "task_id": { "type": "string", "pattern": "^task-start_nomad_sync-[a-z0-9]{1,16}$" },
+          "action_type": { "const": "start_nomad_sync" },
+          "provider": { "const": "nomad_perla_psc" },
+          "provider_scope": { "const": "source" },
+          "status": { "const": "queued" },
+          "queue_scope": { "const": "operator_local" },
+          "declared_effects": {
+            "type": "array",
+            "prefixItems": [{ "const": "provider_sync_jobs" }],
+            "minItems": 1,
+            "maxItems": 1
+          },
+          "writes_authorized": { "const": false },
+          "execution_started": { "const": false },
+          "created_at": { "type": "null" },
+          "config": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["transport", "runtime_writes", "config_source"],
+            "properties": {
+              "transport": { "const": "operator_task_queue" },
+              "runtime_writes": { "const": false },
+              "config_source": { "const": "workflow_command_allowlist" }
+            }
+          },
+          "admission_status": { "const": "admitted" },
+          "admission_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "ledger_path": { "const": "data/lib/operator_tasks/operator-task-ledger.jsonl" },
+          "admission_source": { "const": "operator_task_ledger" },
+          "execution_report": { "$ref": "operator-task-execution.schema.json" }
+        }
+      }
+    }
+  }
+}

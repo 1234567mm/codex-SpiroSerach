@@ -35,12 +35,15 @@ class V35ReadValidationScriptTests(unittest.TestCase):
             "provider-cache-index",
             "run-artifacts",
             "readonly-run",
+            "workflow-task",
+            "restore",
         ]:
             self.assertIn(command, script)
 
         self.assertIn("v35.source_snapshot_manifest.v1", script)
         self.assertIn("v35.source_closure_requirements.v1", script)
         self.assertIn("v35.source_provider_connection_probe.v1", script)
+        self.assertIn("v35.operator_task_restore.v1", script)
         self.assertIn("data\\lib", script)
         self.assertIn("data\\public_baselines", script)
         self.assertIn("PASS: V35 Go read/validation regression closure passed.", script)

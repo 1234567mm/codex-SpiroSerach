@@ -245,6 +245,177 @@ func TestExecuteNomadAdmissionRoutesArchiveRateLimitToReviewSnapshot(t *testing.
 	}
 }
 
+func TestRestoreExecutedNomadTasksReadsLedgerAndSnapshotManifest(t *testing.T) {
+	root := t.TempDir()
+	writeWorkflowTaskSourceRegistryFixture(t, root)
+	if _, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime()); err != nil {
+		t.Fatalf("AppendAdmissionRecord() error = %v", err)
+	}
+	target := "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd"
+	_, err := ExecuteNomadAdmission(context.Background(), ExecuteNomadAdmissionOptions{
+		Root:                       root,
+		LedgerRelPath:              DefaultAdmissionLedgerPath,
+		TaskID:                     "task-start_nomad_sync-ab12cd",
+		TargetRelPath:              target,
+		AuthorizeLiveProviderCalls: true,
+		Now:                        fixedAdmissionTime().Add(time.Hour),
+		Transport: &workflowTaskNomadTransport{
+			search:  workflowTaskNomadSearchFixture(),
+			archive: workflowTaskNomadArchiveFixture(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteNomadAdmission() error = %v", err)
+	}
+
+	restore, err := RestoreExecutedNomadTasks(root, DefaultAdmissionLedgerPath)
+	if err != nil {
+		t.Fatalf("RestoreExecutedNomadTasks() error = %v", err)
+	}
+
+	if restore.SchemaVersion != OperatorTaskRestoreSchemaVersion ||
+		restore.ReadAuthorizationScope != "operator_task_snapshots_readonly" ||
+		restore.ProviderCacheWritten ||
+		restore.LocalBackendWritten ||
+		restore.ScoringWritten ||
+		restore.ExperimentWritten ||
+		len(restore.RestoredTasks) != 1 {
+		t.Fatalf("restore report mismatch: %#v", restore)
+	}
+	task := restore.RestoredTasks[0]
+	if task.SchemaVersion != OperatorTaskSchemaVersion ||
+		task.TaskID != "task-start_nomad_sync-ab12cd" ||
+		task.ActionType != "start_nomad_sync" ||
+		task.Provider == nil ||
+		*task.Provider != "nomad_perla_psc" ||
+		task.ProviderScope != "source" ||
+		task.Status != "queued" ||
+		task.QueueScope != OperatorTaskQueueScope ||
+		task.WritesAuthorized ||
+		task.ExecutionStarted ||
+		task.AdmissionStatus != "admitted" ||
+		task.AdmissionSource != "operator_task_ledger" ||
+		task.LedgerPath != DefaultAdmissionLedgerPath ||
+		task.ExecutionReport.SourceManifestPath != target+"/source-manifest.json" ||
+		task.ExecutionReport.NormalizedRecordCount != 1 {
+		t.Fatalf("restored task mismatch: %#v", task)
+	}
+	if task.Config["transport"] != "operator_task_queue" ||
+		task.Config["runtime_writes"] != false ||
+		task.Config["config_source"] != "workflow_command_allowlist" {
+		t.Fatalf("restored task config mismatch: %#v", task.Config)
+	}
+	body, err := json.Marshal(restore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"api_key", "readonly_token", "Bearer ", "spiroctl.exe", "provider_cache_path"} {
+		if strings.Contains(string(body), forbidden) {
+			t.Fatalf("restore report leaked forbidden fragment %q: %s", forbidden, body)
+		}
+	}
+}
+
+func TestRestoreExecutedNomadTasksReturnsEmptyReportForMissingLedgerOrSnapshot(t *testing.T) {
+	root := t.TempDir()
+	if restore, err := RestoreExecutedNomadTasks(root, DefaultAdmissionLedgerPath); err != nil ||
+		restore.SchemaVersion != OperatorTaskRestoreSchemaVersion ||
+		len(restore.RestoredTasks) != 0 {
+		t.Fatalf("missing ledger restore mismatch: restore=%#v err=%v", restore, err)
+	}
+	if _, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime()); err != nil {
+		t.Fatalf("AppendAdmissionRecord() error = %v", err)
+	}
+
+	restore, err := RestoreExecutedNomadTasks(root, DefaultAdmissionLedgerPath)
+	if err != nil {
+		t.Fatalf("RestoreExecutedNomadTasks() error = %v", err)
+	}
+	if len(restore.RestoredTasks) != 0 {
+		t.Fatalf("expected no restored tasks without snapshot manifest: %#v", restore.RestoredTasks)
+	}
+}
+
+func TestRestoreExecutedNomadTasksRejectsTamperedValidationSummary(t *testing.T) {
+	root := t.TempDir()
+	writeWorkflowTaskSourceRegistryFixture(t, root)
+	if _, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime()); err != nil {
+		t.Fatalf("AppendAdmissionRecord() error = %v", err)
+	}
+	target := "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd"
+	if _, err := ExecuteNomadAdmission(context.Background(), ExecuteNomadAdmissionOptions{
+		Root:                       root,
+		LedgerRelPath:              DefaultAdmissionLedgerPath,
+		TaskID:                     "task-start_nomad_sync-ab12cd",
+		TargetRelPath:              target,
+		AuthorizeLiveProviderCalls: true,
+		Now:                        fixedAdmissionTime().Add(time.Hour),
+		Transport: &workflowTaskNomadTransport{
+			search:  workflowTaskNomadSearchFixture(),
+			archive: workflowTaskNomadArchiveFixture(),
+		},
+	}); err != nil {
+		t.Fatalf("ExecuteNomadAdmission() error = %v", err)
+	}
+	reportPath := filepath.Join(root, filepath.FromSlash(target), "validation-summary.json")
+	body, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := strings.Replace(string(body), `"provider_cache_written": false`, `"provider_cache_written": true`, 1)
+	if err := os.WriteFile(reportPath, []byte(tampered), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = RestoreExecutedNomadTasks(root, DefaultAdmissionLedgerPath)
+	if !errors.Is(err, ErrExecutionRestoreInvalid) {
+		t.Fatalf("expected restore invalid error, got %v", err)
+	}
+}
+
+func TestRestoreExecutedNomadTasksRejectsRedirectedSnapshotFile(t *testing.T) {
+	root := t.TempDir()
+	writeWorkflowTaskSourceRegistryFixture(t, root)
+	if _, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime()); err != nil {
+		t.Fatalf("AppendAdmissionRecord() error = %v", err)
+	}
+	target := "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd"
+	if _, err := ExecuteNomadAdmission(context.Background(), ExecuteNomadAdmissionOptions{
+		Root:                       root,
+		LedgerRelPath:              DefaultAdmissionLedgerPath,
+		TaskID:                     "task-start_nomad_sync-ab12cd",
+		TargetRelPath:              target,
+		AuthorizeLiveProviderCalls: true,
+		Now:                        fixedAdmissionTime().Add(time.Hour),
+		Transport: &workflowTaskNomadTransport{
+			search:  workflowTaskNomadSearchFixture(),
+			archive: workflowTaskNomadArchiveFixture(),
+		},
+	}); err != nil {
+		t.Fatalf("ExecuteNomadAdmission() error = %v", err)
+	}
+	reportPath := filepath.Join(root, filepath.FromSlash(target), "validation-summary.json")
+	body, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "validation-summary.json")
+	if err := os.WriteFile(outside, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(reportPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, reportPath); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+
+	_, err = RestoreExecutedNomadTasks(root, DefaultAdmissionLedgerPath)
+	if !errors.Is(err, ErrExecutionRestoreInvalid) {
+		t.Fatalf("expected restore invalid error for redirected snapshot file, got %v", err)
+	}
+}
+
 func TestReadAdmissionRecordRejectsMissingTaskID(t *testing.T) {
 	root := t.TempDir()
 	if _, err := AppendAdmissionRecord(root, DefaultAdmissionLedgerPath, validStartNomadTask(), fixedAdmissionTime()); err != nil {

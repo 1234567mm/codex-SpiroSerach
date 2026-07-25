@@ -612,6 +612,100 @@ func TestWorkflowTaskExecuteWritesNomadSourceSnapshotWithExplicitAuthorization(t
 	}
 }
 
+func TestWorkflowTaskRestoreReadsPersistedExecutionReports(t *testing.T) {
+	root := t.TempDir()
+	writeSpiroctlRepoMarkersWithSourceRegistry(t, root)
+	t.Chdir(root)
+	taskPath := writeWorkflowTaskJSON(t, root, validStartNomadWorkflowTaskJSON())
+	ledgerRel := "data/lib/operator_tasks/operator-task-ledger.jsonl"
+	if _, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "admit", taskPath, "--ledger", ledgerRel})
+	}); err != nil {
+		t.Fatalf("admit error = %v", err)
+	}
+	target := "data/lib/nomad_perla_psc/snapshots/run-task-start_nomad_sync-ab12cd"
+	if _, err := captureStdout(func() error {
+		return runWithNomadTransport([]string{
+			"workflow-task",
+			"execute",
+			"--task-id",
+			"task-start_nomad_sync-ab12cd",
+			"--ledger",
+			ledgerRel,
+			"--authorize-live-provider-calls",
+			"--target",
+			target,
+		}, &spiroctlNomadTransport{
+			search:  spiroctlNomadSearchFixture(),
+			archive: spiroctlNomadArchiveFixture(),
+		})
+	}); err != nil {
+		t.Fatalf("execute error = %v", err)
+	}
+
+	output, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "restore", "--ledger", ledgerRel})
+	})
+	if err != nil {
+		t.Fatalf("restore error = %v output=%s", err, output)
+	}
+
+	var restore struct {
+		SchemaVersion        string `json:"schema_version"`
+		ReadAuthorization    string `json:"read_authorization_scope"`
+		ProviderCacheWritten bool   `json:"provider_cache_written"`
+		RestoredTasks        []struct {
+			SchemaVersion   string `json:"schema_version"`
+			TaskID          string `json:"task_id"`
+			AdmissionStatus string `json:"admission_status"`
+			AdmissionSource string `json:"admission_source"`
+			LedgerPath      string `json:"ledger_path"`
+			ExecutionReport struct {
+				SchemaVersion      string `json:"schema_version"`
+				SourceManifestPath string `json:"source_manifest_path"`
+			} `json:"execution_report"`
+		} `json:"restored_tasks"`
+	}
+	if err := json.Unmarshal([]byte(output), &restore); err != nil {
+		t.Fatalf("restore output is not JSON: %v\n%s", err, output)
+	}
+	if restore.SchemaVersion != "v35.operator_task_restore.v1" ||
+		restore.ReadAuthorization != "operator_task_snapshots_readonly" ||
+		restore.ProviderCacheWritten ||
+		len(restore.RestoredTasks) != 1 ||
+		restore.RestoredTasks[0].SchemaVersion != "v35.operator_task.v1" ||
+		restore.RestoredTasks[0].TaskID != "task-start_nomad_sync-ab12cd" ||
+		restore.RestoredTasks[0].AdmissionStatus != "admitted" ||
+		restore.RestoredTasks[0].AdmissionSource != "operator_task_ledger" ||
+		restore.RestoredTasks[0].LedgerPath != ledgerRel ||
+		restore.RestoredTasks[0].ExecutionReport.SchemaVersion != "v35.operator_task_execution.v1" ||
+		restore.RestoredTasks[0].ExecutionReport.SourceManifestPath != target+"/source-manifest.json" {
+		t.Fatalf("restore output mismatch: %#v", restore)
+	}
+	for _, forbidden := range []string{"api_key", "mp-secret", "Bearer ", `D:\private`, "spiroctl.exe"} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("restore output leaked forbidden fragment %q: %s", forbidden, output)
+		}
+	}
+}
+
+func TestWorkflowTaskRestoreMissingLedgerReturnsEmptyReadonlyReport(t *testing.T) {
+	root := t.TempDir()
+	writeSpiroctlRepoMarkers(t, root)
+	t.Chdir(root)
+
+	output, err := captureStdout(func() error {
+		return run([]string{"workflow-task", "restore", "--ledger", "data/lib/operator_tasks/operator-task-ledger.jsonl"})
+	})
+	if err != nil {
+		t.Fatalf("restore missing ledger error = %v output=%s", err, output)
+	}
+	if !strings.Contains(output, `"schema_version":"v35.operator_task_restore.v1"`) ||
+		!strings.Contains(output, `"restored_tasks":[]`) {
+		t.Fatalf("missing ledger restore output mismatch: %s", output)
+	}
+}
+
 func TestWorkflowTaskExecuteRequiresAuthorizationFlagShape(t *testing.T) {
 	root := t.TempDir()
 	writeSpiroctlRepoMarkersWithSourceRegistry(t, root)

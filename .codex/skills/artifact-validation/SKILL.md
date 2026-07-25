@@ -51,6 +51,35 @@ Escalate to broad Python, Go, or frontend gates only when the artifact shape is
 shared across multiple readers, a manifest discovery rule changes globally, or
 the minimum verification cannot name every affected reader.
 
+## Artifact Test Budget
+
+Do not multiply schema, manifest, and reader tests for the same field at every
+layer. Keep the smallest set that proves:
+
+- the payload validates against the schema;
+- the emitter records the artifact in the manifest or index;
+- the reader discovers it through the manifest/index, not a hard-coded filename;
+- hashes, sizes, JSON/JSONL framing, and source paths fail closed on tampering.
+
+If one fixture plus one CLI validator proves the artifact contract, avoid adding
+parallel tests that only assert the same literal fields. Add extra tests only
+for a distinct reader, writer, schema branch, or trust-boundary failure mode.
+
+## Restore And Reload Contracts
+
+When an artifact is meant to survive app restart or agent handoff, validate the
+reload path, not only the writer's immediate return value.
+
+- Reload from the manifest/index and re-check hashes before trusting the report.
+- Bind restored UI state to backend evidence such as ledger id, admission hash,
+  run id, source manifest path, or validation summary role.
+- Treat missing persisted evidence as empty/unavailable state, not as proof of
+  completion.
+- Treat tampered persisted evidence as a hard failure unless the contract
+  explicitly routes it to review/quarantine.
+
+This avoids "works until refresh" slices while preserving read/write separation.
+
 ## Useful Commands
 
 ```powershell

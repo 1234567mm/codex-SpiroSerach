@@ -21,6 +21,10 @@ import {
   normalizeReadonlyRunOutputDir,
   resolveConfiguredReadonlyOutputDir,
 } from "./readonly-run-operator-config";
+import {
+  projectWorkflowTaskRestoreReport,
+  type WorkflowTaskRestoreReader,
+} from "./workflow-task-restore-adapter";
 
 export interface ReadonlyRunWorkbenchReadAdapterOptions {
   baseWorkspace: AtomReasonXWorkspaceState;
@@ -31,6 +35,7 @@ export interface RuntimeWorkbenchReadAdapterOptions {
   baseWorkspace: AtomReasonXWorkspaceState;
   readonlyOutputDir?: string | null;
   createSidecarSession?: (options: { outputDir: string }) => Promise<TauriReadonlyRunSession>;
+  workflowTaskRestoreReader?: WorkflowTaskRestoreReader;
 }
 
 export interface RuntimeWorkbenchReadAdapter {
@@ -95,10 +100,23 @@ export const createRuntimeWorkbenchReadAdapter = ({
   baseWorkspace,
   readonlyOutputDir = resolveConfiguredReadonlyOutputDir(),
   createSidecarSession = ({ outputDir }) => createTauriReadonlyRunSession({ outputDir }),
+  workflowTaskRestoreReader,
 }: RuntimeWorkbenchReadAdapterOptions): RuntimeWorkbenchReadAdapter => {
   const outputDir = normalizeReadonlyRunOutputDir(readonlyOutputDir);
   if (!outputDir) {
-    const adapter = createFixtureWorkbenchReadAdapter(baseWorkspace);
+    const fixtureAdapter = createFixtureWorkbenchReadAdapter(baseWorkspace);
+    const adapter: WorkbenchReadAdapter = {
+      async loadWorkspace() {
+        const workspace = await fixtureAdapter.loadWorkspace();
+        if (!workflowTaskRestoreReader) {
+          return workspace;
+        }
+        return projectWorkflowTaskRestoreReport(
+          workspace,
+          await workflowTaskRestoreReader.restore(),
+        );
+      },
+    };
     return {
       adapter,
       readOnly: false,
