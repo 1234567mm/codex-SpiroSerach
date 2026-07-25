@@ -2,7 +2,7 @@
 
 Status: active execution checkpoint  
 Branch: `codex-v35-data-source-p0`  
-Latest implementation HEAD before this status update: `2285e0b`
+Latest implementation HEAD before this status update: `4cb79b4`
 Date: 2026-07-25
 
 ## Goal
@@ -117,6 +117,8 @@ The current branch contains these V35 execution commits:
 | `d400016` | P2 AtomReasonX NOMAD persisted execution restore | Adds read-only persisted restore for admitted NOMAD execution snapshots: Go reloads ledger-bound source manifests and validation summaries, `spiroctl workflow-task restore --ledger ...` emits a strict restore report, Tauri exposes a fixed no-argument restore bridge, and AtomReasonX projects restored task summaries during normal runtime workspace load. Provider cache, SQLite, scoring, review promotion, and experiment writes remain untouched. |
 | `2285e0b` | P2 AtomReasonX workflow task handoff status | Distinguishes local queued, ledger-admitted, current-session snapshot, restored snapshot, and review-blocked NOMAD operator task rows in the workflow surface using frontend provenance markers so operators cannot confuse pre-admission tasks, freshly executed evidence, restored evidence, or closure/review blockers. This is UI-only state classification and does not add provider cache, SQLite, scoring, review-promotion, or experiment writers. |
 | current dirty checkpoint | P3 NOMAD source-closure promotion gate | Adds machine-readable `source-closure requirements nomad_perla_psc` and blocks NOMAD operator execution snapshots from promotion until official-interface source evidence, validation summary hashes, review resolution, source-snapshot-only authorization, and record license/citation attribution are all satisfied. This gates SpiroSearch promotion around official NOMAD-derived snapshots; it does not modify NOMAD, replace the official API, or add provider cache, SQLite, scoring, review-promotion, frontend, or experiment writers. |
+| `2e2dfe0` | P3 Materials Cloud Go client | Adds `internal/materialscloud/` with `FetchRecord` and `FetchFileManifest` for Materials Cloud archive API (InvenioRDM at `archive.materialscloud.org`), Transport interface, RateLimiter, ProviderResponse normalization, field allowlist filtering, and 30 tests. Materials Cloud `go_migration_state` moves from `parity_required` to `go_shadow_ready` in source_registry, fixture, and cross-language drift tests. |
+| `4cb79b4` | P3 nomad_perovskite_schema Go reader | Adds `internal/nomadperovskiteschema/` with `Reader` for `schema-package.json` including `Validate`, `FindSearchApp`, `ProviderIDs`, `Summary`, and 22 tests. `go_migration_state` moves from `parity_required` to `go_shadow_ready`. All remaining `parity_required` entries eliminated from source_registry. |
 
 ## Current Data Source Status
 
@@ -127,9 +129,9 @@ The current branch contains these V35 execution commits:
 | NOMAD PERLA PSC | Official-interface migration is partially complete: Go uses NOMAD v1 REST-style `/entries/query` and `/entries/archive/query` paths for HTL search/archive shadow parity; archive rate limiting and schema-unrecognized cases route to review. AtomReasonX records known NOMAD sync controls as local operator tasks, Go admits them to an append-only ledger, the CLI has an explicitly authorized execution path that writes a quarantined/pending source snapshot only, the desktop bridge can invoke that path only for admission-backed ledger tasks through a fixed no-token/no-executable-path command surface, the UI projects returned execution reports/manifests back into the operator task list, and reopened runtime sessions can restore those persisted execution reports read-only from ledger plus source-manifest evidence. Current dirty work adds a closure gate tying validation-summary hashes and writer flags back to the generated snapshot. | Next closure is not more custom NOMAD design: finish official NOMAD/OpenAPI and FAIRmat plugin alignment notes, then add review/promotion so accepted snapshots can move to provider cache, SQLite/local backend, scoring, or experiments only through explicit future writer authorization. |
 | HOPV15 | Go local snapshot parity; still may require Python bridge for larger chemistry parsing/import decisions. | Full snapshot import tooling and dataset-scale validation. |
 | OPV-DB | Go local snapshot parity; device metrics remain benchmark facts, not PSC truth. | Full CC-BY attribution/import bundle policy. |
-| PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts; ready snapshots now require schema-valid Python oracle and parser parity report bodies. | Full dataset acquisition, real parser parity, Python oracle output, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
-| Materials Cloud | Manual archive metadata import plus P3 closure-readiness gate; metadata-only facts remain blocked; a single-record scientific path is now defined only for explicitly allowlisted fields with parser, unit, checksum, license, citation, manifest-listed validation evidence, and schema-valid parser/unit report bodies. | Real operator-selected record DOI/version/file bundle, record-specific parser report body, unit validation body, license/citation review, checksum coverage, and identity evidence before non-fixture scientific facts are admitted. |
-| NOMAD perovskite schema package | Schema/reference module; not a data mirror. | Optional deeper schema extraction only if it improves field alias coverage. |
+| PubChemQC | Local snapshot foundation plus P3 closure-readiness gate; quarantined; `python_bridge_required=true`; records must be explicit computed facts; ready snapshots now require schema-valid Python oracle and parser parity report bodies. Go client handles identity lookup. | Full dataset acquisition, real parser parity, Python oracle output, identity join, checksum, license/citation, and storage policy before any non-fixture import. |
+| Materials Cloud | Go shadow-ready (`internal/materialscloud/` with FetchRecord, FetchFileManifest); manual archive metadata import plus P3 closure-readiness gate; metadata-only facts remain blocked; a single-record scientific path is now defined only for explicitly allowlisted fields with parser, unit, checksum, license, citation, manifest-listed validation evidence, and schema-valid parser/unit report bodies. | Real operator-selected record DOI/version/file bundle, record-specific parser report body, unit validation body, license/citation review, checksum coverage, and identity evidence before non-fixture scientific facts are admitted. |
+| NOMAD perovskite schema package | Go shadow-ready (`internal/nomadperovskiteschema/` with Reader, Validate, FindSearchApp); schema/reference module; not a data mirror. `go_migration_state` is now `go_shadow_ready`. | Optional deeper schema extraction only if it improves field alias coverage. |
 | Crossref/OpenAlex | Existing Python/provider plan surfaces; not part of current Go parity wave. | Future literature metadata Go parity after data-source P3 stabilizes. |
 | Custom HTL DFT | Project-generated calculation path; Python bridge retained. | Keep as science bridge until workflow/tooling parity exists. |
 | Local paper vault/future extraction | Workbench-visible, deferred extractor path. | P4/P5 knowledge pipeline and model-assisted extraction contracts. |
@@ -306,6 +308,19 @@ Recent gates run during this checkpoint:
 - `npm.cmd run build` in `frontend/atomreasonx` passed after the workflow operator task queue slice.
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 28 tests after the workflow operator task queue slice; sandboxed `.venv` Python remained blocked by local `uv` trampoline permissions.
 - Herschel found no blocking spec issues and suggested low-cost direct behavior coverage; Dalton found P1/P2 boundary hardening issues around loose artifact projection and payload-controlled operator metadata. The fix moved workflow metadata into an allowlist contract, hashes task ids instead of embedding raw idempotency keys, rebuilds safe task config, and fails closed on mismatched schema/status/queue/action/provider/effects. Targeted Vitest, build, and Python contract reruns above covered the review fixes; Dalton re-reviewed and approved the slice.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 -v ./internal/materialscloud/` passed with 30 tests after the Materials Cloud Go client slice, covering record lookup, not-found, file manifest, citation building, deterministic IDs, rate limiting, context cancellation, and ProviderResponse contract validation.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/... ./cmd/...` passed with 14 packages after the Materials Cloud Go client slice.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the Materials Cloud Go client slice.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 53 Vitest tests after the Materials Cloud Go client and source_registry update; no frontend code changed, so existing evidence remained valid.
+- `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_contracts -v` passed with 31 tests after adding `materials_cloud.go_migration_state == "go_shadow_ready"` drift sentinel. The generated root `uv.lock` was removed.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 -v ./internal/sourcesnapshot/` passed after updating `TestSourceRegistryMarksHopv15AndOpvDbGoShadowReady` to expect `materials_cloud.go_migration_state == "go_shadow_ready"`.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 -v ./internal/nomadperovskiteschema/` passed with 22 tests after the nomad_perovskite_schema Go reader slice, covering Reader creation, Validate (14 error conditions), FindSearchApp, ProviderIDs, Summary, and JSON error handling.
+- `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/... ./cmd/...` passed with 14 packages after the nomad_perovskite_schema Go reader slice.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed after the nomad_perovskite_schema Go reader slice.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 53 Vitest tests after the nomad_perovskite_schema reader and fixture sync; no frontend code changed, so existing evidence remained valid.
+- `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_contracts -v` passed with 31 tests after adding `nomad_perovskite_schema.go_migration_state == "go_shadow_ready"` drift sentinel and syncing the frontend fixture. The generated root `uv.lock` was removed.
+- `git diff --check`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed before each commit; `uv.lock` was absent after each cleanup.
+- Go vet shows only the pre-existing `testing.Chdir requires go1.24 or later` warning in `cmd/spiroctl/main_test.go` (module is go1.22); this was not introduced by any V35 slice in this checkpoint.
 
 ## Remaining Work
 
@@ -327,12 +342,7 @@ Recent gates run during this checkpoint:
    are still required. Deferred scientific fields such as geometry, total
    energy, dipole, charge state, or software must fail closed until parser
    parity exists.
-3. Materials Cloud scientific import remains open for real data, but the
-   admission contract is now explicit for a single record: parser report, unit
-   validation, record-specific license/citation review, checksum coverage,
-   manifest-listed validation files, schema-valid report bodies, computed=true,
-   metadata_only=false, and a closed scientific field allowlist are required.
-   The current repository fixture remains metadata-only and closure-blocked.
+3. Materials Cloud now has a Go shadow client (`internal/materialscloud/` with 30 tests) for record lookup and file manifest extraction, but scientific import remains open for real data. The admission contract is explicit: parser report, unit validation, record-specific license/citation review, checksum coverage, manifest-listed validation files, schema-valid report bodies, computed=true, metadata_only=false, and a closed scientific field allowlist are required. The current repository fixture remains metadata-only and closure-blocked.
 4. NOMAD PERLA live archive behavior remains conservative. Rate limit,
    archive-unavailable, and schema-unrecognized cases must stay review-routed.
    The next implementation should be official-interface migration work, not
