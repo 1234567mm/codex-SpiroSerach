@@ -6,3 +6,9 @@ tests/fixtures/v20_project_evolution/run-001/* -text
 tests/fixtures/v20_project_evolution/run-002/* -text
 tests/fixtures/v21_identity_closure/* text eol=lf
 tests/fixtures/v22_scientific_validation/* text eol=lf
+data/lib/**/*.json text eol=lf
+data/lib/**/*.jsonl text eol=lf
+data/public_baselines/**/*.json text eol=lf
+schemas/*.json text eol=lf
+internal/**/*.go text eol=lf
+cmd/**/*.go text eol=lf
