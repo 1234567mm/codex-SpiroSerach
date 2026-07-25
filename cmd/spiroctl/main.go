@@ -95,8 +95,14 @@ func runWithDependencies(
 	if len(args) >= 3 && args[0] == "workflow-task" {
 		return runWorkflowTask(args, nomadTransportFactory)
 	}
+	if len(args) >= 3 && args[0] == "source-closure" && (args[1] == "requirements" || args[1] == "promote") {
+		if args[1] == "requirements" {
+			return runSourceClosureRequirements(args)
+		}
+		return runSourceClosurePromote(args)
+	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -391,6 +397,51 @@ func parseSourceProviderTestConnectionArgs(args []string) (string, string, bool)
 
 func sourceProviderTestConnectionUsageError() error {
 	return fmt.Errorf("usage: spiroctl source-provider test-connection materials_project [--formula <formula>]")
+}
+
+func runSourceClosureRequirements(args []string) error {
+	report, err := sourcesnapshot.BuildClosureRequirementsReport(args[2])
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(report)
+}
+
+func runSourceClosurePromote(args []string) error {
+	manifestPath := args[2]
+	manifest, err := sourcesnapshot.LoadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("cannot load source manifest: %w", err)
+	}
+	dir := filepath.Dir(manifestPath)
+	report, err := sourcesnapshot.BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		return fmt.Errorf("closure readiness build failed: %w", err)
+	}
+	if !report.Ready {
+		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
+			return err
+		}
+		return &sourcesnapshot.ClosureReadinessError{Report: report}
+	}
+	promotion := struct {
+		SchemaVersion string `json:"schema_version"`
+		SourceID      string `json:"source_id"`
+		Action        string `json:"action"`
+		Ready         bool   `json:"ready"`
+		PromotionScope string `json:"promotion_scope"`
+		ManifestPath  string `json:"manifest_path"`
+		RecordCount   int    `json:"record_count"`
+	}{
+		SchemaVersion: "v36.source_closure_promotion.v1",
+		SourceID:      manifest.SourceID,
+		Action:        "promote",
+		Ready:         true,
+		PromotionScope: "readiness_only",
+		ManifestPath:  manifestPath,
+		RecordCount:   report.RecordCount,
+	}
+	return json.NewEncoder(os.Stdout).Encode(promotion)
 }
 
 func defaultSourceRegistryPath() (string, error) {

@@ -299,6 +299,33 @@ func TestSourceClosureRequirementsEmitsMachineReadableBacklog(t *testing.T) {
 	}
 }
 
+func TestSourceClosurePromoteBlocksQuarantinedFixtures(t *testing.T) {
+	cases := []struct {
+		name           string
+		path           string
+		expectedReason string
+	}{
+		{
+			name:           "pubchemqc",
+			path:           filepath.Join("..", "..", "data", "lib", "pubchemqc", "source-manifest.json"),
+			expectedReason: "pubchemqc_python_oracle_missing",
+		},
+		{
+			name:           "materials_cloud",
+			path:           filepath.Join("..", "..", "data", "lib", "materials_cloud", "source-manifest.json"),
+			expectedReason: "materials_cloud_metadata_only_records",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := run([]string{"source-closure", "promote", tc.path})
+			if err == nil || !strings.Contains(err.Error(), tc.expectedReason) {
+				t.Fatalf("expected %s closure block, got %v", tc.expectedReason, err)
+			}
+		})
+	}
+}
+
 func TestSourceProviderTestConnectionMaterialsProjectMissingKeyIsMachineReadable(t *testing.T) {
 	t.Setenv("MATERIALS_PROJECT_API_KEY", "")
 
