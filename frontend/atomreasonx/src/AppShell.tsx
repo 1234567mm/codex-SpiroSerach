@@ -12,7 +12,7 @@ import type {
   ReadonlyRunOperatorConfig,
   ReadonlyRunRecentOutputDir,
 } from "./adapters/readonly-run-operator-config";
-import type { AtomReasonXWorkspaceState } from "./contracts/types";
+import type { AtomReasonXWorkspaceState, OperatorTaskExecutionReport } from "./contracts/types";
 
 const RIGHT_INSPECTOR_TABS = ["Overview", "Files"];
 
@@ -33,6 +33,7 @@ export const AppShell: React.FC<{
   onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
   commandDispatcher?: WorkbenchCommandDispatcher;
   workflowTaskExecutor?: WorkflowTaskExecutor;
+  onWorkflowTaskExecuted?: (report: OperatorTaskExecutionReport) => void;
 }> = ({
   workspace,
   onOpenSettings,
@@ -43,6 +44,7 @@ export const AppShell: React.FC<{
   onApplyReadonlyRunOutputDir,
   commandDispatcher,
   workflowTaskExecutor,
+  onWorkflowTaskExecuted,
 }) => {
   return (
     <div className="app-shell" style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
@@ -70,6 +72,7 @@ export const AppShell: React.FC<{
               operatorTasks={workspace.operator_tasks}
               commandDispatcher={commandDispatcher}
               workflowTaskExecutor={workflowTaskExecutor}
+              onWorkflowTaskExecuted={onWorkflowTaskExecuted}
             />
           </div>
           <div className="composer" style={{ padding: "8px" }}>

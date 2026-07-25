@@ -49,6 +49,7 @@ import {
   buildWorkflowTaskExecutionRequest,
   canExecuteWorkflowTask,
   createTauriWorkflowTaskExecutor,
+  projectWorkflowTaskExecutionReport,
   validateOperatorTaskExecutionReport,
 } from "../adapters/workflow-task-execution-adapter";
 import { projectSourceSettingsCommandResult } from "../adapters/source-settings-command-projection";
@@ -497,10 +498,14 @@ describe("AtomReasonX contract fixtures", () => {
     expect(workflowSource).toContain("operatorTasks");
     expect(workflowSource).toContain("operator-task-list");
     expect(workflowSource).toContain("workflowTaskExecutor");
+    expect(workflowSource).toContain("onWorkflowTaskExecuted");
+    expect(workflowSource).toContain("execution_report");
+    expect(workflowSource).toContain("source_manifest_path");
     expect(workflowSource).toContain("canExecuteWorkflowTask");
     expect(workflowSource).toContain("execute(task)");
     expect(appShellSource).toContain("operatorTasks={workspace.operator_tasks}");
     expect(appShellSource).toContain("workflowTaskExecutor={workflowTaskExecutor}");
+    expect(appShellSource).toContain("onWorkflowTaskExecuted={onWorkflowTaskExecuted}");
     expect(workflowSource).not.toContain("workbench-read-adapter");
     expect(workflowSource).not.toContain("read-only-artifact-adapter");
   });
@@ -1643,6 +1648,86 @@ describe("AtomReasonX contract fixtures", () => {
     expect(JSON.stringify(calls[0].args)).not.toContain("api_key");
     expect(JSON.stringify(calls[0].args)).not.toContain("readonly_token");
     expect(JSON.stringify(calls[0].args)).not.toContain("spiroctl.exe");
+  });
+
+  it("projects NOMAD execution reports back into operator task summaries without writer state", async () => {
+    const workflowAction = (fixture as unknown as AtomReasonXWorkspaceState).command_actions
+      .find(item => item.action_type === "start_nomad_sync");
+    const adapter = createRuntimeWorkbenchCommandAdapter();
+    const dispatcher = createWorkbenchCommandDispatcher(adapter, {
+      idempotencyKey: "nomad-sync-execute-report",
+      expectedTargetVersion: "0",
+    });
+    const result = await submitWorkflowCommandAction(dispatcher, workflowAction!) as AtomReasonXCommandResult;
+    const workspace = projectWorkflowCommandTaskResult(
+      JSON.parse(JSON.stringify(fixture)) as AtomReasonXWorkspaceState,
+      result,
+    );
+    const admittedTask = {
+      ...workspace.operator_tasks[0],
+      admission_status: "admitted" as const,
+      admission_hash: "a".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+    };
+    const workspaceWithAdmittedTask = {
+      ...workspace,
+      operator_tasks: [admittedTask],
+    } satisfies AtomReasonXWorkspaceState;
+    const report = {
+      schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+      task_id: admittedTask.task_id,
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      admission_hash: admittedTask.admission_hash,
+      execution_status: "source_snapshot_written",
+      write_authorization_scope: "source_snapshot_only",
+      live_calls_authorized: true,
+      provider_cache_written: false,
+      local_backend_written: false,
+      scoring_written: false,
+      experiment_written: false,
+      started_at: "2026-07-25T00:00:00Z",
+      target_data_library_path: `data/lib/nomad_perla_psc/snapshots/run-${admittedTask.task_id}`,
+      source_manifest_path: `data/lib/nomad_perla_psc/snapshots/run-${admittedTask.task_id}/source-manifest.json`,
+      normalized_record_count: 2,
+      provider_response_hash: "b".repeat(64),
+      raw_search_hash: "c".repeat(64),
+      raw_archive_hash: "d".repeat(64),
+      archive_status: "rate_limited",
+      review_required: true,
+      review_reasons: ["archive_rate_limited"],
+    } satisfies OperatorTaskExecutionReport;
+
+    const projected = projectWorkflowTaskExecutionReport(workspaceWithAdmittedTask, report);
+    const duplicate = projectWorkflowTaskExecutionReport(projected, report);
+    const unrelated = projectWorkflowTaskExecutionReport(workspaceWithAdmittedTask, {
+      ...report,
+      task_id: "task-start_nomad_sync-unknown",
+    });
+
+    expect(projected).not.toBe(workspaceWithAdmittedTask);
+    expect(projected.operator_tasks[0].execution_report).toMatchObject({
+      schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+      source_manifest_path: report.source_manifest_path,
+      normalized_record_count: 2,
+      archive_status: "rate_limited",
+      review_required: true,
+      review_reasons: ["archive_rate_limited"],
+      provider_cache_written: false,
+      local_backend_written: false,
+      scoring_written: false,
+      experiment_written: false,
+    });
+    expect(canExecuteWorkflowTask(admittedTask)).toBe(true);
+    expect(canExecuteWorkflowTask(projected.operator_tasks[0])).toBe(false);
+    expect(duplicate).toBe(projected);
+    expect(unrelated).toBe(workspaceWithAdmittedTask);
+    expect(workspaceWithAdmittedTask.operator_tasks[0].execution_report).toBeUndefined();
+    expect(projected.knowledge_library).toEqual(workspaceWithAdmittedTask.knowledge_library);
+    expect(JSON.stringify(projected.operator_tasks)).not.toContain("api_key");
+    expect(JSON.stringify(projected.operator_tasks)).not.toContain("readonly_token");
+    expect(JSON.stringify(projected.operator_tasks)).not.toContain("spiroctl.exe");
   });
 
   it("rejects execution reports that drift from the schema contract", () => {

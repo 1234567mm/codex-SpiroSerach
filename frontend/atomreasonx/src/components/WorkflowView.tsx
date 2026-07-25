@@ -4,7 +4,12 @@ import {
   canExecuteWorkflowTask,
   type WorkflowTaskExecutor,
 } from "../adapters/workflow-task-execution-adapter";
-import type { HtlOperatorTaskSummary, HtlWorkbenchCommandAction, HtlWorkflowPreview } from "../contracts/types";
+import type {
+  HtlOperatorTaskSummary,
+  HtlWorkbenchCommandAction,
+  HtlWorkflowPreview,
+  OperatorTaskExecutionReport,
+} from "../contracts/types";
 
 export const buildWorkflowCommandPayload = (action: HtlWorkbenchCommandAction): Record<string, unknown> => ({
   provider: action.provider ?? null,
@@ -31,7 +36,15 @@ export const WorkflowView: React.FC<{
   operatorTasks?: HtlOperatorTaskSummary[];
   commandDispatcher?: WorkbenchCommandDispatcher;
   workflowTaskExecutor?: WorkflowTaskExecutor;
-}> = ({ workflow, commandActions, operatorTasks = [], commandDispatcher, workflowTaskExecutor }) => {
+  onWorkflowTaskExecuted?: (report: OperatorTaskExecutionReport) => void;
+}> = ({
+  workflow,
+  commandActions,
+  operatorTasks = [],
+  commandDispatcher,
+  workflowTaskExecutor,
+  onWorkflowTaskExecuted,
+}) => {
   const [executingTaskIds, setExecutingTaskIds] = React.useState<Set<string>>(() => new Set());
   const executeTask = React.useCallback(async (task: HtlOperatorTaskSummary) => {
     if (!workflowTaskExecutor || !canExecuteWorkflowTask(task) || executingTaskIds.has(task.task_id)) {
@@ -39,7 +52,8 @@ export const WorkflowView: React.FC<{
     }
     setExecutingTaskIds(previous => new Set(previous).add(task.task_id));
     try {
-      await workflowTaskExecutor.execute(task);
+      const report = await workflowTaskExecutor.execute(task);
+      onWorkflowTaskExecuted?.(report);
     } finally {
       setExecutingTaskIds(previous => {
         const next = new Set(previous);
@@ -47,7 +61,7 @@ export const WorkflowView: React.FC<{
         return next;
       });
     }
-  }, [executingTaskIds, workflowTaskExecutor]);
+  }, [executingTaskIds, onWorkflowTaskExecuted, workflowTaskExecutor]);
 
   return (
     <section className="workflow-view">
@@ -81,27 +95,38 @@ export const WorkflowView: React.FC<{
       </div>
       {operatorTasks.length > 0 && (
         <div className="operator-task-list">
-          {operatorTasks.map(task => (
-            <div key={task.task_id} className="operator-task-row">
-              <strong>{task.action_type}</strong>
-              <span>{task.status}</span>
-              <span>{task.provider ?? "workspace"}</span>
-              <button
-                type="button"
-                disabled={
-                  !workflowTaskExecutor
-                  || !canExecuteWorkflowTask(task)
-                  || executingTaskIds.has(task.task_id)
-                }
-                title={task.task_id}
-                onClick={() => {
-                  void executeTask(task);
-                }}
-              >
-                Execute
-              </button>
-            </div>
-          ))}
+          {operatorTasks.map(task => {
+            const report = task.execution_report;
+            return (
+              <div key={task.task_id} className="operator-task-row">
+                <strong>{task.action_type}</strong>
+                <span>{report?.execution_status ?? task.status}</span>
+                <span>{task.provider ?? "workspace"}</span>
+                <button
+                  type="button"
+                  disabled={
+                    !workflowTaskExecutor
+                    || !canExecuteWorkflowTask(task)
+                    || executingTaskIds.has(task.task_id)
+                  }
+                  title={task.task_id}
+                  onClick={() => {
+                    void executeTask(task);
+                  }}
+                >
+                  Execute
+                </button>
+                {report && (
+                  <div className="operator-task-report">
+                    <span>{report.normalized_record_count} records</span>
+                    <span>{report.archive_status}</span>
+                    <span>{report.review_required ? report.review_reasons.join(", ") : "review clear"}</span>
+                    <code style={{ overflowWrap: "anywhere" }}>{report.source_manifest_path}</code>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

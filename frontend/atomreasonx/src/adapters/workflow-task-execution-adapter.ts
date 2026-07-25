@@ -1,4 +1,5 @@
 import type {
+  AtomReasonXWorkspaceState,
   HtlOperatorTaskSummary,
   OperatorTaskExecutionReport,
 } from "../contracts/types";
@@ -73,6 +74,7 @@ export const canExecuteWorkflowTask = (task: HtlOperatorTaskSummary): boolean =>
   && task.admission_status === "admitted"
   && task.admission_source === "operator_task_ledger"
   && task.ledger_path === DEFAULT_OPERATOR_TASK_LEDGER_PATH
+  && task.execution_report === undefined
   && isSHA256(String(task.admission_hash ?? ""))
   && safeNomadTaskId(task.task_id)
   && equalStringArray(task.declared_effects, ["provider_sync_jobs"])
@@ -103,6 +105,40 @@ export const createTauriWorkflowTaskExecutor = ({
     return validateOperatorTaskExecutionReport(report, request);
   },
 });
+
+export const projectWorkflowTaskExecutionReport = (
+  workspace: AtomReasonXWorkspaceState,
+  report: OperatorTaskExecutionReport,
+): AtomReasonXWorkspaceState => {
+  if (!isProjectableExecutionReport(report)) {
+    return workspace;
+  }
+  const taskIndex = workspace.operator_tasks.findIndex(task => (
+    task.task_id === report.task_id
+    && task.action_type === EXECUTABLE_NOMAD_ACTION
+    && task.provider === EXECUTABLE_NOMAD_PROVIDER
+    && task.admission_status === "admitted"
+    && task.admission_source === "operator_task_ledger"
+    && task.admission_hash === report.admission_hash
+  ));
+  if (taskIndex < 0 || workspace.operator_tasks[taskIndex].execution_report) {
+    return workspace;
+  }
+  const nextTasks = workspace.operator_tasks.map((task, index) => {
+    if (index !== taskIndex) {
+      return { ...task, config: { ...task.config } };
+    }
+    return {
+      ...task,
+      config: { ...task.config },
+      execution_report: cloneExecutionReport(report),
+    };
+  });
+  return {
+    ...workspace,
+    operator_tasks: nextTasks,
+  };
+};
 
 export const validateOperatorTaskExecutionReport = (
   value: unknown,
@@ -231,6 +267,48 @@ export const validateOperatorTaskExecutionReport = (
     review_required: report.review_required,
     review_reasons: [...report.review_reasons],
   } as OperatorTaskExecutionReport;
+};
+
+const cloneExecutionReport = (report: OperatorTaskExecutionReport): OperatorTaskExecutionReport => ({
+  ...report,
+  review_reasons: [...report.review_reasons],
+});
+
+const isProjectableExecutionReport = (report: OperatorTaskExecutionReport): boolean => {
+  const blob = JSON.stringify(report);
+  return (
+    report.schema_version === OPERATOR_TASK_EXECUTION_SCHEMA_VERSION
+    && report.action_type === EXECUTABLE_NOMAD_ACTION
+    && report.provider === EXECUTABLE_NOMAD_PROVIDER
+    && report.execution_status === "source_snapshot_written"
+    && report.write_authorization_scope === "source_snapshot_only"
+    && report.live_calls_authorized === true
+    && report.provider_cache_written === false
+    && report.local_backend_written === false
+    && report.scoring_written === false
+    && report.experiment_written === false
+    && typeof report.started_at === "string"
+    && report.started_at.trim() !== ""
+    && typeof report.review_required === "boolean"
+    && isSHA256(report.admission_hash)
+    && isSHA256(report.provider_response_hash)
+    && isSHA256(report.raw_search_hash)
+    && isSHA256(report.raw_archive_hash)
+    && safeNomadTaskId(report.task_id)
+    && safeNomadTargetPath(report.target_data_library_path)
+    && report.source_manifest_path === `${report.target_data_library_path}/source-manifest.json`
+    && Number.isInteger(report.normalized_record_count)
+    && report.normalized_record_count >= 0
+    && EXECUTION_ARCHIVE_STATUSES.has(report.archive_status)
+    && Array.isArray(report.review_reasons)
+    && report.review_reasons.every(reason => typeof reason === "string" && reason.trim() !== "")
+    && !blob.includes("api_key")
+    && !blob.includes(["readonly", "token"].join("_"))
+    && !blob.includes("Bearer ")
+    && !blob.includes("mp-secret")
+    && !blob.includes("SPIROCTL_PATH")
+    && !blob.includes("spiroctl.exe")
+  );
 };
 
 const defaultTauriInvoke: TauriCommandInvoke = async (command, args) => {

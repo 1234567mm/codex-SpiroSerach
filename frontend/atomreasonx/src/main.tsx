@@ -6,7 +6,10 @@ import { createWorkbenchCommandDispatcher, type WorkbenchCommandAdapter } from "
 import { createRuntimeWorkbenchCommandAdapter } from "./adapters/tauri-command-adapter";
 import { projectSourceSettingsCommandResult } from "./adapters/source-settings-command-projection";
 import { projectWorkflowCommandTaskResult } from "./adapters/workflow-command-task-projection";
-import { createTauriWorkflowTaskExecutor } from "./adapters/workflow-task-execution-adapter";
+import {
+  createTauriWorkflowTaskExecutor,
+  projectWorkflowTaskExecutionReport,
+} from "./adapters/workflow-task-execution-adapter";
 import { createRuntimeWorkbenchReadAdapter } from "./adapters/readonly-run-workbench-adapter";
 import {
   buildReadonlyRunRecentOutputDirs,
@@ -17,7 +20,11 @@ import {
 } from "./adapters/readonly-run-operator-config";
 import fixture from "./fixtures/atomreasonx-ui-fixture.json";
 import { useWorkbenchWorkspaceStore } from "./stores/workspace-store";
-import type { AtomReasonXCommandResult, AtomReasonXWorkspaceState } from "./contracts/types";
+import type {
+  AtomReasonXCommandResult,
+  AtomReasonXWorkspaceState,
+  OperatorTaskExecutionReport,
+} from "./contracts/types";
 
 const baseWorkspace = fixture as unknown as AtomReasonXWorkspaceState;
 const commandAdapter = createRuntimeWorkbenchCommandAdapter();
@@ -82,6 +89,16 @@ const AtomReasonXRoot: React.FC = () => {
     }))
     : undefined;
   const workflowTaskExecutor = visibleWorkspace && !runtimeReadAdapter.readOnly ? runtimeWorkflowTaskExecutor : undefined;
+  const onWorkflowTaskExecuted = React.useCallback((report: OperatorTaskExecutionReport) => {
+    if (!visibleWorkspace) {
+      return;
+    }
+    setProjectedWorkspace(current => {
+      const base = current ?? visibleWorkspace;
+      const next = projectWorkflowTaskExecutionReport(base, report);
+      return next === base ? current : next;
+    });
+  }, [visibleWorkspace]);
 
   if (workspaceState.status === "loading") {
     return <div className="app-shell app-shell-loading">Loading AtomReasonX workspace</div>;
@@ -121,6 +138,7 @@ const AtomReasonXRoot: React.FC = () => {
       onApplyReadonlyRunOutputDir={applyReadonlyRunOutputDir}
       commandDispatcher={commandDispatcher}
       workflowTaskExecutor={workflowTaskExecutor}
+      onWorkflowTaskExecuted={onWorkflowTaskExecuted}
     />
   );
 };

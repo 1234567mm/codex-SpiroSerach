@@ -227,6 +227,7 @@ export interface HtlOperatorTaskSummary {
   admission_hash?: string;
   ledger_path?: string;
   admission_source?: "operator_task_ledger";
+  execution_report?: OperatorTaskExecutionReport;
 }
 
 export interface AtomReasonXWorkflowCommandTaskArtifact extends HtlOperatorTaskSummary {
