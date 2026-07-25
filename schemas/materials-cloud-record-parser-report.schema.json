@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/materials-cloud-record-parser-report.schema.json",
+  "title": "MaterialsCloudRecordParserReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "accepted_fields"],
+  "properties": {
+    "schema_version": { "const": "v35.materials_cloud_record_parser_report.v1" },
+    "status": { "const": "pass" },
+    "accepted_fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "material_id",
+          "formula",
+          "structure_ref",
+          "band_gap_ev",
+          "formation_energy_ev_per_atom",
+          "energy_above_hull_ev",
+          "method",
+          "software",
+          "resolution_status"
+        ]
+      }
+    }
+  }
+}

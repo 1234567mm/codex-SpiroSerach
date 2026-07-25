@@ -7,6 +7,7 @@ declared effects. Read-only APIs must not write config.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 import unittest
@@ -16,20 +17,51 @@ from spirosearch.v23_command import (
     CommandPreconditionEvaluator,
 )
 from spirosearch.config_command import ConfigCommandPlane
+from spirosearch.config_command_runtime import execute_config_command_payload
 from spirosearch.local_config import LocalConfigStore, FileSecretStore
 from spirosearch.model_provider_registry import load_model_provider_registry
+from spirosearch.source_registry import load_source_registry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / "data" / "model_provider_registry.json"
+SOURCE_REGISTRY_PATH = REPO_ROOT / "data" / "source_registry.json"
 
 
-def _make_plane(tmpdir: Path) -> ConfigCommandPlane:
+def _fake_source_probe_runner(entry, api_key: str, key_source: str, formula: str) -> dict:
+    return {
+        "schema_version": "v35.source_provider_connection_probe.v1",
+        "provider": entry.provider,
+        "status": "validated",
+        "validation_state": "validated",
+        "read_only": True,
+        "live_enabled": entry.live_enabled,
+        "requires_api_key": entry.requires_api_key,
+        "api_key_env": entry.api_key_env or "MATERIALS_PROJECT_API_KEY",
+        "api_key_configured": bool(api_key),
+        "key_source": key_source,
+        "formula": formula,
+        "source_url": f"{entry.base_url}/materials/summary?formula={formula}",
+        "response_id": "response-test",
+        "resolution_status": "resolved",
+        "normalized_field_count": 3,
+        "allowed_output_fields": list(entry.allowed_output_fields),
+        "review_triggers": list(entry.review_triggers),
+    }
+
+
+def _make_plane(tmpdir: Path, source_probe_runner=_fake_source_probe_runner) -> ConfigCommandPlane:
     store = LocalConfigStore(
         config_path=tmpdir / "local-config.json",
         secret_store=FileSecretStore(tmpdir / "secrets.env"),
     )
     registry = load_model_provider_registry(REGISTRY_PATH)
-    return ConfigCommandPlane(config_store=store, registry=registry)
+    source_registry = load_source_registry(SOURCE_REGISTRY_PATH)
+    return ConfigCommandPlane(
+        config_store=store,
+        registry=registry,
+        source_registry=source_registry,
+        source_probe_runner=source_probe_runner,
+    )
 
 
 def _make_request(
@@ -185,6 +217,73 @@ class TestKeyRotateCommand(unittest.TestCase):
         self.assertEqual(result.reason_code, "invalid_payload")
         self.assertIsNone(self.plane.config_store.get_api_key("deepseek"))
 
+    def test_key_rotate_rejects_env_file_control_characters(self) -> None:
+        request = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-ok\nprivate_new_api=sk-attacker",
+            },
+        )
+        result, audit = self.plane.execute(request)
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.reason_code, "invalid_secret_value")
+        self.assertEqual(audit["validation_state"], "rejected")
+        self.assertIsNone(self.plane.config_store.get_api_key("materials_project"))
+        self.assertNotIn("private_new_api", (self.tmpdir / "secrets.env").read_text())
+
+    def test_key_rotate_accepts_materials_project_source_provider(self) -> None:
+        request = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-new-key",
+            },
+        )
+        result, audit = self.plane.execute(request)
+        sanitized = self.plane.build_sanitized_result(result, audit)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "validated")
+        self.assertEqual(self.plane.config_store.get_api_key("materials_project"), "mp-new-key")
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+        self.assertNotIn("mp-new-key", json.dumps(sanitized))
+
+    def test_key_remove_accepts_materials_project_source_provider(self) -> None:
+        self.plane.config_store.set_api_key("materials_project", "mp-to-remove")
+        request = _make_request(
+            action_type="key_remove",
+            expected_target_version=str(self.plane.config_store.config_version),
+            payload={"provider": "materials_project", "provider_scope": "source"},
+        )
+        result, audit = self.plane.execute(request)
+        sanitized = self.plane.build_sanitized_result(result, audit)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "validated")
+        self.assertIsNone(self.plane.config_store.get_api_key("materials_project"))
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+        self.assertNotIn("mp-to-remove", json.dumps(sanitized))
+
+    def test_key_rotate_rejects_declared_source_scope_for_model_provider(self) -> None:
+        request = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "deepseek",
+                "provider_scope": "source",
+                "api_key": "sk-wrong-scope",
+            },
+        )
+        result, audit = self.plane.execute(request)
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.reason_code, "provider_scope_mismatch")
+        self.assertEqual(audit["validation_state"], "rejected")
+        self.assertIsNone(self.plane.config_store.get_api_key("deepseek"))
+
 
 class TestConnectionCommand(unittest.TestCase):
     def setUp(self) -> None:
@@ -219,11 +318,179 @@ class TestConnectionCommand(unittest.TestCase):
         self.plane.config_store.set_api_key("deepseek", "sk-test")
         request = _make_request(
             action_type="test_connection",
+            expected_target_version=str(self.plane.config_store.config_version),
             payload={"provider": "deepseek"},
         )
         result, audit = self.plane.execute(request)
         self.assertEqual(result.status, "accepted")
         self.assertEqual(audit["validation_state"], "validated")
+
+    def test_source_connection_without_required_key_is_validation_failed(self) -> None:
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+        self.addCleanup(
+            lambda: (
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+                if previous is None
+                else os.environ.__setitem__("MATERIALS_PROJECT_API_KEY", previous)
+            )
+        )
+        request = _make_request(
+            action_type="test_connection",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "probe_contract": "v35.source_provider_connection_probe.v1",
+                "formula": "FAPbI3",
+            },
+        )
+        result, audit = self.plane.execute(request)
+        sanitized = self.plane.build_sanitized_result(result, audit)
+        probe = sanitized["output_artifacts"][0]["provider_probe"]
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "missing")
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+        self.assertEqual(result.output_artifacts[0]["validation_mode"], "live_probe")
+        self.assertEqual(probe["schema_version"], "v35.source_provider_connection_probe.v1")
+        self.assertEqual(probe["provider"], "materials_project")
+        self.assertEqual(probe["status"], "missing_api_key")
+        self.assertEqual(probe["validation_state"], "missing")
+        self.assertEqual(probe["formula"], "FAPbI3")
+        self.assertTrue(probe["read_only"])
+        self.assertFalse(probe["api_key_configured"])
+        self.assertIn("missing_api_key", probe["review_triggers"])
+
+    def test_source_connection_without_required_key_skips_probe_runner(self) -> None:
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+        called = False
+
+        def fail_if_called(entry, api_key: str, key_source: str, formula: str) -> dict:
+            nonlocal called
+            called = True
+            raise AssertionError("missing-key source probe must not call the runner")
+
+        try:
+            plane = _make_plane(self.tmpdir, source_probe_runner=fail_if_called)
+            request = _make_request(
+                action_type="test_connection",
+                payload={"provider": "materials_project", "provider_scope": "source"},
+            )
+            result, audit = plane.execute(request)
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "missing")
+        self.assertFalse(called)
+
+    def test_source_connection_configures_materials_project_without_leaking_key(self) -> None:
+        self.plane.config_store.set_api_key("materials_project", "mp-secret-for-test")
+        request = _make_request(
+            action_type="test_connection",
+            expected_target_version=str(self.plane.config_store.config_version),
+            payload={"provider": "materials_project", "provider_scope": "source"},
+        )
+        result, audit = self.plane.execute(request)
+        sanitized = self.plane.build_sanitized_result(result, audit)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(audit["validation_state"], "validated")
+        self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+        self.assertEqual(result.output_artifacts[0]["validation_mode"], "live_probe")
+        self.assertEqual(
+            result.output_artifacts[0]["provider_probe"]["schema_version"],
+            "v35.source_provider_connection_probe.v1",
+        )
+        self.assertEqual(result.output_artifacts[0]["provider_probe"]["key_source"], "operator_secret")
+        self.assertTrue(result.output_artifacts[0]["provider_probe"]["api_key_configured"])
+        self.assertNotIn("mp-secret-for-test", json.dumps(sanitized))
+
+    def test_source_connection_replays_probe_without_calling_runner_again(self) -> None:
+        probe_calls: list[str] = []
+
+        def counting_probe_runner(entry, api_key: str, key_source: str, formula: str) -> dict:
+            probe_calls.append(formula)
+            report = _fake_source_probe_runner(entry, api_key, key_source, formula)
+            report["response_id"] = f"response-{len(probe_calls)}"
+            return report
+
+        plane = _make_plane(self.tmpdir, source_probe_runner=counting_probe_runner)
+        plane.config_store.set_api_key("materials_project", "mp-secret-for-replay")
+        request = _make_request(
+            action_type="test_connection",
+            idempotency_key="idem-mp-probe-replay",
+            expected_target_version=str(plane.config_store.config_version),
+            payload={"provider": "materials_project", "provider_scope": "source"},
+        )
+
+        result1, _ = plane.execute(request)
+        result2, audit2 = plane.execute(request)
+
+        self.assertEqual(result1.status, "accepted")
+        self.assertEqual(result2.status, "accepted")
+        self.assertEqual(probe_calls, ["CsPbI3"])
+        self.assertEqual(audit2["validation_state"], "replayed")
+        self.assertEqual(result2.output_artifacts, result1.output_artifacts)
+        self.assertEqual(
+            result2.output_artifacts[0]["provider_probe"]["response_id"],
+            "response-1",
+        )
+        self.assertNotIn("mp-secret-for-replay", json.dumps(result2.to_dict()))
+
+    def test_source_connection_uses_materials_project_env_key_fallback(self) -> None:
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-env-secret-for-test"
+        try:
+            request = _make_request(
+                action_type="test_connection",
+                payload={"provider": "materials_project", "provider_scope": "source"},
+            )
+            result, audit = self.plane.execute(request)
+            sanitized = self.plane.build_sanitized_result(result, audit)
+
+            self.assertEqual(result.status, "accepted")
+            self.assertEqual(audit["validation_state"], "validated")
+            self.assertEqual(result.output_artifacts[0]["provider_scope"], "source")
+            self.assertEqual(result.output_artifacts[0]["validation_mode"], "live_probe")
+            self.assertEqual(result.output_artifacts[0]["provider_probe"]["key_source"], "environment")
+            self.assertTrue(result.output_artifacts[0]["provider_probe"]["api_key_configured"])
+            self.assertNotIn("mp-env-secret-for-test", json.dumps(sanitized))
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+    def test_source_connection_rejects_renderer_probe_contract_override(self) -> None:
+        request = _make_request(
+            action_type="test_connection",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "probe_contract": "wrong_contract",
+            },
+        )
+        result, audit = self.plane.execute(request)
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.reason_code, "unsupported_probe_contract")
+        self.assertEqual(audit["validation_state"], "rejected")
+
+    def test_source_connection_rejects_declared_model_scope_for_source_provider(self) -> None:
+        request = _make_request(
+            action_type="test_connection",
+            payload={"provider": "materials_project", "provider_scope": "model"},
+        )
+        result, audit = self.plane.execute(request)
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.reason_code, "provider_scope_mismatch")
+        self.assertEqual(audit["validation_state"], "rejected")
 
 
 class TestRoleAuthorization(unittest.TestCase):
@@ -272,6 +539,127 @@ class TestSanitizedResult(unittest.TestCase):
         self.assertIn("changed_fields", sanitized["audit"])
         self.assertIn("validation_state", sanitized["audit"])
         self.assertEqual(sanitized["audit"]["output_artifacts"], sanitized["output_artifacts"])
+
+
+class TestConfigCommandRuntimeBridge(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmpdir = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_runtime_bridge_rotates_materials_project_key_without_result_leak(self) -> None:
+        payload = _make_request(
+            action_type="key_rotate",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-runtime-secret",
+            },
+        ).to_dict()
+
+        result = execute_config_command_payload(payload, config_root=self.tmpdir)
+        blob = json.dumps(result, sort_keys=True)
+
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["output_artifacts"][0]["provider"], "materials_project")
+        self.assertEqual(result["output_artifacts"][0]["provider_scope"], "source")
+        self.assertNotIn("mp-runtime-secret", blob)
+        self.assertIn("materials_project=mp-runtime-secret", (self.tmpdir / "secrets.env").read_text())
+        self.assertNotIn("mp-runtime-secret", (self.tmpdir / "local-config.json").read_text())
+
+    def test_runtime_bridge_runs_materials_project_probe_with_backend_key(self) -> None:
+        execute_config_command_payload(
+            _make_request(
+                action_type="key_rotate",
+                payload={
+                    "provider": "materials_project",
+                    "provider_scope": "source",
+                    "api_key": "mp-runtime-secret",
+                },
+            ).to_dict(),
+            config_root=self.tmpdir,
+        )
+        payload = _make_request(
+            action_type="test_connection",
+            idempotency_key="runtime-probe-1",
+            expected_target_version="1",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "probe_contract": "v35.source_provider_connection_probe.v1",
+                "formula": "FAPbI3",
+            },
+        ).to_dict()
+
+        result = execute_config_command_payload(
+            payload,
+            config_root=self.tmpdir,
+            source_probe_runner=_fake_source_probe_runner,
+        )
+        blob = json.dumps(result, sort_keys=True)
+        probe = result["output_artifacts"][0]["provider_probe"]
+
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(probe["status"], "validated")
+        self.assertEqual(probe["validation_state"], "validated")
+        self.assertEqual(probe["key_source"], "operator_secret")
+        self.assertEqual(probe["formula"], "FAPbI3")
+        self.assertNotIn("mp-runtime-secret", blob)
+
+    def test_runtime_bridge_replays_key_rotate_across_process_invocations(self) -> None:
+        payload = _make_request(
+            action_type="key_rotate",
+            idempotency_key="runtime-key-rotate-replay",
+            payload={
+                "provider": "materials_project",
+                "provider_scope": "source",
+                "api_key": "mp-runtime-replay-secret",
+            },
+        ).to_dict()
+
+        first = execute_config_command_payload(payload, config_root=self.tmpdir)
+        second = execute_config_command_payload(payload, config_root=self.tmpdir)
+        blob = json.dumps(second, sort_keys=True)
+
+        self.assertEqual(first["status"], "accepted")
+        self.assertEqual(second["status"], "accepted")
+        self.assertEqual(second["audit"]["validation_state"], "replayed")
+        self.assertNotEqual(second["reason_code"], "stale_target_version")
+        self.assertNotIn("mp-runtime-replay-secret", blob)
+        ledger_blob = (self.tmpdir / "config-command-idempotency.json").read_text()
+        self.assertNotIn("mp-runtime-replay-secret", ledger_blob)
+
+    def test_runtime_bridge_does_not_use_materials_project_env_key(self) -> None:
+        previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+        os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-runtime-env-secret"
+        try:
+            payload = _make_request(
+                action_type="test_connection",
+                payload={
+                    "provider": "materials_project",
+                    "provider_scope": "source",
+                    "probe_contract": "v35.source_provider_connection_probe.v1",
+                },
+            ).to_dict()
+            result = execute_config_command_payload(
+                payload,
+                config_root=self.tmpdir,
+                source_probe_runner=_fake_source_probe_runner,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+            else:
+                os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+        probe = result["output_artifacts"][0]["provider_probe"]
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(probe["status"], "missing_api_key")
+        self.assertFalse(probe["api_key_configured"])
+        self.assertNotIn("environment", json.dumps(result, sort_keys=True))
+        self.assertNotIn("mp-runtime-env-secret", json.dumps(result, sort_keys=True))
 
 
 class TestOptimisticConcurrency(unittest.TestCase):

@@ -1,0 +1,13 @@
+[
+  {
+    "pubchem_cid": "5280754",
+    "source_doi": "10.1021/acs.jcim.7b00083",
+    "license": "PubChemQC public dataset terms",
+    "method": "B3LYP",
+    "basis_set": "6-31G*",
+    "homo_ev": -5.08,
+    "lumo_ev": -2.12,
+    "band_gap_ev": 2.96,
+    "computed": true
+  }
+]

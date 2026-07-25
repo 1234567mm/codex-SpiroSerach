@@ -1,0 +1,26 @@
+{
+  "schema_version": "v35.source_snapshot_manifest.v1",
+  "source_id": "pubchemqc",
+  "dataset_doi": "10.1021/acs.jcim.7b00083",
+  "dataset_version": "fixture-v1",
+  "retrieved_at": "2026-07-23T00:00:00+00:00",
+  "source_url": "https://nakatamaho.riken.jp/pubchemqc.riken.jp/",
+  "license_hint": "PubChemQC public dataset terms; cite PubChemQC and original quantum chemistry calculations",
+  "required_citation": "PubChemQC project paper and dataset; preserve PubChem CID, method, basis, and original calculation attribution.",
+  "files": [
+    {
+      "relative_path": "records.json",
+      "bytes": 277,
+      "sha256": "ee16697b970bbfe11ef6bbaa43bd9fcec41c78d6267923568ec6591d452cd72d",
+      "role": "normalized_records"
+    }
+  ],
+  "importer": {
+    "name": "spirosearch-pubchemqc-snapshot-importer",
+    "version": "v35.p7",
+    "normalizer_version": "v35.pubchemqc.snapshot.v1"
+  },
+  "normalized_record_count": 1,
+  "quarantine_status": "fixture_only",
+  "notes": "Fixture proves local snapshot contract only. Full PubChemQC geometry parsing remains a Python bridge until parity is proven."
+}

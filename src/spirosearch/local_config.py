@@ -24,10 +24,13 @@ from spirosearch.model_provider_registry import missing_provider_config_fields
 
 CONFIG_SCHEMA_VERSION = "v33.local_config.v1"
 SANITIZED_CONFIG_STATUS_SCHEMA_VERSION = "v33.sanitized_config_status.v1"
+SANITIZED_SOURCE_CONFIG_STATUS_SCHEMA_VERSION = "v35.sanitized_source_config_status.v1"
 
 VALIDATION_STATES = ("missing", "configured", "validation_failed", "validated")
 ALLOWED_PROVIDER_CONFIG_FIELDS = ("enabled", "base_url", "default_model", "workspace_id")
 SECRET_CONFIG_FIELD_TOKENS = ("api_key", "secret", "token", "password", "credential")
+SECRET_STORE_FORBIDDEN_PROVIDER_CHARS = ("\r", "\n", "\0", "=")
+SECRET_STORE_FORBIDDEN_VALUE_CHARS = ("\r", "\n", "\0")
 
 
 def key_fingerprint(key: str) -> str:
@@ -64,6 +67,16 @@ def validate_provider_config_fields(config: Mapping[str, Any]) -> None:
     if unsupported_fields:
         joined = ", ".join(unsupported_fields)
         raise ValueError(f"unsupported provider config fields: {joined}")
+
+
+def validate_secret_store_entry(provider: str, value: str) -> None:
+    """Validate one env-file secret entry before it can be persisted."""
+    if not provider.strip():
+        raise ValueError("secret provider is required")
+    if any(char in provider for char in SECRET_STORE_FORBIDDEN_PROVIDER_CHARS):
+        raise ValueError("secret provider cannot contain env-file control characters")
+    if any(char in value for char in SECRET_STORE_FORBIDDEN_VALUE_CHARS):
+        raise ValueError("secret value cannot contain newline or NUL characters")
 
 
 class SecretStore(ABC):
@@ -109,6 +122,8 @@ class FileSecretStore(SecretStore):
         return result
 
     def _write_all(self, secrets: Mapping[str, str]) -> None:
+        for provider, value in secrets.items():
+            validate_secret_store_entry(str(provider), str(value))
         lines = [f"{provider}={value}" for provider, value in secrets.items()]
         self.path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
@@ -116,6 +131,7 @@ class FileSecretStore(SecretStore):
         return self._read_all().get(provider)
 
     def set_secret(self, provider: str, value: str) -> None:
+        validate_secret_store_entry(provider, value)
         secrets = self._read_all()
         secrets[provider] = value
         self._write_all(secrets)
@@ -198,9 +214,13 @@ class LocalConfigStore:
 
     def set_api_key(self, provider: str, value: str) -> None:
         self.secret_store.set_secret(provider, value)
+        self._config_version += 1
+        self._save()
 
     def remove_api_key(self, provider: str) -> None:
         self.secret_store.remove_secret(provider)
+        self._config_version += 1
+        self._save()
 
     def key_fingerprint(self, provider: str) -> str | None:
         key = self.get_api_key(provider)
@@ -264,3 +284,66 @@ def build_sanitized_config_status(
         "config_version": store.config_version,
         "providers": providers_status,
     }
+
+
+def build_sanitized_source_config_status(
+    store: LocalConfigStore,
+    source_registry: Any,
+    *,
+    producer_version: str = "v35",
+) -> dict[str, Any]:
+    """Emit frontend-facing source-provider config status without secrets."""
+    sources_status: list[dict[str, Any]] = []
+    for provider_id in source_registry.providers():
+        entry = source_registry.get(provider_id)
+        api_key = _source_api_key(store, entry)
+        has_key = bool(api_key)
+        if entry.requires_api_key and not has_key:
+            validation_state = "missing"
+        else:
+            validation_state = "configured"
+        sources_status.append(
+            {
+                "provider_id": entry.provider,
+                "provider_scope": "source",
+                "provider_kind": _source_provider_kind(entry),
+                "status": entry.operational_status,
+                "v35_slice": entry.v35_slice,
+                "acquisition_mode": entry.acquisition_mode,
+                "distribution_policy": entry.distribution_policy,
+                "requires_api_key": entry.requires_api_key,
+                "key_requirement": "required" if entry.requires_api_key else "none",
+                "api_key_env": entry.api_key_env,
+                "has_api_key": has_key,
+                "key_fingerprint": key_fingerprint(api_key) if api_key else None,
+                "validation_state": validation_state,
+                "data_library_path": entry.data_library_path,
+                "execution_modes": list(entry.execution_modes),
+                "capabilities": list(entry.capabilities),
+            }
+        )
+    return {
+        "schema_version": SANITIZED_SOURCE_CONFIG_STATUS_SCHEMA_VERSION,
+        "producer_version": producer_version,
+        "config_version": store.config_version,
+        "sources": sources_status,
+    }
+
+
+def _source_api_key(store: LocalConfigStore, entry: Any) -> str | None:
+    key = store.get_api_key(entry.provider)
+    if key:
+        return key
+    if entry.requires_api_key and entry.api_key_env:
+        return os.environ.get(str(entry.api_key_env))
+    return None
+
+
+def _source_provider_kind(entry: Any) -> str:
+    if entry.v35_slice == "p0_schema_module" or entry.acquisition_mode == "schema_fixture":
+        return "schema_module"
+    if entry.acquisition_mode == "manual_archive_import":
+        return "archive_import"
+    if entry.local_dataset:
+        return "local_dataset"
+    return "provider_api"

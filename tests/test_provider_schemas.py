@@ -1,4 +1,6 @@
 import json
+import hashlib
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -100,6 +102,130 @@ class ProviderSchemaTests(unittest.TestCase):
             ],
             schema,
         )
+
+    def test_source_snapshot_manifest_schema_defines_v35_contract(self):
+        schema = self._schema("source-snapshot-manifest.schema.json")
+
+        self.assertEqual(
+            schema["properties"]["schema_version"]["const"],
+            "v35.source_snapshot_manifest.v1",
+        )
+        self.assertTrue(
+            {
+                "schema_version",
+                "source_id",
+                "dataset_doi",
+                "dataset_version",
+                "retrieved_at",
+                "source_url",
+                "license_hint",
+                "required_citation",
+                "files",
+                "importer",
+                "normalized_record_count",
+                "quarantine_status",
+            }.issubset(set(schema["required"]))
+        )
+        file_schema = schema["$defs"]["snapshot_file"]
+        self.assertTrue(
+            {"relative_path", "bytes", "sha256", "role"}.issubset(
+                set(file_schema["required"])
+            )
+        )
+        self.assertIn("raw_search", file_schema["properties"]["role"]["enum"])
+        self.assertIn("raw_archive", file_schema["properties"]["role"]["enum"])
+        importer = schema["$defs"]["importer"]
+        self.assertTrue(
+            {"name", "version", "normalizer_version"}.issubset(set(importer["required"]))
+        )
+
+    def test_source_snapshot_manifest_schema_rejects_unsafe_file_paths(self):
+        schema = self._schema("source-snapshot-manifest.schema.json")
+        base_manifest = {
+            "schema_version": "v35.source_snapshot_manifest.v1",
+            "source_id": "fixture_source",
+            "dataset_doi": "10.1000/fixture",
+            "dataset_version": "fixture-v1",
+            "retrieved_at": "2026-07-23T00:00:00+00:00",
+            "source_url": "https://example.invalid/source",
+            "license_hint": "fixture",
+            "required_citation": "fixture citation",
+            "files": [
+                {
+                    "relative_path": "records.json",
+                    "bytes": 2,
+                    "sha256": "0" * 64,
+                    "role": "normalized_records",
+                }
+            ],
+            "importer": {
+                "name": "fixture_importer",
+                "version": "v35.p0",
+                "normalizer_version": "fixture-normalizer-v1",
+            },
+            "normalized_record_count": 0,
+            "quarantine_status": "fixture_only",
+        }
+
+        for unsafe_path in (
+            "../records.json",
+            "/tmp/records.json",
+            "C:/data/records.json",
+            "file://data/records.json",
+            "safe/../records.json",
+        ):
+            manifest = json.loads(json.dumps(base_manifest))
+            manifest["files"][0]["relative_path"] = unsafe_path
+            with self.subTest(unsafe_path=unsafe_path):
+                with self.assertRaises(ValidationError):
+                    validate(manifest, schema)
+
+    def test_hopv15_and_opv_db_source_manifests_validate(self):
+        schema = self._schema("source-snapshot-manifest.schema.json")
+        for manifest_path in (
+            Path("data/lib/hopv15/source-manifest.json"),
+            Path("data/lib/opv_db/source-manifest.json"),
+        ):
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            validate(manifest, schema)
+
+    def test_data_lib_source_manifests_reference_tracked_files(self):
+        for manifest_path in (
+            Path("data/lib/hopv15/source-manifest.json"),
+            Path("data/lib/opv_db/source-manifest.json"),
+        ):
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest_dir = manifest_path.parent
+            for file_record in manifest["files"]:
+                relative_path = file_record["relative_path"]
+                file_path = manifest_dir / relative_path
+                self.assertTrue(file_path.is_file(), str(file_path))
+                file_bytes = file_path.read_bytes()
+                self.assertEqual(file_record["bytes"], len(file_bytes), relative_path)
+                self.assertEqual(
+                    file_record["sha256"],
+                    hashlib.sha256(file_bytes).hexdigest(),
+                    relative_path,
+                )
+                versionable = subprocess.run(
+                    [
+                        "git",
+                        "ls-files",
+                        "--cached",
+                        "--others",
+                        "--exclude-standard",
+                        "--",
+                        file_path.as_posix(),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertIn(
+                    file_path.as_posix(),
+                    versionable.stdout.splitlines(),
+                    relative_path,
+                )
 
     def test_enrichment_artifact_schemas_define_traceable_join_contracts(self):
         enrichment = self._schema("enrichment-results.schema.json")

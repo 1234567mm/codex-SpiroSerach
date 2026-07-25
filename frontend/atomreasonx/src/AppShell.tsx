@@ -6,7 +6,13 @@ import { DatabaseView } from "./components/DatabaseView";
 import { KnowledgeLibraryView } from "./components/KnowledgeLibraryView";
 import { WorkflowView } from "./components/WorkflowView";
 import { InspectorPanel } from "./components/InspectorPanel";
-import type { AtomReasonXWorkspaceState } from "./contracts/types";
+import type { WorkbenchCommandDispatcher } from "./adapters/command-adapter";
+import type { WorkflowTaskExecutor } from "./adapters/workflow-task-execution-adapter";
+import type {
+  ReadonlyRunOperatorConfig,
+  ReadonlyRunRecentOutputDir,
+} from "./adapters/readonly-run-operator-config";
+import type { AtomReasonXWorkspaceState, OperatorTaskExecutionReport } from "./contracts/types";
 
 const RIGHT_INSPECTOR_TABS = ["Overview", "Files"];
 
@@ -14,7 +20,7 @@ const SETTINGS_CATEGORIES = [
   "General", "Models", "Agents", "MCP And Tools", "Remote SSH", "Skills",
   "Subagents", "Plugins", "Memory", "Hooks", "Diagnostics", "Shortcuts",
   "Permissions", "Sandbox", "Network", "Retrieval", "File Parsing",
-  "Knowledge Library", "Citation", "Cost Guardrails", "Telemetry source policy",
+  "Knowledge Library", "Data Sources", "Citation", "Cost Guardrails", "Telemetry source policy",
 ];
 
 export const AppShell: React.FC<{
@@ -22,7 +28,26 @@ export const AppShell: React.FC<{
   onOpenSettings?: () => void;
   showSettings?: boolean;
   onCloseSettings?: () => void;
-}> = ({ workspace, onOpenSettings, showSettings, onCloseSettings }) => {
+  readonlyRunConfig?: ReadonlyRunOperatorConfig;
+  readonlyRecentOutputDirs?: ReadonlyRunRecentOutputDir[];
+  onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
+  commandDispatcher?: WorkbenchCommandDispatcher;
+  workflowTaskExecutor?: WorkflowTaskExecutor;
+  workflowProjectionKey?: string;
+  onWorkflowTaskExecuted?: (report: OperatorTaskExecutionReport, projectionKey?: string) => void;
+}> = ({
+  workspace,
+  onOpenSettings,
+  showSettings,
+  onCloseSettings,
+  readonlyRunConfig,
+  readonlyRecentOutputDirs,
+  onApplyReadonlyRunOutputDir,
+  commandDispatcher,
+  workflowTaskExecutor,
+  workflowProjectionKey,
+  onWorkflowTaskExecuted,
+}) => {
   return (
     <div className="app-shell" style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
       <LeftSidebar
@@ -36,9 +61,22 @@ export const AppShell: React.FC<{
             <span className="app-title">{workspace.app}</span>
           </header>
           <div className="workbench-grid" style={{ flex: 1, overflowY: "auto" }}>
-            <DatabaseView sourceCoverage={workspace.source_coverage} syncJobs={workspace.sync_jobs} />
+            <DatabaseView
+              sourceCoverage={workspace.source_coverage}
+              sourceProfiles={workspace.source_profiles}
+              sourceSettings={workspace.source_settings}
+              syncJobs={workspace.sync_jobs}
+            />
             <KnowledgeLibraryView summary={workspace.knowledge_library} />
-            <WorkflowView workflow={workspace.workflow} commandActions={workspace.command_actions} />
+            <WorkflowView
+              workflow={workspace.workflow}
+              commandActions={workspace.command_actions}
+              operatorTasks={workspace.operator_tasks}
+              commandDispatcher={commandDispatcher}
+              workflowTaskExecutor={workflowTaskExecutor}
+              workflowProjectionKey={workflowProjectionKey}
+              onWorkflowTaskExecuted={onWorkflowTaskExecuted}
+            />
           </div>
           <div className="composer" style={{ padding: "8px" }}>
             <input type="text" placeholder="Ask AtomX..." style={{ width: "100%" }} />
@@ -52,7 +90,15 @@ export const AppShell: React.FC<{
         workflow={workspace.workflow}
       />
       {showSettings && (
-        <SettingsModal categories={SETTINGS_CATEGORIES} onClose={onCloseSettings} />
+        <SettingsModal
+          categories={SETTINGS_CATEGORIES}
+          sourceSettings={workspace.source_settings}
+          readonlyRunConfig={readonlyRunConfig}
+          readonlyRecentOutputDirs={readonlyRecentOutputDirs}
+          onApplyReadonlyRunOutputDir={onApplyReadonlyRunOutputDir}
+          commandDispatcher={commandDispatcher}
+          onClose={onCloseSettings}
+        />
       )}
     </div>
   );

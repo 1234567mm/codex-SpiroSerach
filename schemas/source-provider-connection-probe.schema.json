@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/source-provider-connection-probe.schema.json",
+  "title": "SourceProviderConnectionProbe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider",
+    "status",
+    "validation_state",
+    "read_only",
+    "live_enabled",
+    "requires_api_key",
+    "api_key_env",
+    "api_key_configured",
+    "formula",
+    "normalized_field_count",
+    "allowed_output_fields",
+    "review_triggers"
+  ],
+  "properties": {
+    "schema_version": { "const": "v35.source_provider_connection_probe.v1" },
+    "provider": { "enum": ["materials_project"] },
+    "status": {
+      "enum": [
+        "blocked",
+        "missing_api_key",
+        "provider_error",
+        "validated",
+        "validation_failed"
+      ]
+    },
+    "validation_state": {
+      "enum": ["missing", "validated", "validation_failed"]
+    },
+    "read_only": { "const": true },
+    "live_enabled": { "type": "boolean" },
+    "requires_api_key": { "type": "boolean" },
+    "api_key_env": { "type": "string", "minLength": 1 },
+    "api_key_configured": { "type": "boolean" },
+    "key_source": {
+      "enum": ["environment", "operator_secret"]
+    },
+    "formula": { "type": "string", "minLength": 1 },
+    "source_url": { "type": "string", "minLength": 1 },
+    "response_id": { "type": "string", "minLength": 1 },
+    "resolution_status": { "type": "string", "minLength": 1 },
+    "normalized_field_count": { "type": "integer", "minimum": 0 },
+    "allowed_output_fields": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "review_triggers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "error_code": { "type": "string", "minLength": 1 },
+    "error_message": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "validated" }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "validation_state": { "const": "validated" }
+        },
+        "required": ["source_url", "response_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "missing_api_key" }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "validation_state": { "const": "missing" }
+        },
+        "required": ["error_code"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["blocked", "provider_error", "validation_failed"]
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "validation_state": { "const": "validation_failed" }
+        },
+        "required": ["error_code"]
+      }
+    }
+  ]
+}

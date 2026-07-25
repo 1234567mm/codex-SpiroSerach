@@ -19,6 +19,21 @@ applicable instructions conflict and the higher-priority intent is unclear,
 stop and ask. Discover the repository root, branch, HEAD, worktrees, and status
 at runtime; recorded values are context, not authority.
 
+## Reference Migration
+
+User-provided official APIs, datasets, and open-source repositories are durable
+project inputs, not disposable chat context. When such references are relevant
+to implementation, record their URL, revision if known, license/terms status if
+known, and the intended migration pattern in the active plan or governance note
+before proceeding far enough for context compaction to lose them.
+
+Prefer migration or adapter alignment with the official interface or proven
+architecture shape over re-inventing a local substitute. Direct code transfer
+requires exact revision, license compatibility, attribution, and parity tests.
+When copying is unsafe or unnecessary, implement the pattern in local style and
+document why. In all cases, SpiroSearch provider, review, scoring, artifact,
+authorization, and scientific fail-closed boundaries remain authoritative.
+
 ## Worktree Lifecycle
 
 1. **Inspect.** Resolve the repository root, record the start SHA, current
@@ -30,7 +45,10 @@ at runtime; recorded values are context, not authority.
    editing. Run an appropriate baseline check when existing behavior is in
    scope.
 4. **Implement and verify.** Keep changes within scope, preserve unrelated
-   state, run focused checks, then run the required completion gate.
+   state, run focused checks, then run the required completion gate. Treat
+   broad gates as milestone evidence; after narrow review fixes, rerun the
+   smallest checks that cover the changed surface and record why earlier broad
+   evidence still applies.
 5. **Commit deliberately.** Review the full diff and stage only owned files.
    Commit on the assigned feature branch when the task authorizes a commit.
 6. **Integrate separately.** Merge and push are distinct operations requiring
@@ -58,6 +76,8 @@ Every agent return must include:
 - `scope`: completed work and deliberate exclusions.
 - `files`: every changed path, or `none`.
 - `tests`: exact commands and results, including checks not run and why.
+- `verification scope`: why the chosen checks are sufficient for the final
+  diff, especially when targeted reverification replaces a broad rerun.
 - `commit`: commit SHA, or `not committed`.
 - `no-op reason`: required only when the task produced no substantive result.
 - `not-committed reason`: required when substantive output exists but was not
@@ -98,6 +118,12 @@ belongs in versioned scripts and CI, with hooks acting only as convenient
 wrappers. Agents must inspect hook failures, must not bypass them silently, and
 must not install, replace, or disable hooks without explicit authority. Hooks
 must never auto-merge or auto-push.
+
+Repository hygiene checks should include lightweight sentinels for durable
+process guardrails such as context-budget handoff, quality-preserving targeted
+verification, and user-provided reference migration. These sentinels do not
+replace judgment, but they make sure the rules continue to trigger instead of
+remaining forgotten documentation.
 
 ## Memory Layers
 

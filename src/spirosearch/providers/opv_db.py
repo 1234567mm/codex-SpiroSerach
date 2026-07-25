@@ -34,6 +34,8 @@ class OpvDbLocalProvider:
             "record_id",
             "donor_identity",
             "acceptor_identity",
+            "donor_inchi_key",
+            "acceptor_inchi_key",
             "pce_percent",
             "voc_v",
             "jsc_ma_cm2",
@@ -42,6 +44,8 @@ class OpvDbLocalProvider:
             "validation_flag",
             "license",
             "computed",
+            "benchmark_split",
+            "quality_annotation",
         ]
 
     def load_records(self) -> list[dict[str, Any]]:
@@ -97,6 +101,9 @@ class OpvDbLocalProvider:
             "license": str(record.get("license", self.license_hint)),
             "computed": False,
         }
+        for key in ("donor_inchi_key", "acceptor_inchi_key", "benchmark_split", "quality_annotation"):
+            if record.get(key):
+                normalized[key] = str(record[key])
         for key in ("pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor"):
             if key in record and record[key] is not None:
                 normalized[key] = float(record[key])

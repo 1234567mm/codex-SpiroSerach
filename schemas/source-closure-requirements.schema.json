@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/source-closure-requirements.schema.json",
+  "title": "SourceClosureRequirementsReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_id",
+    "status",
+    "requirements",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": { "const": "v35.source_closure_requirements.v1" },
+    "source_id": { "enum": ["pubchemqc", "materials_cloud", "nomad_perla_psc"] },
+    "status": { "enum": ["inputs_required"] },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "notes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "category", "description", "required_for"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "category": {
+          "enum": [
+            "authorization",
+            "checksum",
+            "license",
+            "operator_input",
+            "parity",
+            "parser_boundary",
+            "record_content",
+            "review_gate",
+            "units"
+          ]
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "required_for": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z0-9_-]+$"
+          }
+        }
+      }
+    }
+  }
+}

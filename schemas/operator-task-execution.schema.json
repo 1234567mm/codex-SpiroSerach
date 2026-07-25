@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/operator-task-execution.schema.json",
+  "title": "OperatorTaskExecutionReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "action_type",
+    "provider",
+    "admission_hash",
+    "execution_status",
+    "write_authorization_scope",
+    "live_calls_authorized",
+    "provider_cache_written",
+    "local_backend_written",
+    "scoring_written",
+    "experiment_written",
+    "started_at",
+    "target_data_library_path",
+    "source_manifest_path",
+    "normalized_record_count",
+    "provider_response_hash",
+    "raw_search_hash",
+    "raw_archive_hash",
+    "archive_status",
+    "review_required",
+    "review_reasons"
+  ],
+  "properties": {
+    "schema_version": { "const": "v35.operator_task_execution.v1" },
+    "task_id": {
+      "type": "string",
+      "pattern": "^task-start_nomad_sync-[a-z0-9]{1,16}$"
+    },
+    "action_type": { "const": "start_nomad_sync" },
+    "provider": { "const": "nomad_perla_psc" },
+    "admission_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "execution_status": { "const": "source_snapshot_written" },
+    "write_authorization_scope": { "const": "source_snapshot_only" },
+    "live_calls_authorized": { "const": true },
+    "provider_cache_written": { "const": false },
+    "local_backend_written": { "const": false },
+    "scoring_written": { "const": false },
+    "experiment_written": { "const": false },
+    "started_at": { "type": "string", "minLength": 1 },
+    "target_data_library_path": {
+      "type": "string",
+      "pattern": "^(?!.*(^|/)\\.\\.(/|$))data/lib/nomad_perla_psc/snapshots/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
+    },
+    "source_manifest_path": {
+      "type": "string",
+      "pattern": "^(?!.*(^|/)\\.\\.(/|$))data/lib/nomad_perla_psc/snapshots/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*/source-manifest\\.json$"
+    },
+    "normalized_record_count": { "type": "integer", "minimum": 0 },
+    "provider_response_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "raw_search_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "raw_archive_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "archive_status": {
+      "enum": ["available", "empty", "unavailable", "rate_limited", "schema_unrecognized", "not_requested"]
+    },
+    "review_required": { "type": "boolean" },
+    "review_reasons": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

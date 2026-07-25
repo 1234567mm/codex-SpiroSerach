@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +15,7 @@ from spirosearch.htl_workbench import (
     build_htl_source_coverage_matrix,
 )
 from spirosearch.local_backend import LocalBackendDatabase, ObjectStore
+from spirosearch.local_config import FileSecretStore, LocalConfigStore
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -35,6 +37,9 @@ class SourceCoverageMatrixTests(unittest.TestCase):
             self.assertIn(by_provider[provider]["key_requirement"], ("none", "optional"))
 
         self.assertEqual(by_provider["pubchemqc"]["status"], "quarantined")
+        self.assertEqual(by_provider["pubchemqc"]["provider_kind"], "local_dataset")
+        self.assertTrue(by_provider["pubchemqc"]["local_dataset"])
+        self.assertEqual(by_provider["pubchemqc"]["automatic_acquisition"], "local_snapshot")
         self.assertEqual(by_provider["materials_project"]["key_requirement"], "required")
         self.assertEqual(
             by_provider["future_model_assisted_claim_extraction"]["phase_status"],
@@ -45,8 +50,21 @@ class SourceCoverageMatrixTests(unittest.TestCase):
         matrix = build_htl_source_coverage_matrix(SOURCE_REGISTRY)
         nomad = {row["provider_id"]: row for row in matrix["sources"]}["nomad_perla_psc"]
         self.assertIn("pce_percent", nomad["expected_fields"])
+        self.assertIn("archive_required_tree_hash", nomad["expected_fields"])
+        self.assertIn("match_type", nomad["expected_fields"])
+        self.assertIn("devices", nomad["expected_fields"])
         self.assertIn("source_url", nomad["provenance_fields"])
         self.assertIn("archive_unavailable", nomad["review_blockers"])
+        self.assertIn("archive_rate_limited", nomad["review_blockers"])
+        self.assertIn("archive_schema_unrecognized", nomad["review_blockers"])
+        self.assertEqual(nomad["blocking_review_count"], 8)
+        pubchem = {row["provider_id"]: row for row in matrix["sources"]}["pubchem"]
+        self.assertIn("inchi", pubchem["expected_fields"])
+        self.assertIn("source_attribution", pubchem["expected_fields"])
+        self.assertEqual(
+            {row["provider_id"]: row for row in matrix["sources"]}["hopv15"]["blocking_review_count"],
+            1,
+        )
 
 
 class KnowledgeLibraryIntakeTests(unittest.TestCase):
@@ -103,17 +121,49 @@ class WorkbenchReadApiTests(unittest.TestCase):
             db.review_items.save_item(
                 source_type="htl_device",
                 source_id="entry-1",
-                reason="source_doi_missing",
+                reason="missing_source_doi",
             )
 
-            payload = HtlWorkbenchReadAPI(db, SOURCE_REGISTRY).state()
+            previous = os.environ.get("MATERIALS_PROJECT_API_KEY")
+            os.environ["MATERIALS_PROJECT_API_KEY"] = "mp-read-api-secret"
+            try:
+                payload = HtlWorkbenchReadAPI(db, SOURCE_REGISTRY).state()
+                blob = json.dumps(payload)
+                self.assertEqual(payload["schema_version"], "v33c.htl_workbench.read_state.v1")
+                self.assertEqual(payload["knowledge_library"]["provider_snapshots"], 1)
+                self.assertEqual(payload["review_blockers"]["open_count"], 1)
+                self.assertEqual(payload["workflow"]["lane"], "htl_only")
+                self.assertIn("source_settings", payload)
+                self.assertIn("materials_project", {
+                    source["provider_id"] for source in payload["source_settings"]["sources"]
+                })
+                self.assertNotIn("mp-read-api-secret", blob)
+                self.assertNotIn("Bearer ", blob)
+                self.assertNotIn("provider_request", blob)
+            finally:
+                if previous is None:
+                    os.environ.pop("MATERIALS_PROJECT_API_KEY", None)
+                else:
+                    os.environ["MATERIALS_PROJECT_API_KEY"] = previous
+
+    def test_read_api_source_settings_join_sanitized_materials_project_key_status(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            store = LocalConfigStore(
+                config_path=Path(td) / "local-config.json",
+                secret_store=FileSecretStore(Path(td) / "secrets.env"),
+            )
+            store.set_api_key("materials_project", "mp-workbench-secret")
+
+            payload = HtlWorkbenchReadAPI(db, SOURCE_REGISTRY, config_store=store).state()
             blob = json.dumps(payload)
-            self.assertEqual(payload["schema_version"], "v33c.htl_workbench.read_state.v1")
-            self.assertEqual(payload["knowledge_library"]["provider_snapshots"], 1)
-            self.assertEqual(payload["review_blockers"]["open_count"], 1)
-            self.assertEqual(payload["workflow"]["lane"], "htl_only")
-            self.assertNotIn("api_key", blob)
-            self.assertNotIn("Bearer ", blob)
+            sources = {source["provider_id"]: source for source in payload["source_settings"]["sources"]}
+
+            self.assertIn("source_settings", payload)
+            self.assertTrue(sources["materials_project"]["has_api_key"])
+            self.assertEqual(sources["materials_project"]["validation_state"], "configured")
+            self.assertEqual(len(sources["materials_project"]["key_fingerprint"]), 16)
+            self.assertNotIn("mp-workbench-secret", blob)
             self.assertNotIn("provider_request", blob)
 
     def test_workflow_contract_names_all_target_fields(self) -> None:
@@ -157,6 +207,8 @@ class WorkbenchCommandPlaneTests(unittest.TestCase):
             jobs = db.sync_jobs.list_jobs("nomad_perla_psc")
             self.assertEqual(len(jobs), 1)
             self.assertEqual(jobs[0]["status"], "queued")
+            self.assertEqual(jobs[0]["config"]["device_architectures"], ["nip"])
+            self.assertEqual(jobs[0]["config"]["data_library_root"], "data/lib")
 
     def test_nomad_lifecycle_commands_update_job_statuses(self) -> None:
         with TemporaryDirectory() as td:
@@ -185,6 +237,97 @@ class WorkbenchCommandPlaneTests(unittest.TestCase):
             self.assertEqual(resumed["output_artifacts"][0]["detail"]["status"], "queued")
             self.assertEqual(cancelled["output_artifacts"][0]["detail"]["status"], "cancelled")
             self.assertEqual(db.sync_jobs.get_job(job_id)["status"], "cancelled")
+
+    def test_snapshot_import_commands_are_explicit_audited_and_idempotent(self) -> None:
+        actions = {
+            "import_hopv15_snapshot": "hopv15",
+            "import_opv_db_snapshot": "opv_db",
+            "import_pubchemqc_snapshot": "pubchemqc",
+        }
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            plane = HtlWorkbenchCommandPlane(db)
+            for index, (action, source_id) in enumerate(actions.items(), start=1):
+                result = plane.execute(
+                    action,
+                    {"manifest_path": f"data/lib/{source_id}/source-manifest.json"},
+                    idempotency_key=f"snapshot-{index}",
+                )
+
+                self.assertEqual(result["status"], "accepted")
+                self.assertEqual(result["audit"]["declared_effects"], ["source_import_tasks"])
+                self.assertEqual(result["output_artifacts"][0]["detail"]["source_id"], source_id)
+                self.assertEqual(result["output_artifacts"][0]["detail"]["status"], "queued")
+
+    def test_snapshot_import_rejects_unsafe_manifest_paths_before_queueing(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            plane = HtlWorkbenchCommandPlane(db)
+            unsafe_paths = (
+                "../source-manifest.json",
+                "data/lib/opv_db/source-manifest.json",
+                "data/lib/hopv15/../source-manifest.json",
+                "file://data/lib/hopv15/source-manifest.json",
+                "C:/data/lib/hopv15/source-manifest.json",
+            )
+
+            for index, manifest_path in enumerate(unsafe_paths, start=1):
+                with self.subTest(manifest_path=manifest_path):
+                    result = plane.execute(
+                        "import_hopv15_snapshot",
+                        {"manifest_path": manifest_path},
+                        idempotency_key=f"unsafe-snapshot-{index}",
+                    )
+                    self.assertEqual(result["status"], "rejected")
+                    self.assertEqual(result["reason_code"], "unsafe_manifest_path")
+
+    def test_workbench_commands_reject_unauthorized_role(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            result = HtlWorkbenchCommandPlane(db).execute(
+                "refresh_pubchem_identity_cache",
+                {"candidate_ids": ["candidate-1"]},
+                idempotency_key="curator-refresh",
+                actor_id="curator-1",
+                role="curator",
+            )
+
+            self.assertEqual(result["status"], "rejected")
+            self.assertEqual(result["reason_code"], "unauthorized_role")
+
+    def test_materials_cloud_archive_import_command_requires_record_or_doi(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            plane = HtlWorkbenchCommandPlane(db)
+            rejected = plane.execute(
+                "import_materials_cloud_archive_record",
+                {},
+                idempotency_key="mc-missing",
+            )
+            accepted = plane.execute(
+                "import_materials_cloud_archive_record",
+                {"archive_record_id": "mc-2026-0001", "dataset_doi": "10.24435/materialscloud:fixture"},
+                idempotency_key="mc-record",
+            )
+
+            self.assertEqual(rejected["status"], "rejected")
+            self.assertEqual(rejected["reason_code"], "invalid_payload")
+            self.assertEqual(accepted["status"], "accepted")
+            self.assertEqual(accepted["output_artifacts"][0]["detail"]["source_id"], "materials_cloud")
+            self.assertEqual(accepted["output_artifacts"][0]["detail"]["status"], "queued")
+
+    def test_pubchem_identity_cache_refresh_command_records_queue_effect(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            result = HtlWorkbenchCommandPlane(db).execute(
+                "refresh_pubchem_identity_cache",
+                {"candidate_ids": ["candidate-1", "candidate-2"]},
+                idempotency_key="pubchem-refresh",
+            )
+
+            self.assertEqual(result["status"], "accepted")
+            self.assertEqual(result["audit"]["declared_effects"], ["provider_cache"])
+            self.assertEqual(result["output_artifacts"][0]["detail"]["provider"], "pubchem")
 
     def test_read_only_api_does_not_expose_command_methods(self) -> None:
         with TemporaryDirectory() as td:

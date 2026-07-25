@@ -1,6 +1,7 @@
 .pytest_cache/
 __pycache__/
 *.pyc
+.cache/
 .venv/
 dist/
 build/
@@ -13,6 +14,23 @@ object_store/
 data/public_baselines/opv_db/*.zip
 fulltext_chunks/
 uv.lock
+
+# Local modular data library. Keep the folder skeleton and manifests in Git,
+# but do not commit downloaded archives, raw snapshots, caches, or bulk data.
+data/lib/*/raw/
+data/lib/*/snapshots/
+data/lib/*/cache/
+data/lib/*/downloads/
+data/lib/operator_tasks/*.jsonl
+data/lib/operator_tasks/**/*.jsonl
+data/lib/**/*.zip
+data/lib/**/*.tar
+data/lib/**/*.tar.gz
+data/lib/**/*.tgz
+data/lib/**/*.7z
+data/lib/**/*.parquet
+data/lib/**/*.sqlite
+data/lib/**/*.db
 
 # Local agent/session state
 .claude/settings.local.json
@@ -30,5 +48,8 @@ uv.lock
 # AtomReasonX frontend build artifacts
 frontend/atomreasonx/node_modules/
 frontend/atomreasonx/dist/
+frontend/atomreasonx/src-tauri/gen/
 frontend/atomreasonx/src-tauri/target/
 frontend/atomreasonx/.vitest/
+frontend/atomreasonx/src-tauri/binaries/*
+!frontend/atomreasonx/src-tauri/binaries/README.md

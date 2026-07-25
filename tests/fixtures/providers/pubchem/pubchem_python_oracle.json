@@ -1,0 +1,267 @@
+{
+  "schema_version": "v35.pubchem_python_oracle.v1",
+  "cases": [
+    {
+      "case_id": "resolved_spiro_ometad",
+      "query_name": "spiro-ometad",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:spiro-ometad",
+        "normalized_result": {
+          "resolution_status": "resolved",
+          "ambiguity_flag": false,
+          "ambiguous_cids": [],
+          "cid": 99542,
+          "molecular_formula": "C81H68N4O8",
+          "molecular_weight": 1225.4,
+          "canonical_smiles": "COc1ccc(N(c2ccc(OC)cc2)c2ccc(OC)cc2)cc1",
+          "isomeric_smiles": "COc1ccc(N(c2ccc(OC)cc2)c2ccc(OC)cc2)cc1",
+          "inchi": "InChI=1S/C81H68N4O8/c1-90-69-37-21-63(22-38-69)84(64-23-39-70(91-2)40-24-64)57-7-13-59(14-8-57)81-61-17-11-55(12-18-61)82(65-25-41-71(92-3)42-26-65)66-27-43-72(93-4)44-28-66",
+          "inchi_key": "VSPQGJQLVZRCQA-UHFFFAOYSA-N",
+          "xlogp": 16.3,
+          "tpsa": 93.6,
+          "hbd_count": 0,
+          "hba_count": 12,
+          "synonyms": [
+            "Spiro-OMeTAD",
+            "spiro-MeOTAD",
+            "2,2',7,7'-Tetrakis[N,N-di(4-methoxyphenyl)amino]-9,9'-spirobifluorene"
+          ],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/spiro-ometad/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/spiro-ometad/synonyms/JSON",
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/spiro-ometad/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "d94bfdc08b5f48583956ca2b2dc2d00c779d48469626d2a59bc3bfd8fefcdcff",
+        "response_id": "4ff307214c7142c0",
+        "confidence": 0.65,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "ambiguous_identity",
+      "query_name": "ambiguous htl",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:ambiguous htl",
+        "normalized_result": {
+          "resolution_status": "ambiguous",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [
+            1,
+            2
+          ],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/ambiguous%20htl/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/ambiguous%20htl/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "464df53f8f5259584f6f6e0d54fb835f8dbb2979595c24ade2016ea7b845e923",
+        "response_id": "15f20e10e991f322",
+        "confidence": 0.35,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "not_found",
+      "query_name": "unknown polymer htl",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:unknown polymer htl",
+        "normalized_result": {
+          "resolution_status": "not_found",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/unknown%20polymer%20htl/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/unknown%20polymer%20htl/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "31fd5e44cf73a37301fa21c2781b968c46e80a2f4f22aab4074b0db460d8315a",
+        "response_id": "9cbf4a5f6f9e950e",
+        "confidence": 0.1,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "unicode_casefold",
+      "query_name": "Stra\u00dfe HTL",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:strasse htl",
+        "normalized_result": {
+          "resolution_status": "not_found",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/Stra%C3%9Fe%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/Stra%C3%9Fe%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "31fd5e44cf73a37301fa21c2781b968c46e80a2f4f22aab4074b0db460d8315a",
+        "response_id": "84ce65f9edebe8e8",
+        "confidence": 0.1,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "unicode_turkic_casefold",
+      "query_name": "\u0130stanbul I\u0131 HTL",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:i\u0307stanbul i\u0131 htl",
+        "normalized_result": {
+          "resolution_status": "not_found",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%C4%B0stanbul%20I%C4%B1%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%C4%B0stanbul%20I%C4%B1%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "31fd5e44cf73a37301fa21c2781b968c46e80a2f4f22aab4074b0db460d8315a",
+        "response_id": "bc15660836453f3f",
+        "confidence": 0.1,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "unicode_greek_sigma_casefold",
+      "query_name": "\u03a3\u03af\u03c3\u03c5\u03c6\u03bf\u03c2 \u03c2 HTL",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:\u03c3\u03af\u03c3\u03c5\u03c6\u03bf\u03c3 \u03c3 htl",
+        "normalized_result": {
+          "resolution_status": "not_found",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%CE%A3%CE%AF%CF%83%CF%85%CF%86%CE%BF%CF%82%20%CF%82%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%CE%A3%CE%AF%CF%83%CF%85%CF%86%CE%BF%CF%82%20%CF%82%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "31fd5e44cf73a37301fa21c2781b968c46e80a2f4f22aab4074b0db460d8315a",
+        "response_id": "c0bc31641e89b650",
+        "confidence": 0.1,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "unicode_micro_casefold",
+      "query_name": "\u00b5-Molecule HTL",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:\u03bc-molecule htl",
+        "normalized_result": {
+          "resolution_status": "not_found",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%C2%B5-Molecule%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%C2%B5-Molecule%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "31fd5e44cf73a37301fa21c2781b968c46e80a2f4f22aab4074b0db460d8315a",
+        "response_id": "9ab1914d65b6ac3d",
+        "confidence": 0.1,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "unicode_kelvin_casefold",
+      "query_name": "\u212aelvin HTL",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:kelvin htl",
+        "normalized_result": {
+          "resolution_status": "not_found",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%E2%84%AAelvin%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%E2%84%AAelvin%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "31fd5e44cf73a37301fa21c2781b968c46e80a2f4f22aab4074b0db460d8315a",
+        "response_id": "721852221f8abf15",
+        "confidence": 0.1,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    },
+    {
+      "case_id": "unicode_long_s_casefold",
+      "query_name": "\u017fpiro sample HTL",
+      "expected_response": {
+        "provider": "pubchem",
+        "query": "name:spiro sample htl",
+        "normalized_result": {
+          "resolution_status": "not_found",
+          "ambiguity_flag": true,
+          "ambiguous_cids": [],
+          "source_attribution": {
+            "provider": "PubChem",
+            "property_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%C5%BFpiro%20sample%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+            "synonyms_url": null,
+            "license_hint": "PubChem data terms; cite NCBI PubChem"
+          }
+        },
+        "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%C5%BFpiro%20sample%20HTL/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IsomericSMILES,InChI,InChIKey,XLogP,TPSA,HBondDonorCount,HBondAcceptorCount/JSON",
+        "retrieved_at": "2026-07-07T00:00:00+00:00",
+        "license_hint": "PubChem data terms; cite NCBI PubChem",
+        "raw_hash": "31fd5e44cf73a37301fa21c2781b968c46e80a2f4f22aab4074b0db460d8315a",
+        "response_id": "54d4262d4fc52996",
+        "confidence": 0.1,
+        "trust_level": "T3_literature_machine",
+        "contract_version": "provider-response-v1"
+      }
+    }
+  ]
+}

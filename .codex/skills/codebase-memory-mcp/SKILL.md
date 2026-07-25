@@ -18,6 +18,10 @@ Use the codebase-memory-mcp tools as the first stop for code discovery in this p
 
 - If the project is not indexed or graph results are empty/stale, run `index_repository` on the repository root first.
 - Use the project name expected by the MCP server for this checkout. If unsure, index with an explicit name for the current repository.
+- Do not re-index repeatedly in the same task unless a just-created file or
+  symbol is missing from the graph and that symbol is needed for the next
+  decision. Record that fallback instead of cycling between graph and text
+  search.
 
 ## Discovery Order
 
@@ -27,6 +31,19 @@ Use the codebase-memory-mcp tools as the first stop for code discovery in this p
 4. Use `query_graph` for complex graph queries, aggregations, hotspots, and multi-hop patterns.
 5. Use `get_architecture` for high-level structure, dependencies, entry points, boundaries, clusters, and hotspots.
 6. Use `search_code` when looking for text patterns that still benefit from graph-enriched ranking.
+
+## Discovery Budget
+
+Stop discovery once you have all three anchors:
+
+- owner module or boundary;
+- exact file/function or schema/artifact contract to edit;
+- focused test or validation command that should prove the change.
+
+Use broad `rg`, large `git diff`, or full architecture reads only when one of
+those anchors is missing. For docs, JSON fixtures, shell scripts, and generated
+artifacts, jump directly to file reads or scoped text search and state that the
+graph does not own those surfaces.
 
 Prefer reading the boundary owner before editing:
 

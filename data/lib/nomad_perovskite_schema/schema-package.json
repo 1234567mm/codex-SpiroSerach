@@ -1,0 +1,64 @@
+{
+  "schema_version": "v35.nomad_perovskite_schema_reference.v1",
+  "source_id": "nomad_perovskite_schema",
+  "resource_kind": "nomad_plugin_schema_reference",
+  "package_name": "perovskite-solar-cell-database",
+  "package_version_hint": "v1.2.14",
+  "repository": "https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database",
+  "zenodo_doi": "10.5281/zenodo.16910883",
+  "license_hint": "Apache-2.0",
+  "data_mirror": false,
+  "remote_api_retained": true,
+  "spirosearch_provider_ids": [
+    "nomad_perla_psc",
+    "nomad"
+  ],
+  "nomad_search_apps": [
+    {
+      "name": "Solar Cells",
+      "url": "https://nomad-lab.eu/prod/v1/staging/gui/search/solarcells",
+      "code_module": "perovskite_solar_cell_database.apps.solar_cell_app"
+    },
+    {
+      "name": "Perovskite Solar Cells Database",
+      "url": "https://nomad-lab.eu/prod/v1/develop/gui/search/perovskite-solar-cells-database",
+      "code_module": "perovskite_solar_cell_database.apps.perovskite_solar_cell_database_app"
+    },
+    {
+      "name": "Halide Perovskite Ions",
+      "url": "https://nomad-lab.eu/prod/v1/develop/gui/search/perovskite-ions",
+      "code_module": "perovskite_solar_cell_database.apps.perovskite_ions_app"
+    }
+  ],
+  "nomad_plugin_entry_points": [
+    "perovskite_solar_cell",
+    "perovskite_solar_cell_database_app",
+    "perovskite_composition",
+    "ion_parser",
+    "perovskite_ions_app",
+    "perovskite_tandem_cell",
+    "perovskite_tandem_json_parser",
+    "solar_cell_app",
+    "tandem_app",
+    "llm_extraction_schema",
+    "llm_extractor_schema",
+    "llm_extracted_solar_cells",
+    "ions_database_example",
+    "perla_notebooks_example",
+    "llm_extractor_action"
+  ],
+  "schema_reference_use": [
+    "field_alias_coverage",
+    "NOMAD search app/API parity checks",
+    "PERLA archive field mapping review",
+    "HTL stack/device stack schema vocabulary"
+  ],
+  "admission_policy": {
+    "may_create_provider_facts": false,
+    "may_create_training_records": false,
+    "may_update_scoring_view": false,
+    "required_runtime_data_source": "NOMAD API or separately checksummed NOMAD export",
+    "review_reason": "schema_reference_only_not_data_mirror"
+  },
+  "notes": "This module records the local FAIRmat/NFDI NOMAD plugin package as a schema and API-reference resource. It is not a local NOMAD data mirror and must not be treated as normalized solar-cell records."
+}

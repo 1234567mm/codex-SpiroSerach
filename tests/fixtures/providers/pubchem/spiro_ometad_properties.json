@@ -1,0 +1,19 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 99542,
+        "CanonicalSMILES": "COc1ccc(N(c2ccc(OC)cc2)c2ccc(OC)cc2)cc1",
+        "HBondAcceptorCount": 12,
+        "HBondDonorCount": 0,
+        "InChI": "InChI=1S/C81H68N4O8/c1-90-69-37-21-63(22-38-69)84(64-23-39-70(91-2)40-24-64)57-7-13-59(14-8-57)81-61-17-11-55(12-18-61)82(65-25-41-71(92-3)42-26-65)66-27-43-72(93-4)44-28-66",
+        "InChIKey": "VSPQGJQLVZRCQA-UHFFFAOYSA-N",
+        "IsomericSMILES": "COc1ccc(N(c2ccc(OC)cc2)c2ccc(OC)cc2)cc1",
+        "MolecularFormula": "C81H68N4O8",
+        "MolecularWeight": 1225.4,
+        "TPSA": 93.6,
+        "XLogP": 16.3
+      }
+    ]
+  }
+}

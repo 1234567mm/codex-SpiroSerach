@@ -27,9 +27,20 @@ The default full test gate is:
 $env:PYTHONPATH='src'; uv run python -m unittest discover tests -v
 ```
 
-Run focused tests while developing, then run the full gate before claiming a
-code change is complete. Documentation-only changes may use document-specific
-checks instead. Never record a fixed test count in governance or prompts.
+Run focused tests while developing. For the first completion gate of a
+behavior, code, schema, or artifact slice, run the applicable milestone gate
+from governance and `review-ship`; use the default full gate when the impact is
+not tightly bounded. After fresh broad or milestone evidence, bounded review
+fixes may use targeted reverification instead of rerunning every expensive
+suite. Record the verification scope and why omitted broad gates remain covered.
+Documentation-only changes may use document-specific checks instead. Never
+record a fixed test count in governance or prompts.
+
+Choose verification with engineering judgment. Keep checks that prove the
+changed behavior, durable contracts, source integrity, authorization, review
+fail-closed paths, and secret/path boundaries. Skip redundant reruns when a
+fresh broader gate already covers unchanged surfaces and the current diff is
+bounded; record the verification scope instead of running tests as ceremony.
 
 Changes to model evaluation, surrogate, acquisition, replay, scikit-learn, or
 BoTorch paths also require the applicable optional dependency gate:
@@ -56,6 +67,33 @@ and remove only that known generated file when appropriate.
 - Legacy `models.py`, `v4.py`, and `screening_v31.py` migrate through adapters;
   do not remove them as an incidental refactor.
 
+## Reference Migration Policy
+
+User-provided official APIs, datasets, and open-source repositories are durable
+architecture inputs. Record them in the active plan before relying on them so
+context compaction cannot erase the source. Prefer migrating or adapting the
+official interface and proven architecture shape over inventing a parallel
+local design, as long as license, terms, attribution, and SpiroSearch
+provider/review/scoring/artifact boundaries allow it. If direct migration is
+not safe, document the reason and build the closest compatible adapter.
+
+Current required references:
+
+- NOMAD Solar Cells GUI:
+  `https://nomad-lab.eu/prod/v1/staging/gui/search/solarcells`
+- NOMAD API analysis/OpenAPI GUI:
+  `https://nomad-lab.eu/prod/v1/staging/gui/analyze/apis`
+- FAIRmat NOMAD perovskite database:
+  `https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database`
+- DeepSeek-Reasonix:
+  `https://github.com/esengine/DeepSeek-Reasonix`
+- Cherry Studio:
+  `https://github.com/CherryHQ/cherry-studio`
+- API for Cherry Studio:
+  `https://github.com/tufeiping/api-for-cherrystudio`
+- OpenAI Codex:
+  `https://github.com/openai/codex`
+
 ## Skill Routing
 
 Project capabilities in `.codex/skills/` define required repository workflows:
@@ -66,6 +104,8 @@ Project capabilities in `.codex/skills/` define required repository workflows:
   provider boundary failures.
 - `artifact-validation` for JSON artifacts, manifests, JSONL, indexes, and
   artifact viewer inputs.
+- `atomreasonx-tauri-msvc` for AtomReasonX Tauri/Rust desktop checks, Windows
+  MSVC linker setup, sidecar packaging, WiX bundling, and generated Tauri files.
 - `review-ship` before completion, merge, push, or worktree cleanup.
 - `context-handoff` for checkpoints and cross-session handoff.
 - `find-skills` for discovering, comparing, or installing project skills.

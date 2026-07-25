@@ -20,6 +20,32 @@ function Read-StrictUtf8 {
     return $script:StrictUtf8.GetString($bytes)
 }
 
+function Assert-RequiredText {
+    param(
+        [Parameter(Mandatory = $true)][string]$RelativePath,
+        [Parameter(Mandatory = $true)][string[]]$RequiredText
+    )
+
+    $fullPath = Join-Path $Root $RelativePath
+    $displayPath = $RelativePath.Replace('\', '/')
+    if (-not [IO.File]::Exists($fullPath)) {
+        Add-Violation "$displayPath is missing required process guardrails."
+        return
+    }
+
+    try {
+        $text = Read-StrictUtf8 $fullPath
+        foreach ($fragment in $RequiredText) {
+            if (-not $text.Contains($fragment)) {
+                Add-Violation "$displayPath is missing required process guardrail text: $fragment"
+            }
+        }
+    }
+    catch {
+        Add-Violation "$displayPath could not be read for process guardrail checks."
+    }
+}
+
 function Get-RepositoryRoot {
     param([string]$RequestedRoot)
 
@@ -46,6 +72,54 @@ catch {
 if (-not [IO.Directory]::Exists($Root)) {
     Write-Output "ERROR: Repository root does not exist: $Root"
     exit 1
+}
+
+$configuredHooksPath = & git -C $Root config --get core.hooksPath 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($configuredHooksPath | Select-Object -First 1))) {
+    Add-Violation 'Git core.hooksPath must be configured to .githooks so repository hook checks actually run.'
+}
+else {
+    $hookPathValue = (($configuredHooksPath | Select-Object -First 1).ToString()).Trim()
+    if ([IO.Path]::IsPathRooted($hookPathValue)) {
+        $resolvedHookPath = [IO.Path]::GetFullPath($hookPathValue)
+    }
+    else {
+        $resolvedHookPath = [IO.Path]::GetFullPath((Join-Path $Root $hookPathValue))
+    }
+    $expectedHookPath = [IO.Path]::GetFullPath((Join-Path $Root '.githooks'))
+    if ($resolvedHookPath.TrimEnd('\', '/') -cne $expectedHookPath.TrimEnd('\', '/')) {
+        Add-Violation "Git core.hooksPath must point to .githooks; current value is '$hookPathValue'."
+    }
+}
+
+$preCommitHook = Join-Path $Root '.githooks\pre-commit'
+if (-not [IO.File]::Exists($preCommitHook)) {
+    Add-Violation '.githooks/pre-commit is missing; context-budget and hygiene checks will not trigger on commit.'
+}
+
+$contextBudgetChecker = Join-Path $Root 'scripts\check-context-budget.ps1'
+if (-not [IO.File]::Exists($contextBudgetChecker)) {
+    Add-Violation 'scripts/check-context-budget.ps1 is missing; context-budget guardrails must be executable.'
+}
+else {
+    try {
+        $contextBudgetOutput = & $contextBudgetChecker -RepositoryRoot $Root 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            foreach ($line in $contextBudgetOutput) {
+                Add-Violation "context-budget hook failed: $line"
+            }
+        }
+        else {
+            foreach ($line in $contextBudgetOutput) {
+                if (-not [string]::IsNullOrWhiteSpace($line)) {
+                    Write-Output "context-budget hook: $line"
+                }
+            }
+        }
+    }
+    catch {
+        Add-Violation "context-budget hook failed: $($_.Exception.Message)"
+    }
 }
 
 if ([IO.File]::Exists((Join-Path $Root 'uv.lock'))) {
@@ -224,6 +298,45 @@ foreach ($relativePath in $governanceFiles) {
     catch {
         Add-Violation "$displayPath cannot be decoded as strict UTF-8."
     }
+}
+
+$processGuardrails = @(
+    @{
+        RelativePath = 'CLAUDE.md'
+        RequiredText = @('milestone gate', 'targeted reverification', 'Reference Migration Policy')
+    },
+    @{
+        RelativePath = 'docs\agent-collaboration-governance.md'
+        RequiredText = @('broad gates as milestone evidence', 'verification scope', 'Reference Migration')
+    },
+    @{
+        RelativePath = 'AGENTS.md'
+        RequiredText = @('External References', 'NOMAD API analysis/OpenAPI GUI', 'CherryHQ/cherry-studio', 'openai/codex')
+    },
+    @{
+        RelativePath = '.codex\skills\review-ship\SKILL.md'
+        RequiredText = @('targeted reverification', 'Review-Fix Verification Record', 'User-provided reference')
+    },
+    @{
+        RelativePath = '.codex\skills\worktree-tdd\SKILL.md'
+        RequiredText = @('Targeted Reverification', 'External Architecture References', 'CherryHQ/cherry-studio')
+    },
+    @{
+        RelativePath = '.codex\skills\codebase-memory-mcp\SKILL.md'
+        RequiredText = @('Discovery Budget')
+    },
+    @{
+        RelativePath = '.codex\skills\contract-debugging\SKILL.md'
+        RequiredText = @('Failure Triage Budget')
+    },
+    @{
+        RelativePath = '.codex\skills\artifact-validation\SKILL.md'
+        RequiredText = @('Validation Matrix')
+    }
+)
+
+foreach ($guardrail in $processGuardrails) {
+    Assert-RequiredText $guardrail.RelativePath $guardrail.RequiredText
 }
 
 if ($Violations.Count -gt 0) {

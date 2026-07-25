@@ -8,23 +8,62 @@
     "type": "object",
     "additionalProperties": false,
     "required": [
+      "schema_version",
       "provider",
+      "display_name",
+      "source_family",
       "base_url",
       "license_hint",
+      "license_scope",
       "trust_level",
+      "default_curation_status",
       "rate_limit",
       "requires_api_key",
       "cache_ttl_hours",
       "allowed_output_fields",
+      "review_triggers",
+      "go_migration_state",
+      "python_bridge_required",
+      "typescript_surface",
       "disambiguation_required",
       "operational_status",
       "capabilities",
-      "execution_modes"
+      "execution_modes",
+      "data_library_path",
+      "v35_slice",
+      "acquisition_mode",
+      "distribution_policy"
     ],
     "properties": {
+      "schema_version": { "const": "v35.data_source_profile.v1" },
       "provider": { "type": "string", "minLength": 1 },
+      "display_name": { "type": "string", "minLength": 1 },
+      "source_family": {
+        "enum": [
+          "archive_metadata",
+          "computed_materials",
+          "computed_molecule",
+          "general",
+          "literature_metadata",
+          "molecule_identity",
+          "opv_benchmark",
+          "project_generated",
+          "psc_device_performance",
+          "schema_reference"
+        ]
+      },
       "base_url": { "type": "string", "minLength": 1 },
       "license_hint": { "type": "string", "minLength": 1 },
+      "license_scope": {
+        "enum": [
+          "api_terms_record",
+          "dataset_snapshot",
+          "project_generated",
+          "record_specific",
+          "schema_software_only",
+          "source_record"
+        ]
+      },
       "trust_level": {
         "enum": [
           "T0_missing",
@@ -33,6 +72,16 @@
           "T3_literature_machine",
           "T4_literature_curated",
           "T5_experimental_device"
+        ]
+      },
+      "default_curation_status": {
+        "enum": [
+          "calculated",
+          "curated_reference",
+          "machine_extracted",
+          "machine_normalized",
+          "schema_reference",
+          "user_import_required"
         ]
       },
       "rate_limit": {
@@ -52,6 +101,32 @@
         "minItems": 1,
         "items": { "type": "string", "minLength": 1 }
       },
+      "review_triggers": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "type": "string", "minLength": 1 },
+        "uniqueItems": true
+      },
+      "go_migration_state": {
+        "enum": [
+          "deferred",
+          "go_owned",
+          "go_shadow_ready",
+          "out_of_current_slice",
+          "parity_required",
+          "python_bridge_retained",
+          "python_oracle_p0"
+        ]
+      },
+      "python_bridge_required": { "type": "boolean" },
+      "typescript_surface": {
+        "enum": [
+          "read_only_reference",
+          "settings_and_import_commands",
+          "source_coverage_and_settings_only",
+          "source_coverage_settings_and_commands"
+        ]
+      },
       "disambiguation_required": { "type": "boolean" },
       "operational_status": {
         "enum": ["active", "experimental", "quarantined", "disabled"]
@@ -66,7 +141,45 @@
         "minItems": 1,
         "items": { "enum": ["direct", "enrichment", "local_dataset"] }
       },
-      "last_verified_at": { "type": ["string", "null"] }
+      "last_verified_at": { "type": ["string", "null"] },
+      "data_library_path": {
+        "type": ["string", "null"],
+        "minLength": 1,
+        "pattern": "^data/lib/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
+      },
+      "v35_slice": {
+        "enum": [
+          "p0_live_provider",
+          "p0_local_snapshot",
+          "p0_manual_import",
+          "p0_schema_module",
+          "deferred",
+          "out_of_current_slice"
+        ]
+      },
+      "acquisition_mode": {
+        "enum": [
+          "api_lookup",
+          "api_sync",
+          "local_snapshot",
+          "manual_archive_import",
+          "manual_import",
+          "schema_fixture",
+          "disabled",
+          "deferred",
+          "local_dataset"
+        ]
+      },
+      "distribution_policy": {
+        "enum": [
+          "derived_facts_with_source_pointers",
+          "local_only_pending_attribution",
+          "schema_only",
+          "api_terms_required",
+          "project_generated"
+        ]
+      },
+      "probe_notes": { "type": ["string", "null"] }
     }
   }
 }

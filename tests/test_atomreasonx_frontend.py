@@ -15,6 +15,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = REPO_ROOT / "frontend" / "atomreasonx"
 FIXTURE_PATH = FRONTEND_DIR / "src" / "fixtures" / "atomreasonx-ui-fixture.json"
+TAURI_DIR = FRONTEND_DIR / "src-tauri"
 
 
 class TestFrontendDirectoryStructure(unittest.TestCase):
@@ -46,11 +47,106 @@ class TestFrontendDirectoryStructure(unittest.TestCase):
             self.assertTrue((FRONTEND_DIR / "src" / "components" / component).exists())
 
     def test_local_adapters_exist(self) -> None:
-        for adapter in ["command-adapter.ts", "read-only-artifact-adapter.ts"]:
+        for adapter in [
+            "command-adapter.ts",
+            "read-only-artifact-adapter.ts",
+            "readonly-run-operator-config.ts",
+            "readonly-run-workbench-adapter.ts",
+            "tauri-readonly-sidecar.ts",
+        ]:
             self.assertTrue((FRONTEND_DIR / "src" / "adapters" / adapter).exists())
 
     def test_fixture_exists(self) -> None:
         self.assertTrue(FIXTURE_PATH.exists())
+
+
+class TestTauriReadonlySidecarBridge(unittest.TestCase):
+    def test_tauri_config_allows_only_loopback_readonly_fetches(self) -> None:
+        config = json.loads((TAURI_DIR / "tauri.conf.json").read_text(encoding="utf-8"))
+        self.assertTrue(config["app"]["withGlobalTauri"])
+        csp = config["app"]["security"]["csp"]
+
+        self.assertIn("connect-src 'self' http://127.0.0.1:* http://localhost:* http://[::1]:*", csp)
+        self.assertNotIn("https:", csp)
+        self.assertNotIn("http://*:*", csp)
+        self.assertEqual(config["bundle"]["externalBin"], ["binaries/spiroctl"])
+
+    def test_tauri_rust_bridge_spawns_fixed_readonly_command_without_shell(self) -> None:
+        main_rs = (TAURI_DIR / "src" / "main.rs").read_text(encoding="utf-8")
+
+        self.assertIn("start_readonly_sidecar", main_rs)
+        self.assertIn("stop_readonly_sidecar", main_rs)
+        self.assertIn('DEFAULT_READONLY_SIDECAR_ADDR: &str = "127.0.0.1:0"', main_rs)
+        self.assertIn('Command::new(executable)', main_rs)
+        self.assertIn("resolve_spiroctl_path(&app)", main_rs)
+        self.assertIn("resolve_bundled_spiroctl_path", main_rs)
+        self.assertIn("bundled_spiroctl_artifact_name", main_rs)
+        self.assertIn("SPIROCTL_PATH", main_rs)
+        self.assertIn('"readonly-run"', main_rs)
+        self.assertIn('"serve"', main_rs)
+        self.assertIn('"--addr"', main_rs)
+        self.assertIn('"run-manifest.json"', main_rs)
+        self.assertIn("read_startup_announcement", main_rs)
+        self.assertIn("parse_startup_announcement", main_rs)
+        self.assertNotIn("spiroctl_path:", main_rs)
+        self.assertNotIn("println!", main_rs)
+        self.assertNotIn("emit(", main_rs)
+        self.assertNotIn("shell()", main_rs)
+
+    def test_tauri_typescript_bridge_keeps_token_out_of_redacted_state(self) -> None:
+        bridge = (FRONTEND_DIR / "src" / "adapters" / "tauri-readonly-sidecar.ts").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("start_readonly_sidecar", bridge)
+        self.assertIn("stop_readonly_sidecar", bridge)
+        self.assertIn("createTauriReadonlyRunSession", bridge)
+        self.assertIn("validateReadonlySidecarLaunch", bridge)
+        self.assertIn('readonly_token: "REDACTED"', bridge)
+        self.assertIn("isReadonlySidecarLoopbackBaseUrl", bridge)
+        self.assertNotIn("spiroctlPath", bridge)
+        self.assertNotIn("console.", bridge)
+        self.assertNotIn("localStorage", bridge)
+
+    def test_runtime_workbench_adapter_maps_readonly_run_without_command_surface(self) -> None:
+        adapter = (FRONTEND_DIR / "src" / "adapters" / "readonly-run-workbench-adapter.ts").read_text(
+            encoding="utf-8",
+        )
+        operator_config = (FRONTEND_DIR / "src" / "adapters" / "readonly-run-operator-config.ts").read_text(
+            encoding="utf-8",
+        )
+        settings_modal = (FRONTEND_DIR / "src" / "components" / "SettingsModal.tsx").read_text(
+            encoding="utf-8",
+        )
+        main_tsx = (FRONTEND_DIR / "src" / "main.tsx").read_text(encoding="utf-8")
+
+        self.assertIn("createReadonlyRunWorkbenchReadAdapter", adapter)
+        self.assertIn('transport.read("manifest")', adapter)
+        self.assertIn('transport.read("artifact_index")', adapter)
+        self.assertIn('transport.read("scoring_view")', adapter)
+        self.assertIn('transport.read("review_summary")', adapter)
+        self.assertIn('transport.read("provider_lineage")', adapter)
+        self.assertIn('workspace.active_workspace = `readonly_run:${runId}`', adapter)
+        self.assertIn("workspace._provisional = false", adapter)
+        self.assertIn("readonlyOutputDir", adapter)
+        self.assertIn("normalizeReadonlyRunOutputDir", operator_config)
+        self.assertIn("buildReadonlyRunOperatorConfig", operator_config)
+        self.assertIn("Readonly run output directory", settings_modal)
+        self.assertIn("onApplyReadonlyRunOutputDir", settings_modal)
+        self.assertNotIn("submit(", adapter)
+        self.assertNotIn("execute(", adapter)
+        self.assertNotIn("sync(", adapter)
+        self.assertIn("createRuntimeWorkbenchReadAdapter", main_tsx)
+        self.assertIn("runtimeReadAdapter.readOnly", main_tsx)
+        self.assertIn("setReadonlyOutputDir", main_tsx)
+        self.assertIn("readonlyRunConfig", main_tsx)
+        self.assertIn('workspaceState.status === "error"', main_tsx)
+        self.assertIn("<SettingsModal", main_tsx)
+        self.assertIn("? undefined", main_tsx)
+        self.assertNotIn("spiroctlPath", settings_modal)
+        self.assertNotIn("api_key", operator_config)
+        self.assertNotIn("readonly_token", operator_config)
+        self.assertNotIn("localStorage", operator_config)
 
 
 class TestFrontendFixtureValid(unittest.TestCase):
@@ -73,6 +169,7 @@ class TestFrontendFixtureValid(unittest.TestCase):
 
     def test_fixture_contains_v33c_workbench_modules(self) -> None:
         self.assertIn("source_coverage", self.fixture)
+        self.assertIn("source_profiles", self.fixture)
         self.assertIn("sync_jobs", self.fixture)
         self.assertIn("workflow", self.fixture)
         self.assertIn("command_actions", self.fixture)

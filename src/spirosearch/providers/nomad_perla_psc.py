@@ -9,14 +9,53 @@ from spirosearch.source_registry import SourceRateLimiter, SourceRegistry, Sourc
 
 
 JSONPostTransport = Callable[[str, bytes, Mapping[str, str]], Mapping[str, Any]]
+DEFAULT_DEVICE_ARCHITECTURES: tuple[str, ...] = ("nip",)
+NOMAD_HTL_QUERY_PATH = "results.properties.optoelectronic.solar_cell.hole_transport_layer:any"
+NOMAD_ARCHITECTURE_QUERY_PATH = "results.properties.optoelectronic.solar_cell.device_architecture:any"
 
 # Synonym expansion for common HTL names
 _HTL_SYNONYMS: dict[str, list[str]] = {
     "spiro-ometad": ["Spiro-OMeTAD", "spiro-OMeTAD", "spiroometad", "spiro-omeTAD"],
+    "spiro-meotad": ["Spiro-OMeTAD", "spiro-OMeTAD", "spiro-ometad"],
     "ptaa": ["PTAA", "poly[bis(4-phenyl)(2,4,6-trimethylphenyl)amine]"],
+    "pedot": ["PEDOT:PSS", "pedot:pss", "pedot-pss"],
     "pedot:pss": ["PEDOT:PSS", "pedot-pss"],
-    "meo-2pacz": ["MeO-2PACz", "meo-2pacz"],
+    "pacz": ["2PACz", "MeO-2PACz", "Me-4PACz", "Br-2PACz"],
+    "2pacz": ["2PACz"],
+    "meo-2pacz": ["MeO-2PACz", "meo-2pacz", "MeO2PACz"],
+    "me-4pacz": ["Me-4PACz"],
+    "br-2pacz": ["Br-2PACz"],
+    "nio": ["NiOx", "NiO_x", "NiO"],
     "nio_x": ["NiOx", "NiO_x", "NiO"],
+}
+
+NOMAD_HTL_ARCHIVE_REQUIRED: dict[str, Any] = {
+    "metadata": "*",
+    "results": {
+        "properties": {
+            "optoelectronic": {
+                "solar_cell": "*",
+            },
+        },
+    },
+    "data": {
+        "ref": "*",
+        "cell": "*",
+        "substrate": "*",
+        "etl": "*",
+        "perovskite": "*",
+        "perovskite_deposition": "*",
+        "htl": "*",
+        "backcontact": "*",
+        "add": "*",
+        "jv": "*",
+        "stabilised": "*",
+        "eqe": "*",
+        "stability": "*",
+        "outdoor": "*",
+        "layers": "*",
+        "perovskite_solar_cell_database": "*",
+    },
 }
 
 
@@ -27,6 +66,34 @@ def _expand_htl_synonyms(htl_name: str) -> list[str]:
     synonyms = _HTL_SYNONYMS.get(key, [])
     terms.extend(synonyms)
     return terms
+
+
+def _build_htl_search_body(
+    htl_name: str,
+    *,
+    page_size: int,
+    page_after_value: str | None = None,
+    device_architectures: tuple[str, ...] = DEFAULT_DEVICE_ARCHITECTURES,
+) -> dict[str, Any]:
+    query: dict[str, Any] = {
+        "sections:all": ["nomad.datamodel.results.SolarCell"],
+        NOMAD_HTL_QUERY_PATH: _expand_htl_synonyms(htl_name),
+    }
+    architectures = [
+        str(architecture).strip().casefold()
+        for architecture in device_architectures
+        if str(architecture).strip()
+    ]
+    if architectures:
+        query[NOMAD_ARCHITECTURE_QUERY_PATH] = architectures
+    body: dict[str, Any] = {
+        "owner": "public",
+        "query": query,
+        "pagination": {"page_size": page_size},
+    }
+    if page_after_value:
+        body["pagination"]["page_after_value"] = page_after_value
+    return body
 
 
 def _htl_list_contains(htl_name: str, htl_list: Any) -> tuple[bool, bool]:
@@ -117,6 +184,11 @@ def _normalize_psc_device(
     # --- Try archive data for richer fields (if available) ---
     psc_device = {}
     archive_metadata = {}
+    archive_data = {}
+    htl_section = {}
+    cell_section = {}
+    jv_section = {}
+    layers_section: Any = None
     if archive_entry is not None:
         archive = dict(archive_entry.get("archive", archive_entry))
         archive_data = dict(archive.get("data", {}))
@@ -127,6 +199,10 @@ def _normalize_psc_device(
         device_section = dict(psc_db.get("device", {}))
         psc_device = dict(device_section.get("SolarCell", {}))
         archive_metadata = archive_meta
+        htl_section = _section_mapping(archive_data, "htl")
+        cell_section = _section_mapping(archive_data, "cell")
+        jv_section = _section_mapping(archive_data, "jv")
+        layers_section = archive_data.get("layers")
 
     # Archive provides more detailed fields — override search where archive has data
     if psc_device:
@@ -169,6 +245,83 @@ def _normalize_psc_device(
         if archive_formula is not None and "chemical_formula" not in normalized:
             _put_optional(normalized, "chemical_formula", archive_formula, str)
 
+    if archive_data:
+        htl_from_v35 = _first_present(
+            htl_section.get("name"),
+            htl_section.get("material"),
+            htl_section.get("hole_transport_layer"),
+            htl_section.get("hole_transport_layer_name"),
+            _htl_from_layers(layers_section),
+        )
+        if htl_from_v35 is not None and htl_from_search is None:
+            htl_from_search = htl_from_v35
+
+        archive_stack = _first_present(
+            cell_section.get("device_stack"),
+            cell_section.get("stack_sequence"),
+            htl_section.get("device_stack"),
+            htl_section.get("stack_sequence"),
+            _stack_from_layers(layers_section),
+        )
+        if archive_stack is not None and "device_stack" not in normalized:
+            stack_value = _stack_to_string(archive_stack)
+            if stack_value:
+                _put_optional(normalized, "device_stack", stack_value, str)
+
+        archive_architecture = _first_present(
+            cell_section.get("device_architecture"),
+            cell_section.get("architecture"),
+            psc_device.get("device_architecture"),
+            psc_device.get("architecture"),
+        )
+        if archive_architecture is not None and "device_architecture" not in normalized:
+            _put_optional(
+                normalized,
+                "device_architecture",
+                _value_or_raw(archive_architecture),
+                str,
+            )
+
+        archive_pce = _first_present(
+            jv_section.get("default_PCE"),
+            jv_section.get("default_pce"),
+            jv_section.get("pce"),
+            jv_section.get("PCE"),
+            jv_section.get("power_conversion_efficiency"),
+        )
+        if archive_pce is not None and "pce_percent" not in normalized:
+            _put_optional(normalized, "pce_percent", _value_or_raw(archive_pce), float)
+
+        archive_voc = _first_present(
+            jv_section.get("default_Voc"),
+            jv_section.get("default_voc"),
+            jv_section.get("voc"),
+            jv_section.get("Voc"),
+            jv_section.get("open_circuit_voltage"),
+        )
+        if archive_voc is not None and "voc_v" not in normalized:
+            _put_optional(normalized, "voc_v", _value_or_raw(archive_voc), float)
+
+        archive_jsc = _first_present(
+            jv_section.get("default_Jsc"),
+            jv_section.get("default_jsc"),
+            jv_section.get("jsc"),
+            jv_section.get("Jsc"),
+            jv_section.get("short_circuit_current_density"),
+        )
+        if archive_jsc is not None and "jsc_ma_cm2" not in normalized:
+            _put_optional(normalized, "jsc_ma_cm2", _value_or_raw(archive_jsc), float)
+
+        archive_ff = _first_present(
+            jv_section.get("default_FF"),
+            jv_section.get("default_ff"),
+            jv_section.get("ff"),
+            jv_section.get("FF"),
+            jv_section.get("fill_factor"),
+        )
+        if archive_ff is not None and "fill_factor" not in normalized:
+            _put_optional(normalized, "fill_factor", _value_or_raw(archive_ff), float)
+
     # Perovskite composition: also try from search if archive didn't provide it
     if "perovskite_composition" not in normalized and psc_device:
         # Already tried above; skip
@@ -197,7 +350,14 @@ def _normalize_psc_device(
     # Determine HTL match: check both search (list) and archive (string)
     htl_for_match = htl_from_search
     exact_hit, synonym_hit = _htl_list_contains(htl_name, htl_for_match)
-    psc_section_present = bool(solar_cell) or bool(psc_device)
+    psc_section_present = (
+        bool(solar_cell)
+        or bool(psc_device)
+        or bool(htl_section)
+        or bool(cell_section)
+        or bool(jv_section)
+        or bool(layers_section)
+    )
 
     has_pce = "pce_percent" in normalized
     has_voc = "voc_v" in normalized
@@ -238,6 +398,80 @@ def _convert_jsc_search(raw: Any) -> float | None:
     return v * 0.1
 
 
+def _section_mapping(data: Mapping[str, Any], name: str) -> dict[str, Any]:
+    section = data.get(name)
+    return dict(section) if isinstance(section, Mapping) else {}
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        return value
+    return None
+
+
+def _stack_to_string(raw_stack: Any) -> str | None:
+    stack = _value_or_raw(raw_stack)
+    if stack is None:
+        return None
+    if isinstance(stack, str):
+        return stack.strip() or None
+    if isinstance(stack, list):
+        parts = []
+        for item in stack:
+            label = _layer_material_label(item)
+            if label:
+                parts.append(label)
+        return "/".join(parts) if parts else None
+    return str(stack)
+
+
+def _stack_from_layers(layers: Any) -> list[str] | None:
+    if not isinstance(layers, list):
+        return None
+    parts = []
+    for layer in layers:
+        label = _layer_material_label(layer)
+        if label:
+            parts.append(label)
+    return parts or None
+
+
+def _htl_from_layers(layers: Any) -> str | None:
+    if not isinstance(layers, list):
+        return None
+    for layer in layers:
+        if not isinstance(layer, Mapping):
+            continue
+        role_text = " ".join(
+            str(layer.get(key, ""))
+            for key in ("function", "role", "layer_type", "type", "label", "name")
+        ).casefold()
+        if "htl" in role_text or "hole" in role_text:
+            return _layer_material_label(layer)
+    return None
+
+
+def _layer_material_label(layer: Any) -> str | None:
+    if isinstance(layer, Mapping):
+        for key in ("material", "name", "compound", "substance", "label", "value"):
+            value = layer.get(key)
+            raw_value = _value_or_raw(value)
+            if raw_value is not None and str(raw_value).strip():
+                return str(raw_value).strip()
+        return None
+    value = _value_or_raw(layer)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _extract_doi_from_datasets(datasets: Any) -> str | None:
     """Extract DOI from datasets list (search or archive metadata)."""
     if not isinstance(datasets, list) or not datasets:
@@ -246,7 +480,7 @@ def _extract_doi_from_datasets(datasets: Any) -> str | None:
     if isinstance(first, Mapping):
         doi = first.get("doi")
         if doi:
-            return str(doi)
+            return _normalize_doi(str(doi))
     return None
 
 
@@ -262,10 +496,32 @@ def _extract_doi_from_references(references: Any) -> str | None:
         marker = "doi.org/"
         marker_index = text.casefold().find(marker)
         if marker_index >= 0:
-            return text[marker_index + len(marker):].strip()
+            return _normalize_doi(text[marker_index + len(marker):].strip())
         if text.startswith("10.") and "/" in text:
-            return text
+            return _normalize_doi(text)
     return None
+
+
+def _normalize_doi(value: str | None) -> str | None:
+    if value is None:
+        return None
+    doi = str(value).strip()
+    if not doi:
+        return None
+    lowered = doi.casefold()
+    for prefix in (
+        "https://doi.org/",
+        "http://doi.org/",
+        "https://dx.doi.org/",
+        "http://dx.doi.org/",
+    ):
+        if lowered.startswith(prefix):
+            doi = doi[len(prefix):]
+            lowered = doi.casefold()
+            break
+    if lowered.startswith("doi:"):
+        doi = doi[4:]
+    return doi.strip().rstrip(".,;")
 
 
 def _extract_license_from_datasets(datasets: Any) -> str | None:
@@ -295,6 +551,19 @@ def _query_hash(body: bytes) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
+def _archive_required_tree() -> dict[str, Any]:
+    return json.loads(json.dumps(NOMAD_HTL_ARCHIVE_REQUIRED))
+
+
+def _archive_required_tree_hash() -> str:
+    raw = json.dumps(
+        NOMAD_HTL_ARCHIVE_REQUIRED,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
 def _review_reasons_for_device(
     normalized: Mapping[str, Any],
     search_entry: Mapping[str, Any],
@@ -302,7 +571,11 @@ def _review_reasons_for_device(
     archive_status: str,
 ) -> list[str]:
     reasons: list[str] = []
-    if archive_status in {"empty", "unavailable"}:
+    if archive_status == "rate_limited":
+        reasons.append("archive_rate_limited")
+    elif archive_status == "schema_unrecognized":
+        reasons.append("archive_schema_unrecognized")
+    elif archive_status in {"empty", "unavailable"}:
         reasons.append("archive_unavailable")
     if not search_entry:
         return reasons
@@ -312,18 +585,69 @@ def _review_reasons_for_device(
         htl_name,
         solar_cell.get("hole_transport_layer"),
     )
+    if not exact_hit and not synonym_hit and normalized.get("device_stack"):
+        exact_hit, synonym_hit = _htl_list_contains(
+            htl_name,
+            str(normalized["device_stack"]).split("/"),
+        )
     if not exact_hit and not synonym_hit:
-        reasons.append("htl_match_missing_or_ambiguous")
+        reasons.append("ambiguous_htl_match")
     if "device_stack" not in normalized:
-        reasons.append("device_stack_missing")
+        reasons.append("missing_device_stack")
+    if not _normalized_has_htl_stack(normalized, htl_name):
+        reasons.append("missing_htl_stack")
     if "source_doi" not in normalized:
-        reasons.append("source_doi_missing")
+        reasons.append("missing_source_doi")
     if "license" not in normalized:
-        reasons.append("license_missing")
+        reasons.append("missing_license")
     metric_keys = ("pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor")
     if not all(key in normalized for key in metric_keys):
-        reasons.append("device_metrics_incomplete")
+        reasons.append("missing_core_metrics")
     return reasons
+
+
+def _normalized_has_htl_stack(normalized: Mapping[str, Any], htl_name: str) -> bool:
+    stack = normalized.get("device_stack")
+    if stack is None:
+        return False
+    exact_hit, synonym_hit = _htl_list_contains(htl_name, str(stack).split("/"))
+    return exact_hit or synonym_hit
+
+
+def _archive_status_from_exception(exc: Exception) -> str:
+    text = f"{type(exc).__name__} {exc}".casefold()
+    if "429" in text or "rate" in text or "too many requests" in text:
+        return "rate_limited"
+    return "unavailable"
+
+
+def _archive_entry_status(archive_payload: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    archive_data_list = archive_payload.get("data", [])
+    if not isinstance(archive_data_list, list):
+        return None, "schema_unrecognized"
+    if not archive_data_list:
+        return None, "empty"
+    if not isinstance(archive_data_list[0], Mapping):
+        return None, "schema_unrecognized"
+    archive_entry = dict(archive_data_list[0])
+    if not _archive_has_recognized_psc_sections(archive_entry):
+        return archive_entry, "schema_unrecognized"
+    return archive_entry, "available"
+
+
+def _archive_has_recognized_psc_sections(archive_entry: Mapping[str, Any]) -> bool:
+    archive = dict(archive_entry.get("archive", archive_entry))
+    archive_data = dict(archive.get("data", {}))
+    psc_db = archive_data.get("perovskite_solar_cell_database")
+    if isinstance(psc_db, Mapping):
+        device_section = psc_db.get("device")
+        if isinstance(device_section, Mapping) and isinstance(device_section.get("SolarCell"), Mapping):
+            return True
+    for section_name in ("htl", "cell", "jv", "perovskite", "stabilised", "stability", "outdoor"):
+        if isinstance(archive_data.get(section_name), Mapping):
+            return True
+    layers = archive_data.get("layers")
+    return isinstance(layers, list) and bool(layers)
 
 
 def _search_solar_cell(search_entry: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -414,15 +738,7 @@ class NomadPerlaPscProvider:
         # Use the correct API path confirmed by probe:
         #   results.properties.optoelectronic.solar_cell.hole_transport_layer:any
         search_url = f"{self.base_url}/entries/query"
-        search_terms = _expand_htl_synonyms(query_value)
-        search_body = {
-            "owner": "public",
-            "query": {
-                "sections:all": ["nomad.datamodel.results.SolarCell"],
-                "results.properties.optoelectronic.solar_cell.hole_transport_layer:any": search_terms,
-            },
-            "pagination": {"page_size": 25},
-        }
+        search_body = _build_htl_search_body(query_value, page_size=25)
         search_body_bytes = json.dumps(search_body).encode("utf-8")
         query_hash = _query_hash(search_body_bytes)
         headers = {"Content-Type": "application/json"}
@@ -447,40 +763,36 @@ class NomadPerlaPscProvider:
         archive_entry = None
         archive_status = "not_requested"
         archive_error: dict[str, str] | None = None
+        archive_required_hash: str | None = None
         if entry_ids:
             archive_status = "unavailable"
+            archive_required_hash = _archive_required_tree_hash()
             try:
                 if self.rate_limiter is not None:
                     self.rate_limiter.wait_for_slot()
                 archive_url = f"{self.base_url}/entries/archive/query"
                 archive_body = {
                     "entry_id": entry_ids[:1],  # Only fetch first entry to reduce rate-limit risk
-                    "required": {
-                        "metadata": "*",
-                        "data": "*",
-                    },
+                    "required": _archive_required_tree(),
                 }
                 archive_body_bytes = json.dumps(archive_body).encode("utf-8")
                 archive_payload = self._fetch_with_backoff(archive_url, archive_body_bytes, headers)
-                archive_data_list = archive_payload.get("data", [])
-                if isinstance(archive_data_list, list) and archive_data_list:
-                    if isinstance(archive_data_list[0], Mapping):
-                        archive_entry = dict(archive_data_list[0])
-                        archive_status = "available"
-                elif isinstance(archive_data_list, list):
-                    archive_status = "empty"
+                archive_entry, archive_status = _archive_entry_status(archive_payload)
             except Exception as exc:
                 archive_error = {
                     "type": type(exc).__name__,
                     "message": str(exc),
                 }
                 archive_entry = None
+                archive_status = _archive_status_from_exception(exc)
 
         # Normalize from search entry + optional archive enrichment
         normalized, confidence = _normalize_psc_device(
             first_search_entry, archive_entry, query_value
         )
         normalized["query_hash"] = query_hash
+        if archive_required_hash is not None:
+            normalized["archive_required_tree_hash"] = archive_required_hash
         confidence = _apply_review_markers(
             normalized,
             search_entry=first_search_entry,
@@ -494,6 +806,8 @@ class NomadPerlaPscProvider:
             "archive": dict(archive_entry) if archive_entry is not None else {},
             "archive_status": archive_status,
         }
+        if archive_required_hash is not None:
+            raw_data["archive_required_tree_hash"] = archive_required_hash
         if archive_error is not None:
             raw_data["archive_error"] = archive_error
 
@@ -521,18 +835,11 @@ class NomadPerlaPscProvider:
             self.rate_limiter.wait_for_slot()
 
         search_url = f"{self.base_url}/entries/query"
-        search_terms = _expand_htl_synonyms(query_value)
-        search_body = {
-            "owner": "public",
-            "query": {
-                "sections:all": ["nomad.datamodel.results.SolarCell"],
-                "results.properties.optoelectronic.solar_cell.hole_transport_layer:any": search_terms,
-            },
-            "pagination": {
-                "page_size": 25,
-                "page_after_value": page_after_value,
-            },
-        }
+        search_body = _build_htl_search_body(
+            query_value,
+            page_size=25,
+            page_after_value=page_after_value,
+        )
         search_body_bytes = json.dumps(search_body).encode("utf-8")
         query_hash = _query_hash(search_body_bytes)
         headers = {"Content-Type": "application/json"}
@@ -553,39 +860,35 @@ class NomadPerlaPscProvider:
         archive_entry = None
         archive_status = "not_requested"
         archive_error: dict[str, str] | None = None
+        archive_required_hash: str | None = None
         if entry_ids:
             archive_status = "unavailable"
+            archive_required_hash = _archive_required_tree_hash()
             try:
                 if self.rate_limiter is not None:
                     self.rate_limiter.wait_for_slot()
                 archive_url = f"{self.base_url}/entries/archive/query"
                 archive_body = {
                     "entry_id": entry_ids[:1],
-                    "required": {
-                        "metadata": "*",
-                        "data": "*",
-                    },
+                    "required": _archive_required_tree(),
                 }
                 archive_body_bytes = json.dumps(archive_body).encode("utf-8")
                 archive_payload = self._fetch_with_backoff(archive_url, archive_body_bytes, headers)
-                archive_data_list = archive_payload.get("data", [])
-                if isinstance(archive_data_list, list) and archive_data_list:
-                    if isinstance(archive_data_list[0], Mapping):
-                        archive_entry = dict(archive_data_list[0])
-                        archive_status = "available"
-                elif isinstance(archive_data_list, list):
-                    archive_status = "empty"
+                archive_entry, archive_status = _archive_entry_status(archive_payload)
             except Exception as exc:
                 archive_error = {
                     "type": type(exc).__name__,
                     "message": str(exc),
                 }
                 archive_entry = None
+                archive_status = _archive_status_from_exception(exc)
 
         normalized, confidence = _normalize_psc_device(
             first_search_entry, archive_entry, query_value
         )
         normalized["query_hash"] = query_hash
+        if archive_required_hash is not None:
+            normalized["archive_required_tree_hash"] = archive_required_hash
         confidence = _apply_review_markers(
             normalized,
             search_entry=first_search_entry,
@@ -599,6 +902,8 @@ class NomadPerlaPscProvider:
             "archive": dict(archive_entry) if archive_entry is not None else {},
             "archive_status": archive_status,
         }
+        if archive_required_hash is not None:
+            raw_data["archive_required_tree_hash"] = archive_required_hash
         if archive_error is not None:
             raw_data["archive_error"] = archive_error
 
@@ -632,15 +937,7 @@ class NomadPerlaPscProvider:
             self.rate_limiter.wait_for_slot()
 
         search_url = f"{self.base_url}/entries/query"
-        search_terms = _expand_htl_synonyms(query_value)
-        search_body = {
-            "owner": "public",
-            "query": {
-                "sections:all": ["nomad.datamodel.results.SolarCell"],
-                "results.properties.optoelectronic.solar_cell.hole_transport_layer:any": search_terms,
-            },
-            "pagination": {"page_size": max_results},
-        }
+        search_body = _build_htl_search_body(query_value, page_size=max_results)
         search_body_bytes = json.dumps(search_body).encode("utf-8")
         query_hash = _query_hash(search_body_bytes)
         headers = {"Content-Type": "application/json"}

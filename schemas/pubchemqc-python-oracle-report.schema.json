@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/pubchemqc-python-oracle-report.schema.json",
+  "title": "PubChemQCPythonOracleReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "oracle", "record_count"],
+  "properties": {
+    "schema_version": { "const": "v35.pubchemqc_python_oracle_report.v1" },
+    "status": { "const": "pass" },
+    "oracle": { "const": "python" },
+    "record_count": { "type": "integer", "minimum": 1 }
+  }
+}

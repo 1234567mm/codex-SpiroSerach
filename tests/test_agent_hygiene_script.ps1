@@ -41,17 +41,47 @@ function New-CleanFixture {
 
     Set-Utf8File (Join-Path $root '.gitignore') ".qoder/`n"
     Set-Utf8File (Join-Path $root 'reasonix.toml') "[skills]`npaths = [`".codex/skills`"]`n"
-    Set-Utf8File (Join-Path $root 'AGENTS.md') "# Agents`n"
-    Set-Utf8File (Join-Path $root 'CLAUDE.md') "# Claude`n"
-    Set-Utf8File (Join-Path $root 'docs\agent-collaboration-governance.md') "# Governance`n"
+    Set-Utf8File (Join-Path $root '.githooks\pre-commit') @'
+#!/bin/sh
+repo_root=$(git rev-parse --show-toplevel)
+exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/check-agent-hygiene.ps1" -RepositoryRoot "$repo_root"
+'@
+    Set-Utf8File (Join-Path $root 'scripts\check-context-budget.ps1') @'
+[CmdletBinding()]
+param([string]$RepositoryRoot)
+Write-Output 'PASS: context budget hook fixture passed.'
+exit 0
+'@
+    Set-Utf8File (Join-Path $root 'AGENTS.md') "# Agents`n## External References`nNOMAD API analysis/OpenAPI GUI`nCherryHQ/cherry-studio`nopenai/codex`n"
+    Set-Utf8File (Join-Path $root 'CLAUDE.md') "# Claude`nUse a milestone gate, then targeted reverification for bounded review fixes.`n## Reference Migration Policy`n"
+    Set-Utf8File (Join-Path $root 'docs\agent-collaboration-governance.md') "# Governance`nUse broad gates as milestone evidence and report verification scope.`n## Reference Migration`n"
     Set-Utf8File (Join-Path $root 'docs\ai-collaboration-instruction-templates.md') "# Templates`n"
+    Set-Utf8File (Join-Path $root 'docs\project-hooks.md') "# Project Hooks`nUse check-context-budget.ps1 with SPIRO_CONTEXT_USAGE_PERCENT and SPIRO_CONTEXT_HANDOFF_PATH.`n"
+    Set-Utf8File (Join-Path $root 'plans\v35-execution-status-and-next-slices.md') "# V35`nOperational addendum: roughly 80% context usage requires fewer duplicate tests and a quality-preserving test budget.`n"
     Set-Utf8File (Join-Path $root '.codex\skills\example\SKILL.md') "---`nname: example`ndescription: Example skill`n---`n"
     Set-Utf8File (Join-Path $root '.codex\skills\example\agents\openai.yaml') "interface:`n  display_name: Example`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\context-handoff\SKILL.md') "---`nname: context-handoff`ndescription: Context handoff skill`n---`n# Context Handoff`n## Context Budget Trigger`nAt 80% context usage, run check-context-budget.ps1.`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\context-handoff\agents\openai.yaml') "interface:`n  display_name: Context Handoff`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\review-ship\SKILL.md') "---`nname: review-ship`ndescription: Review ship skill`n---`n# Review Ship`nUse targeted reverification.`n## Review-Fix Verification Record`nUser-provided reference`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\review-ship\agents\openai.yaml') "interface:`n  display_name: Review Ship`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\SKILL.md') "---`nname: worktree-tdd`ndescription: Worktree TDD skill`n---`n## Targeted Reverification`n## External Architecture References`nCherryHQ/cherry-studio`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\agents\openai.yaml') "interface:`n  display_name: Worktree TDD`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\codebase-memory-mcp\SKILL.md') "---`nname: codebase-memory-mcp`ndescription: Codebase memory skill`n---`n## Discovery Budget`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\codebase-memory-mcp\agents\openai.yaml') "interface:`n  display_name: Codebase Memory`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\contract-debugging\SKILL.md') "---`nname: contract-debugging`ndescription: Contract debugging skill`n---`n## Failure Triage Budget`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\contract-debugging\agents\openai.yaml') "interface:`n  display_name: Contract Debugging`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\artifact-validation\SKILL.md') "---`nname: artifact-validation`ndescription: Artifact validation skill`n---`n## Validation Matrix`n"
+    Set-Utf8File (Join-Path $root '.codex\skills\artifact-validation\agents\openai.yaml') "interface:`n  display_name: Artifact Validation`n"
     Set-Utf8File (Join-Path $root '.qoder\local-only.txt') "local state`n"
 
     $gitOutput = & git -C $root init --quiet 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "git init failed for fixture '$Name': $($gitOutput -join [Environment]::NewLine)"
+    }
+
+    $gitOutput = & git -C $root config core.hooksPath .githooks 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "git config core.hooksPath failed for fixture '$Name': $($gitOutput -join [Environment]::NewLine)"
     }
 
     return $root
@@ -107,6 +137,7 @@ try {
     $result = Invoke-Checker $clean
     Assert-True ($result.ExitCode -eq 0) "Clean fixture failed:`n$($result.Output)"
     Assert-Contains $result.Output 'PASS:' 'Clean fixture did not emit a PASS line.'
+    Assert-Contains $result.Output 'context budget hook fixture passed' 'Clean fixture did not show context-budget hook execution.'
     Assert-True (-not $result.Output.Contains('ERROR:')) "Clean fixture emitted an ERROR line:`n$($result.Output)"
     Write-Output 'PASS: clean repository'
 
@@ -144,6 +175,29 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $invalidUtf8 'CLAUDE.md'), [byte[]](0x43, 0xC3, 0x28))
     Assert-Failure (Invoke-Checker $invalidUtf8) 'UTF-8' 'invalid UTF-8 fixture'
     Write-Output 'PASS: invalid UTF-8 governance file is rejected'
+
+    $guardrail = New-CleanFixture 'process-guardrail'
+    Set-Utf8File (Join-Path $guardrail 'CLAUDE.md') "# Claude`nUse a milestone gate only.`n"
+    Assert-Failure (Invoke-Checker $guardrail) 'targeted reverification' 'process guardrail fixture'
+    Write-Output 'PASS: missing process guardrail text is rejected'
+
+    $hookPath = New-CleanFixture 'hook-path'
+    $gitOutput = & git -C $hookPath config --unset core.hooksPath 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "git config --unset core.hooksPath failed for fixture: $($gitOutput -join [Environment]::NewLine)"
+    }
+    Assert-Failure (Invoke-Checker $hookPath) 'core.hooksPath' 'hook path fixture'
+    Write-Output 'PASS: missing Git hooksPath config is rejected'
+
+    $contextBudgetHook = New-CleanFixture 'context-budget-hook'
+    Set-Utf8File (Join-Path $contextBudgetHook 'scripts\check-context-budget.ps1') @'
+[CmdletBinding()]
+param([string]$RepositoryRoot)
+Write-Output 'ERROR: context budget hook was executed.'
+exit 1
+'@
+    Assert-Failure (Invoke-Checker $contextBudgetHook) 'context budget hook was executed' 'context budget hook fixture'
+    Write-Output 'PASS: context budget hook failures are rejected'
 
     Write-Output 'PASS: all agent hygiene checker tests passed'
     exit 0

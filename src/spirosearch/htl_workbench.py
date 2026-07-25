@@ -16,12 +16,15 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from spirosearch.local_backend import LocalBackendDatabase
+from spirosearch.local_config import LocalConfigStore, build_sanitized_source_config_status
 from spirosearch.nomad_sync import NomadHtlSyncJob, NomadSyncConfig
+from spirosearch.source_registry import load_source_registry
 
 HTL_WORKBENCH_READ_SCHEMA_VERSION = "v33c.htl_workbench.read_state.v1"
 HTL_WORKBENCH_COMMAND_SCHEMA_VERSION = "v33c.htl_workbench.command_result.v1"
 HTL_SOURCE_COVERAGE_SCHEMA_VERSION = "v33c.htl_source_coverage.v1"
 HTL_WORKFLOW_SCHEMA_VERSION = "v33c.htl_workflow.v1"
+WORKBENCH_MUTATION_ROLES = {"operator", "admin"}
 
 HTL_WORKFLOW_TARGET_FIELDS: tuple[str, ...] = (
     "htl_name",
@@ -42,6 +45,17 @@ HTL_WORKFLOW_TARGET_FIELDS: tuple[str, ...] = (
     "review_blockers",
 )
 
+
+class _ReadOnlyEmptyConfigStore:
+    config_version = 0
+
+    def get_api_key(self, provider: str) -> str | None:
+        return None
+
+    def key_fingerprint(self, provider: str) -> str | None:
+        return None
+
+
 _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
     "nomad_perla_psc": {
         "provider_kind": "provider_api",
@@ -51,26 +65,51 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "local_dataset": False,
         "expected_fields": (
             "entry_id",
+            "upload_id",
             "htl_name",
             "device_stack",
+            "device_architecture",
             "pce_percent",
             "voc_v",
             "jsc_ma_cm2",
             "fill_factor",
             "perovskite_composition",
+            "chemical_formula",
             "source_doi",
             "license",
+            "query_hash",
+            "archive_required_tree_hash",
             "archive_status",
+            "review_required",
+            "review_reasons",
+            "match_type",
+            "device_count",
+            "devices",
         ),
         "provenance_fields": ("entry_id", "source_url", "source_doi", "query_hash", "raw_sha256"),
+        "blocking_review_count": 8,
         "review_blockers": (
-            "missing_doi",
+            "missing_source_doi",
             "missing_license",
-            "missing_stack",
-            "incomplete_metrics",
+            "missing_device_stack",
+            "missing_htl_stack",
+            "missing_core_metrics",
             "archive_unavailable",
+            "archive_rate_limited",
+            "archive_schema_unrecognized",
             "ambiguous_htl_match",
         ),
+    },
+    "nomad_perovskite_schema": {
+        "provider_kind": "schema_module",
+        "phase_status": "useful",
+        "htl_capability": "NOMAD perovskite schema aliases and search-app field mapping",
+        "automatic_acquisition": "schema_fixture",
+        "local_dataset": True,
+        "expected_fields": ("schema_name", "schema_version", "field_aliases"),
+        "provenance_fields": ("source_url", "sha256", "repository_ref"),
+        "blocking_review_count": 1,
+        "review_blockers": ("schema_version_unpinned",),
     },
     "pubchem": {
         "provider_kind": "provider_api",
@@ -78,8 +117,18 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "molecule identity and synonyms",
         "automatic_acquisition": "api_lookup",
         "local_dataset": False,
-        "expected_fields": ("cid", "canonical_smiles", "inchi_key", "synonyms", "ambiguity_flag"),
+        "expected_fields": (
+            "cid",
+            "canonical_smiles",
+            "isomeric_smiles",
+            "inchi",
+            "inchi_key",
+            "synonyms",
+            "source_attribution",
+            "ambiguity_flag",
+        ),
         "provenance_fields": ("cid", "source_url", "raw_sha256"),
+        "blocking_review_count": 1,
         "review_blockers": ("ambiguous_identity",),
     },
     "crossref": {
@@ -90,6 +139,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "local_dataset": False,
         "expected_fields": ("doi", "title", "journal", "published_at", "authors", "license"),
         "provenance_fields": ("doi", "source_url", "raw_sha256"),
+        "blocking_review_count": 2,
         "review_blockers": ("retraction_flag", "source_url_missing"),
     },
     "local_paper_vault": {
@@ -103,6 +153,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "expected_fields": ("paper_group", "main_pdf", "si_assets", "notes", "doi", "source_url"),
         "provenance_fields": ("deposit_path", "sha256", "doi", "source_url"),
         "cache_ttl_hours": None,
+        "blocking_review_count": 3,
         "review_blockers": ("missing_main_pdf", "missing_si", "source_url_missing"),
     },
     "hopv15": {
@@ -111,6 +162,8 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "organic PV molecular benchmark",
         "automatic_acquisition": "local_snapshot",
         "local_dataset": True,
+        "blocking_review_count": 1,
+        "review_blockers": ("snapshot_manifest_missing",),
     },
     "opv_db": {
         "provider_kind": "local_dataset",
@@ -118,6 +171,8 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "device-performance baseline",
         "automatic_acquisition": "local_snapshot",
         "local_dataset": True,
+        "blocking_review_count": 1,
+        "review_blockers": ("third_party_attribution_missing",),
     },
     "openalex": {
         "provider_kind": "provider_api",
@@ -126,6 +181,8 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "literature graph and open-access metadata",
         "automatic_acquisition": "api_lookup",
         "local_dataset": False,
+        "blocking_review_count": 0,
+        "review_blockers": (),
     },
     "materials_project": {
         "provider_kind": "provider_api",
@@ -134,6 +191,18 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "inorganic and computed material context",
         "automatic_acquisition": "api_lookup",
         "local_dataset": False,
+        "blocking_review_count": 0,
+        "review_blockers": (),
+    },
+    "materials_cloud": {
+        "provider_kind": "archive_import",
+        "phase_status": "optional_for_htl",
+        "key_requirement": "none",
+        "htl_capability": "record-level computed datasets imported by DOI/archive record",
+        "automatic_acquisition": "manual_archive_import",
+        "local_dataset": True,
+        "blocking_review_count": 2,
+        "review_blockers": ("record_license_unverified", "archive_manifest_missing"),
     },
     "custom_htl_dft": {
         "provider_kind": "local_dataset",
@@ -141,14 +210,17 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "htl_capability": "user HTL calculations",
         "automatic_acquisition": "local_dataset",
         "local_dataset": True,
+        "blocking_review_count": 0,
+        "review_blockers": (),
     },
     "pubchemqc": {
-        "provider_kind": "provider_api",
+        "provider_kind": "local_dataset",
         "phase_status": "blocked_until_validated",
         "key_requirement": "none",
         "htl_capability": "computed molecular properties",
-        "automatic_acquisition": "disabled",
-        "local_dataset": False,
+        "automatic_acquisition": "local_snapshot",
+        "local_dataset": True,
+        "blocking_review_count": 1,
         "review_blockers": ("provider_quarantined",),
     },
     "future_model_assisted_claim_extraction": {
@@ -162,6 +234,7 @@ _SOURCE_OVERRIDES: dict[str, dict[str, Any]] = {
         "expected_fields": ("claim_text", "field_name", "field_value", "provenance"),
         "provenance_fields": ("knowledge_chunk_id", "citation_link_id"),
         "cache_ttl_hours": None,
+        "blocking_review_count": 1,
         "review_blockers": ("extractor_not_enabled",),
     },
 }
@@ -174,6 +247,7 @@ def build_htl_source_coverage_matrix(source_registry_path: str | Path) -> dict[s
     by_provider = {str(row.get("provider")): row for row in registry_rows}
     provider_order = (
         "nomad_perla_psc",
+        "nomad_perovskite_schema",
         "pubchem",
         "crossref",
         "local_paper_vault",
@@ -181,6 +255,7 @@ def build_htl_source_coverage_matrix(source_registry_path: str | Path) -> dict[s
         "opv_db",
         "openalex",
         "materials_project",
+        "materials_cloud",
         "custom_htl_dft",
         "future_model_assisted_claim_extraction",
         "pubchemqc",
@@ -190,6 +265,9 @@ def build_htl_source_coverage_matrix(source_registry_path: str | Path) -> dict[s
         registry = by_provider.get(provider_id, {})
         overrides = _SOURCE_OVERRIDES[provider_id]
         requires_key = bool(registry.get("requires_api_key", False))
+        if "blocking_review_count" not in overrides:
+            raise ValueError(f"blocking_review_count must be explicit for {provider_id}")
+        review_blockers = list(overrides.get("review_blockers", ()))
         row = {
             "provider_id": provider_id,
             "provider_kind": overrides.get("provider_kind", _provider_kind(registry)),
@@ -205,7 +283,8 @@ def build_htl_source_coverage_matrix(source_registry_path: str | Path) -> dict[s
             "expected_fields": list(overrides.get("expected_fields", registry.get("allowed_output_fields", ()))),
             "provenance_fields": list(overrides.get("provenance_fields", ("source_url", "raw_sha256"))),
             "cache_ttl_hours": overrides.get("cache_ttl_hours", registry.get("cache_ttl_hours")),
-            "review_blockers": list(overrides.get("review_blockers", ())),
+            "blocking_review_count": int(overrides["blocking_review_count"]),
+            "review_blockers": review_blockers,
         }
         sources.append(row)
     return {
@@ -348,9 +427,11 @@ class HtlWorkbenchReadAPI:
 
     db: LocalBackendDatabase
     source_registry_path: str | Path
+    config_store: LocalConfigStore | None = None
 
     def state(self) -> dict[str, Any]:
-        return {
+        config_store = self.config_store or _ReadOnlyEmptyConfigStore()
+        payload = {
             "schema_version": HTL_WORKBENCH_READ_SCHEMA_VERSION,
             "source_coverage": self.source_coverage(),
             "sync_jobs": self.sync_jobs(),
@@ -359,7 +440,12 @@ class HtlWorkbenchReadAPI:
             "paper_groups": list(self.db.paper_groups.list_groups()),
             "review_blockers": self.review_blockers(),
             "workflow": self.workflow_preview(),
+            "source_settings": build_sanitized_source_config_status(
+                config_store,
+                load_source_registry(self.source_registry_path),
+            ),
         }
+        return payload
 
     def source_coverage(self) -> dict[str, Any]:
         return build_htl_source_coverage_matrix(self.source_registry_path)
@@ -440,8 +526,14 @@ class HtlWorkbenchCommandPlane:
         *,
         idempotency_key: str,
         actor_id: str = "operator",
+        role: str = "operator",
     ) -> dict[str, Any]:
-        request_hash = _stable_payload_hash({"action_type": action_type, "payload": dict(payload)})
+        request_hash = _stable_payload_hash({
+            "action_type": action_type,
+            "payload": dict(payload),
+            "actor_id": actor_id,
+            "role": role,
+        })
         existing = self._idempotency.get(idempotency_key)
         if existing is not None:
             if existing["request_hash"] == request_hash:
@@ -458,6 +550,19 @@ class HtlWorkbenchCommandPlane:
                 [],
                 [],
             )
+        if role not in WORKBENCH_MUTATION_ROLES:
+            result = _command_result(
+                action_type,
+                "rejected",
+                idempotency_key,
+                actor_id,
+                "unauthorized_role",
+                "Actor role is not authorized for this workbench action.",
+                [],
+                [],
+            )
+            self._idempotency[idempotency_key] = {"request_hash": request_hash, "result": result}
+            return result
 
         result = self._execute_once(action_type, payload, idempotency_key=idempotency_key, actor_id=actor_id)
         self._idempotency[idempotency_key] = {"request_hash": request_hash, "result": result}
@@ -500,10 +605,12 @@ class HtlWorkbenchCommandPlane:
             )
         if action_type == "start_nomad_sync":
             config = NomadSyncConfig(
-                htl_names=tuple(str(name) for name in payload.get("htl_names", ("Spiro-OMeTAD",))),
+                htl_names=_tuple_payload(payload.get("htl_names"), ("Spiro-OMeTAD",)),
                 max_pages=int(payload.get("max_pages", 100)),
                 max_records=int(payload.get("max_records", 1000)),
                 fetch_archive=bool(payload.get("fetch_archive", True)),
+                device_architectures=_tuple_payload(payload.get("device_architectures"), ("nip",)),
+                data_library_root=str(payload.get("data_library_root", "data/lib")),
             )
             job_id = self.db.sync_jobs.create_job(provider="nomad_perla_psc", config=config.to_dict())
             self.db.sync_jobs.update_status(job_id, "queued")
@@ -519,10 +626,12 @@ class HtlWorkbenchCommandPlane:
             )
         if action_type == "run_nomad_sync_now":
             config = NomadSyncConfig(
-                htl_names=tuple(str(name) for name in payload.get("htl_names", ("Spiro-OMeTAD",))),
+                htl_names=_tuple_payload(payload.get("htl_names"), ("Spiro-OMeTAD",)),
                 max_pages=int(payload.get("max_pages", 100)),
                 max_records=int(payload.get("max_records", 1000)),
                 fetch_archive=bool(payload.get("fetch_archive", True)),
+                device_architectures=_tuple_payload(payload.get("device_architectures"), ("nip",)),
+                data_library_root=str(payload.get("data_library_root", "data/lib")),
             )
             result = NomadHtlSyncJob(self.db).run(config)
             return _command_result(
@@ -554,6 +663,95 @@ class HtlWorkbenchCommandPlane:
                 f"{action_type} applied to NOMAD HTL sync job.",
                 ["provider_sync_jobs"],
                 [_effect(action_type, "provider_sync_jobs", {"job_id": job_id, "status": status})],
+            )
+        snapshot_import_sources = {
+            "import_hopv15_snapshot": "hopv15",
+            "import_opv_db_snapshot": "opv_db",
+            "import_pubchemqc_snapshot": "pubchemqc",
+        }
+        if action_type in snapshot_import_sources:
+            source_id = snapshot_import_sources[action_type]
+            try:
+                manifest_path = _validate_source_manifest_path(
+                    source_id,
+                    str(payload.get("manifest_path", f"data/lib/{source_id}/source-manifest.json")),
+                )
+            except ValueError as exc:
+                return _rejected(
+                    action_type,
+                    idempotency_key,
+                    actor_id,
+                    "unsafe_manifest_path",
+                    str(exc),
+                )
+            detail = {
+                "source_id": source_id,
+                "manifest_path": manifest_path,
+                "status": "queued",
+                "quarantine_status": "pending_import",
+            }
+            return _command_result(
+                action_type,
+                "accepted",
+                idempotency_key,
+                actor_id,
+                "queued",
+                f"{source_id} snapshot import queued for command worker execution.",
+                ["source_import_tasks"],
+                [_effect(action_type, "source_import_tasks", detail)],
+            )
+        if action_type == "import_materials_cloud_archive_record":
+            archive_record_id = str(payload.get("archive_record_id", "")).strip()
+            dataset_doi = str(payload.get("dataset_doi", "")).strip()
+            if not archive_record_id and not dataset_doi:
+                return _rejected(
+                    action_type,
+                    idempotency_key,
+                    actor_id,
+                    "invalid_payload",
+                    "archive_record_id or dataset_doi is required",
+                )
+            detail = {
+                "source_id": "materials_cloud",
+                "archive_record_id": archive_record_id or None,
+                "dataset_doi": dataset_doi or None,
+                "status": "queued",
+                "quarantine_status": "pending_import",
+            }
+            return _command_result(
+                action_type,
+                "accepted",
+                idempotency_key,
+                actor_id,
+                "queued",
+                "Materials Cloud archive record import queued for command worker execution.",
+                ["source_import_tasks"],
+                [_effect(action_type, "source_import_tasks", detail)],
+            )
+        if action_type == "refresh_pubchem_identity_cache":
+            candidate_ids = payload.get("candidate_ids", ())
+            if not isinstance(candidate_ids, Sequence) or isinstance(candidate_ids, (str, bytes)):
+                return _rejected(
+                    action_type,
+                    idempotency_key,
+                    actor_id,
+                    "invalid_payload",
+                    "candidate_ids must be a list",
+                )
+            detail = {
+                "provider": "pubchem",
+                "candidate_ids": [str(candidate_id) for candidate_id in candidate_ids],
+                "status": "queued",
+            }
+            return _command_result(
+                action_type,
+                "accepted",
+                idempotency_key,
+                actor_id,
+                "queued",
+                "PubChem identity cache refresh queued for command worker execution.",
+                ["provider_cache"],
+                [_effect(action_type, "provider_cache", detail)],
             )
         if action_type in {"run_parsing_job", "run_extraction_job"}:
             return _command_result(
@@ -616,6 +814,35 @@ def _deposit_path(root: str, key: str) -> str:
     safe = re.sub(r"[^a-zA-Z0-9_.-]+", "_", key).strip("_") or "paper"
     digest = hashlib.sha256(key.casefold().encode("utf-8")).hexdigest()[:12]
     return f"{root}/{safe}_{digest}"
+
+
+def _validate_source_manifest_path(source_id: str, manifest_path: str) -> str:
+    path = manifest_path.strip()
+    if path != manifest_path or not path:
+        raise ValueError("manifest_path must be a clean relative data/lib path")
+    if path.startswith(("file://", "/", "\\")) or "\\" in path or ":" in path:
+        raise ValueError("manifest_path must stay under data/lib")
+    parts = path.split("/")
+    if len(parts) < 4 or parts[:3] != ["data", "lib", source_id]:
+        raise ValueError(f"manifest_path must stay under data/lib/{source_id}")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("manifest_path must not contain traversal segments")
+    if parts[-1] != "source-manifest.json":
+        raise ValueError("manifest_path must point to source-manifest.json")
+    return path
+
+
+def _tuple_payload(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        items = (value,)
+    elif isinstance(value, Sequence):
+        items = tuple(str(item) for item in value)
+    else:
+        items = (str(value),)
+    cleaned = tuple(item.strip() for item in items if item.strip())
+    return cleaned or default
 
 
 def _stable_payload_hash(payload: Mapping[str, Any]) -> str:
