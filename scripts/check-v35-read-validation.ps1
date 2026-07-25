@@ -368,6 +368,9 @@ Invoke-Go 'Go read/validation package tests' @(
     './internal/readonlyserver',
     './internal/workflowtask',
     './internal/nomadperla',
+    './internal/materialscloud',
+    './internal/nomadperovskiteschema',
+    './internal/pubchem',
     './cmd/spiroctl'
 )
 
