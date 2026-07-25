@@ -430,6 +430,52 @@ Open decisions:
   Python workers, or only queues commands initially.
 - Local database migrations: decide whether SQLite migrations remain Python
   owned first or move to Go-owned migration packages.
+
+## Additional External References
+
+The following references are durable architecture inputs per the project governance documents and were assessed alongside the primary sources above:
+
+### OpenAI Codex (Apache-2.0)
+
+Repository: https://github.com/openai/codex
+
+Architecture patterns suitable for SpiroSearch:
+- Local agent CLI layering with explicit approval flows
+- Sandbox boundary structure and trust-boundary enforcement
+- Single-executable delivery model for the CLI runtime
+- Deterministic command dispatch with explicit read/write separation
+
+Codex is an architecture reference for trust-boundary structure, not a behavioral template. SpiroSearch should not copy Codex-specific product behavior, MCP semantics, or sandbox implementation without exact license/source parity review.
+
+### API for Cherry Studio
+
+Repository: https://github.com/tufeiping/api-for-cherrystudio
+
+Architecture patterns suitable for SpiroSearch:
+- Model/provider configuration API design
+- Provider routing and credential management patterns
+- Secret-free frontend state management
+
+This reference provides API interface patterns for model-provider configuration. It is complementary to the Cherry Studio frontend patterns documented in the primary sources above.
+
+### NOMAD API / OpenAPI GUI
+
+- NOMAD Solar Cells GUI: https://nomad-lab.eu/prod/v1/staging/gui/search/solarcells
+- NOMAD API analysis GUI: https://nomad-lab.eu/prod/v1/staging/gui/analyze/apis
+
+These are the canonical reference for NOMAD v1 REST/OpenAPI semantics. SpiroSearch NOMAD migration should align with official endpoints such as `/entries/query` and `/entries/archive/query` before adding local abstractions. The GUI surfaces provide operator reference for solar-cell search workflow design and query parameter discovery.
+
+### FAIRmat NOMAD Perovskite Database
+
+Repository: https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database
+
+Recorded in SpiroSearch as `data/lib/nomad_perovskite_schema/`. This is a NOMAD plugin schema/search-app/parser reference for perovskite solar cells. It provides:
+- Field path definitions for device stack, HTL, perovskite composition
+- Synonym maps for material aliases (Spiro-MeOTAD -> Spiro-OMeTAD, etc.)
+- Archive fixture samples for LLM-extracted and traditional cell records
+- Citation and software-version metadata
+
+This package is a schema/synonym/fixture reference module, not a data mirror or provider source. SpiroSearch must not use it as a substitute for live NOMAD API records.
 - Packaging authority: decide when desktop installer work is in scope; CLI
   packaging can move sooner.
 
