@@ -3,6 +3,7 @@ param(
     [string]$RepositoryRoot,
     [int]$ContextUsagePercent = -1,
     [int]$ThresholdPercent = 80,
+    [int]$ProactiveHandoffPercent = 70,
     [string]$HandoffPath
 )
 
@@ -139,6 +140,13 @@ if ($ThresholdPercent -lt 1 -or $ThresholdPercent -gt 100) {
     Add-Violation 'ThresholdPercent must be between 1 and 100.'
 }
 
+if ($ProactiveHandoffPercent -lt 1 -or $ProactiveHandoffPercent -gt 100) {
+    Add-Violation 'ProactiveHandoffPercent must be between 1 and 100.'
+}
+elseif ($ProactiveHandoffPercent -gt $ThresholdPercent) {
+    Add-Violation 'ProactiveHandoffPercent must be less than or equal to ThresholdPercent.'
+}
+
 if ($ContextUsagePercent -lt 0 -and -not [string]::IsNullOrWhiteSpace($env:SPIRO_CONTEXT_USAGE_PERCENT)) {
     $parsedContextUsage = 0
     if ([int]::TryParse($env:SPIRO_CONTEXT_USAGE_PERCENT, [ref]$parsedContextUsage)) {
@@ -159,6 +167,7 @@ if ([string]::IsNullOrWhiteSpace($HandoffPath) -and -not [string]::IsNullOrWhite
 
 Assert-RequiredText '.codex\skills\context-handoff\SKILL.md' @(
     'Context Budget Trigger',
+    '70% context usage',
     '80% context usage',
     'check-context-budget.ps1'
 )
@@ -173,7 +182,8 @@ Assert-RequiredText '.codex\skills\review-ship\SKILL.md' @(
     'Stage-End Learning'
 )
 Assert-RequiredText 'plans\v35-execution-status-and-next-slices.md' @(
-    'roughly 80% context usage',
+    '70% context usage',
+    '80% context usage',
     'fewer duplicate tests',
     'quality-preserving test budget'
 )
@@ -201,6 +211,10 @@ if ($Violations.Count -gt 0) {
 
 if ($ContextUsagePercent -ge $ThresholdPercent) {
     Write-Output "PASS: context budget handoff gate passed at $ContextUsagePercent%."
+}
+elseif ($ContextUsagePercent -ge $ProactiveHandoffPercent) {
+    Write-Output "WARN: context usage $ContextUsagePercent% reached proactive handoff band $ProactiveHandoffPercent%; save or refresh a concise handoff before the hard $ThresholdPercent% gate."
+    Write-Output "PASS: context usage $ContextUsagePercent% is below hard threshold $ThresholdPercent%; static context-budget hook checks passed."
 }
 elseif ($ContextUsagePercent -ge 0) {
     Write-Output "PASS: context usage $ContextUsagePercent% is below threshold $ThresholdPercent%; static context-budget hook checks passed."

@@ -579,7 +579,11 @@ describe("AtomReasonX contract fixtures", () => {
       writes_authorized: false,
       execution_started: false,
       created_at: null,
-      config: { transport: "operator_task_queue", runtime_writes: false },
+      config: {
+        transport: "operator_task_queue",
+        runtime_writes: false,
+        config_source: "workflow_command_allowlist",
+      },
       admission_status: "admitted",
       admission_hash: "a".repeat(64),
       ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
@@ -639,6 +643,98 @@ describe("AtomReasonX contract fixtures", () => {
     expect(executedMarkup).not.toContain("api_key");
     expect(executedMarkup).not.toContain("readonly_token");
     expect(executedMarkup).not.toContain("spiroctl.exe");
+  });
+
+  it("distinguishes queued, admitted, restored, and review-blocked workflow tasks", () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const baseTask = {
+      schema_version: "v35.operator_task.v1",
+      task_id: "task-start_nomad_sync-ab12cd",
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      provider_scope: "source",
+      status: "queued",
+      queue_scope: "operator_local",
+      declared_effects: ["provider_sync_jobs"],
+      writes_authorized: false,
+      execution_started: false,
+      created_at: null,
+      config: {
+        transport: "operator_task_queue",
+        runtime_writes: false,
+        config_source: "workflow_command_allowlist",
+      },
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const admittedTask = {
+      ...baseTask,
+      task_id: "task-start_nomad_sync-bb22",
+      admission_status: "admitted" as const,
+      admission_hash: "b".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const restoredTask = {
+      ...baseTask,
+      task_id: "task-start_nomad_sync-cc33",
+      admission_status: "admitted" as const,
+      admission_hash: "c".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+      execution_report: executionReportForTask({
+        task_id: "task-start_nomad_sync-cc33",
+        admission_hash: "c".repeat(64),
+      }),
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const normalizedRestoredTask = validateOperatorTaskRestoreReport(
+      restoreReportForTasks([restoredTask]),
+    ).restored_tasks[0];
+    const reviewBlockedTask = {
+      ...baseTask,
+      task_id: "task-start_nomad_sync-dd44",
+      admission_status: "admitted" as const,
+      admission_hash: "d".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+      execution_report: executionReportForTask({
+        task_id: "task-start_nomad_sync-dd44",
+        admission_hash: "d".repeat(64),
+      }, {
+        archive_status: "schema_unrecognized",
+        review_required: true,
+        review_reasons: ["nomad_schema_unrecognized"],
+      }),
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const currentSessionTask = projectWorkflowTaskExecutionReport({
+      ...workspace,
+      operator_tasks: [admittedTask],
+    }, executionReportForTask(admittedTask)).operator_tasks[0];
+    const executor = { execute: async () => executionReportForTask(admittedTask) };
+
+    const markup = renderToStaticMarkup(React.createElement(WorkflowView, {
+      workflow: workspace.workflow,
+      commandActions: [],
+      operatorTasks: [baseTask, admittedTask, currentSessionTask, normalizedRestoredTask, reviewBlockedTask],
+      workflowTaskExecutor: executor,
+      workflowProjectionKey: "fixture:perovskite_htl_screening:1",
+      onWorkflowTaskExecuted: () => undefined,
+    }));
+
+    expect(markup).toContain("local queued");
+    expect(markup).toContain("admitted");
+    expect(markup).toContain("current session snapshot");
+    expect(markup).toContain("restored snapshot");
+    expect(markup).toContain("review blocked");
+    expect(markup).toContain("nomad_schema_unrecognized");
+    expect(normalizedRestoredTask.execution_report).toBeDefined();
+    expect(markup).toContain(normalizedRestoredTask.execution_report!.source_manifest_path);
+    expect(markup).toContain("operator-task-row operator-task-row--local-queued");
+    expect(markup).toContain("operator-task-row operator-task-row--admitted-ready");
+    expect(markup).toContain("operator-task-row operator-task-row--current-session-snapshot");
+    expect(markup).toContain("operator-task-row operator-task-row--restored-snapshot");
+    expect(markup).toContain("operator-task-row operator-task-row--review-blocked");
+    expect(markup).not.toContain("api_key");
+    expect(markup).not.toContain("readonly_token");
+    expect(markup).not.toContain("spiroctl.exe");
   });
 
   it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {
@@ -2017,6 +2113,14 @@ describe("AtomReasonX contract fixtures", () => {
       { ...report, extra: true },
       { ...report, provider_cache_written: true },
       { ...report, restored_tasks: [{ ...task, api_key: "mp-secret" }] },
+      { ...report, restored_tasks: [{ ...task, handoff_source: "current_session_execution" }] },
+      {
+        ...report,
+        restored_tasks: [{
+          ...task,
+          config: { ...task.config, api_key: "mp-secret" },
+        }],
+      },
       {
         ...report,
         restored_tasks: [{

@@ -137,6 +137,7 @@ export const projectWorkflowTaskExecutionReport = (
     return {
       ...task,
       config: { ...task.config },
+      handoff_source: "current_session_execution" as const,
       execution_report: cloneExecutionReport(normalizedReport),
     };
   });

@@ -14,13 +14,17 @@ Use this skill when the user asks to save progress, restore context, resume work
   exact branch, worktree, and verification state.
 - Global context or compression skills may help compact the text, but the
   repository return contract still defines what must be preserved.
-- Use proactively when conversation/context usage is near 80% and the work is
-  still active. Finish any command already needed for correctness, then save a
-  concise handoff before continuing or before compaction.
+- Use proactively when conversation/context usage reaches about 70% and the work
+  is still active. Finish any command already needed for correctness, then save
+  a concise handoff before continuing. Treat 80% context usage as the hard gate,
+  not as the first reminder.
 
 ## Context Budget Trigger
 
-At roughly 80% context usage:
+At 70% context usage, save or refresh a concise handoff while there is still
+enough room to preserve decisions, evidence, pitfalls, and next actions. At 80%
+context usage, a repository handoff under `docs/` or `plans/` is required
+before continuing through the hook/hygiene gate.
 
 1. Capture current git state, changed files, commands already run, and the next
    concrete action.
@@ -44,7 +48,9 @@ no context percentage supplied, it verifies the static guardrails remain
 configured. When an agent or wrapper can measure context, set
 `SPIRO_CONTEXT_USAGE_PERCENT` or pass `-ContextUsagePercent`; at 80 or above,
 also set `SPIRO_CONTEXT_HANDOFF_PATH` or pass `-HandoffPath` to a repository
-handoff under `docs/` or `plans/`.
+handoff under `docs/` or `plans/`. At 70-79, the checker emits a visible
+proactive warning so the handoff can be saved before automatic compaction is
+near.
 
 ## Save Context
 

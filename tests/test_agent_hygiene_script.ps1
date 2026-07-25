@@ -137,6 +137,7 @@ try {
     $result = Invoke-Checker $clean
     Assert-True ($result.ExitCode -eq 0) "Clean fixture failed:`n$($result.Output)"
     Assert-Contains $result.Output 'PASS:' 'Clean fixture did not emit a PASS line.'
+    Assert-Contains $result.Output 'context budget hook fixture passed' 'Clean fixture did not show context-budget hook execution.'
     Assert-True (-not $result.Output.Contains('ERROR:')) "Clean fixture emitted an ERROR line:`n$($result.Output)"
     Write-Output 'PASS: clean repository'
 

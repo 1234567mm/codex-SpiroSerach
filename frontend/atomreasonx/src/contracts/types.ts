@@ -227,6 +227,7 @@ export interface HtlOperatorTaskSummary {
   admission_hash?: string;
   ledger_path?: string;
   admission_source?: "operator_task_ledger";
+  handoff_source?: "current_session_execution" | "restored_snapshot";
   execution_report?: OperatorTaskExecutionReport;
 }
 

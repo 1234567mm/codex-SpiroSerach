@@ -109,6 +109,13 @@ else {
                 Add-Violation "context-budget hook failed: $line"
             }
         }
+        else {
+            foreach ($line in $contextBudgetOutput) {
+                if (-not [string]::IsNullOrWhiteSpace($line)) {
+                    Write-Output "context-budget hook: $line"
+                }
+            }
+        }
     }
     catch {
         Add-Violation "context-budget hook failed: $($_.Exception.Message)"

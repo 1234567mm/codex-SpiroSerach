@@ -47,7 +47,7 @@ description: Use when saving context
 # Context Handoff
 Use check-context-budget.ps1 before handoff.
 ## Context Budget Trigger
-At roughly 80% context usage, save a handoff and preserve verification quality.
+At 70% context usage, save a proactive handoff; at 80% context usage, a handoff is required. Preserve verification quality.
 '@
     Set-Utf8File (Join-Path $root '.codex\skills\worktree-tdd\SKILL.md') @'
 ---
@@ -71,7 +71,7 @@ description: Use before shipping
 '@
     Set-Utf8File (Join-Path $root 'plans\v35-execution-status-and-next-slices.md') @'
 # V35
-Operational addendum: roughly 80% context usage requires fewer duplicate tests, same quality, and a quality-preserving test budget.
+Operational addendum: 70% context usage triggers proactive handoff; 80% context usage requires fewer duplicate tests, same quality, and a quality-preserving test budget.
 '@
     Set-Utf8File (Join-Path $root 'docs\project-hooks.md') @'
 # Project Hooks
@@ -137,6 +137,13 @@ try {
     Assert-True ($result.ExitCode -eq 0) "Clean fixture failed:`n$($result.Output)"
     Assert-Contains $result.Output 'PASS:' 'Clean fixture did not emit a PASS line.'
     Write-Output 'PASS: static context budget hook fixture'
+
+    $proactiveHandoff = New-CleanFixture 'proactive-handoff'
+    $result = Invoke-Checker $proactiveHandoff @('-ContextUsagePercent', '70')
+    Assert-True ($result.ExitCode -eq 0) "Proactive handoff fixture failed:`n$($result.Output)"
+    Assert-Contains $result.Output 'WARN:' 'Proactive handoff fixture did not emit a visible warning.'
+    Assert-Contains $result.Output 'proactive handoff band' 'Proactive handoff fixture did not identify the proactive band.'
+    Write-Output 'PASS: 70 percent context emits a visible proactive handoff warning'
 
     $missingHandoff = New-CleanFixture 'missing-handoff'
     Assert-Failure (Invoke-Checker $missingHandoff @('-ContextUsagePercent', '80')) 'HandoffPath' 'missing handoff fixture'

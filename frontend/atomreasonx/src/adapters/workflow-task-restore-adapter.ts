@@ -38,7 +38,14 @@ const RESTORED_TASK_FIELDS = new Set([
   "admission_hash",
   "ledger_path",
   "admission_source",
+  "handoff_source",
   "execution_report",
+]);
+const OPTIONAL_RESTORED_TASK_FIELDS = new Set(["handoff_source"]);
+const RESTORED_TASK_CONFIG_FIELDS = new Set([
+  "transport",
+  "runtime_writes",
+  "config_source",
 ]);
 
 export interface OperatorTaskRestoreReport {
@@ -146,10 +153,23 @@ const validateRestoredTask = (value: unknown): HtlOperatorTaskSummary => {
     }
   }
   for (const field of RESTORED_TASK_FIELDS) {
+    if (OPTIONAL_RESTORED_TASK_FIELDS.has(field)) {
+      continue;
+    }
     if (!(field in value)) {
       throw new Error(`restored workflow task ${field} is required`);
     }
   }
+  const config = value.config;
+  if (!isRecord(config)) {
+    throw new Error("restored workflow task metadata is invalid");
+  }
+  for (const key of Object.keys(config)) {
+    if (!RESTORED_TASK_CONFIG_FIELDS.has(key)) {
+      throw new Error(`restored workflow task config has unsupported field ${key}`);
+    }
+  }
+
   if (
     value.schema_version !== "v35.operator_task.v1"
     || !safeNomadTaskId(String(value.task_id))
@@ -162,14 +182,17 @@ const validateRestoredTask = (value: unknown): HtlOperatorTaskSummary => {
     || value.writes_authorized !== false
     || value.execution_started !== false
     || value.created_at !== null
-    || !isRecord(value.config)
-    || value.config.transport !== "operator_task_queue"
-    || value.config.runtime_writes !== false
-    || value.config.config_source !== "workflow_command_allowlist"
+    || config.transport !== "operator_task_queue"
+    || config.runtime_writes !== false
+    || config.config_source !== "workflow_command_allowlist"
     || value.admission_status !== "admitted"
     || !isSHA256(String(value.admission_hash))
     || value.ledger_path !== DEFAULT_OPERATOR_TASK_LEDGER_PATH
     || value.admission_source !== "operator_task_ledger"
+    || (
+      "handoff_source" in value
+      && value.handoff_source !== "restored_snapshot"
+    )
   ) {
     throw new Error("restored workflow task metadata is invalid");
   }
@@ -202,6 +225,7 @@ const validateRestoredTask = (value: unknown): HtlOperatorTaskSummary => {
     admission_hash: String(value.admission_hash),
     ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
     admission_source: "operator_task_ledger",
+    handoff_source: "restored_snapshot",
     execution_report: cloneExecutionReport(executionReport),
   };
 };

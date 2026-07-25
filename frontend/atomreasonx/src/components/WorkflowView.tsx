@@ -20,6 +20,38 @@ export const buildWorkflowCommandPayload = (action: HtlWorkbenchCommandAction): 
 export const canSubmitWorkflowCommandAction = (action: HtlWorkbenchCommandAction): boolean =>
   action.enabled && (action.input_fields ?? []).length === 0;
 
+type WorkflowTaskHandoffState =
+  | "local-queued"
+  | "admitted-ready"
+  | "current-session-snapshot"
+  | "restored-snapshot"
+  | "review-blocked";
+
+const WORKFLOW_TASK_HANDOFF_LABELS: Record<WorkflowTaskHandoffState, string> = {
+  "local-queued": "local queued",
+  "admitted-ready": "admitted",
+  "current-session-snapshot": "current session snapshot",
+  "restored-snapshot": "restored snapshot",
+  "review-blocked": "review blocked",
+};
+
+export const workflowTaskHandoffState = (task: HtlOperatorTaskSummary): WorkflowTaskHandoffState => {
+  const report = task.execution_report;
+  if (report?.review_required) {
+    return "review-blocked";
+  }
+  if (report && task.handoff_source === "restored_snapshot") {
+    return "restored-snapshot";
+  }
+  if (report) {
+    return "current-session-snapshot";
+  }
+  if (task.admission_status === "admitted" && task.admission_source === "operator_task_ledger") {
+    return "admitted-ready";
+  }
+  return "local-queued";
+};
+
 export const submitWorkflowCommandAction = (
   commandDispatcher: WorkbenchCommandDispatcher,
   action: HtlWorkbenchCommandAction,
@@ -100,9 +132,11 @@ export const WorkflowView: React.FC<{
         <div className="operator-task-list">
           {operatorTasks.map(task => {
             const report = task.execution_report;
+            const handoffState = workflowTaskHandoffState(task);
             return (
-              <div key={task.task_id} className="operator-task-row">
+              <div key={task.task_id} className={`operator-task-row operator-task-row--${handoffState}`}>
                 <strong>{task.action_type}</strong>
+                <span>{WORKFLOW_TASK_HANDOFF_LABELS[handoffState]}</span>
                 <span>{report?.execution_status ?? task.status}</span>
                 <span>{task.provider ?? "workspace"}</span>
                 <button

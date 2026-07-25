@@ -38,9 +38,10 @@ The hygiene check is intentionally local and fast. It currently verifies:
 - Verification check: when AtomReasonX changes, run both `npm.cmd test` and
   `npm.cmd run build`; PowerShell may block `npm.ps1`.
 - Context budget check: `scripts/check-context-budget.ps1` is executed by
-  hygiene/pre-commit. If `SPIRO_CONTEXT_USAGE_PERCENT` is 80 or higher, the
-  script requires `SPIRO_CONTEXT_HANDOFF_PATH` to point at a strict UTF-8
-  handoff under `docs/` or `plans/`.
+  hygiene/pre-commit. If `SPIRO_CONTEXT_USAGE_PERCENT` is 70-79, the script
+  emits a visible proactive handoff warning. If `SPIRO_CONTEXT_USAGE_PERCENT`
+  is 80 or higher, the script requires `SPIRO_CONTEXT_HANDOFF_PATH` to point at
+  a strict UTF-8 handoff under `docs/` or `plans/`.
 
 ## Manual Pre-Ship Commands
 
@@ -50,7 +51,14 @@ git diff --check
 Test-Path uv.lock
 ```
 
-For an explicit 80% context-budget gate:
+For an explicit 70% context-budget warning:
+
+```powershell
+$env:SPIRO_CONTEXT_USAGE_PERCENT='70'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-context-budget.ps1 -RepositoryRoot (git rev-parse --show-toplevel)
+```
+
+For an explicit 80% context-budget hard gate:
 
 ```powershell
 $env:SPIRO_CONTEXT_USAGE_PERCENT='80'

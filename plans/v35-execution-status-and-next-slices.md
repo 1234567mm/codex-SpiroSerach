@@ -13,13 +13,15 @@ evidence. The goal is not reduced: Go owns deterministic runtime contracts and
 TypeScript owns AtomReasonX workbench surfaces; Python remains only where the
 scientific ecosystem is still the validated implementation.
 
-Operational addendum: when a V35 run approaches roughly 80% context usage,
-agents must preserve completion quality by saving a compact handoff, updating
-project skills or process notes with reusable lessons, and applying the
-quality-preserving test budget. The principle is fewer duplicate tests and
-clearer gate classes, not weaker validation; source integrity, scientific
-fail-closed behavior, authorization, cross-language contracts, and secret/path
-boundaries remain mandatory.
+Operational addendum: at 70% context usage, agents must proactively save or
+refresh a compact handoff while enough context remains to preserve decisions,
+evidence, pitfalls, and next actions. At 80% context usage, the
+context-budget hook/hygiene gate requires a repository handoff under `docs/` or
+`plans/` before continuing. Update project skills or process notes with
+reusable lessons and apply the quality-preserving test budget. The principle is
+fewer duplicate tests and clearer gate classes, not weaker validation; source
+integrity, scientific fail-closed behavior, authorization, cross-language
+contracts, and secret/path boundaries remain mandatory.
 
 ## External Architecture References
 
@@ -86,7 +88,8 @@ The current branch contains these V35 execution commits:
 | `ae72246` | P1/P2 workflow task admission gates | Completes deterministic NOMAD positive HTL query-plan attachment, `spiroctl workflow-task validate/admit`, schema-constrained admission records, ledger idempotency hardening, and TypeScript/Go/schema drift gates. |
 | `e1458f2` | P2 NOMAD workflow task execution snapshot | Adds `spiroctl workflow-task execute --task-id ... --ledger ... --authorize-live-provider-calls --target ...` as an explicitly authorized source-snapshot writer for admitted NOMAD tasks. It writes raw search/archive payloads, normalized provider-response records, validation summary, and a V35 source manifest under `data/lib/nomad_perla_psc/snapshots/`; it still does not write provider cache, SQLite, scoring, review, or experiments. |
 | `7221f90` | P2 AtomReasonX workflow task execution bridge | Wires admission-backed NOMAD operator tasks to a fixed Tauri `execute_workflow_task` bridge that builds `spiroctl workflow-task execute` requests with the default operator ledger, deterministic NOMAD snapshot target, explicit live-call authorization, strict execution-report validation, native same-task single-flight, and no WebView executable path or token surface. Local queued tasks remain non-executable until ledger admission evidence is present. |
-| current checkpoint | P2 AtomReasonX NOMAD persisted execution restore | Adds read-only persisted restore for admitted NOMAD execution snapshots: Go reloads ledger-bound source manifests and validation summaries, `spiroctl workflow-task restore --ledger ...` emits a strict restore report, Tauri exposes a fixed no-argument restore bridge, and AtomReasonX projects restored task summaries during normal runtime workspace load. Provider cache, SQLite, scoring, review promotion, and experiment writes remain untouched. |
+| `d400016` | P2 AtomReasonX NOMAD persisted execution restore | Adds read-only persisted restore for admitted NOMAD execution snapshots: Go reloads ledger-bound source manifests and validation summaries, `spiroctl workflow-task restore --ledger ...` emits a strict restore report, Tauri exposes a fixed no-argument restore bridge, and AtomReasonX projects restored task summaries during normal runtime workspace load. Provider cache, SQLite, scoring, review promotion, and experiment writes remain untouched. |
+| current checkpoint | P2 AtomReasonX workflow task handoff status | Distinguishes local queued, ledger-admitted, current-session snapshot, restored snapshot, and review-blocked NOMAD operator task rows in the workflow surface using frontend provenance markers so operators cannot confuse pre-admission tasks, freshly executed evidence, restored evidence, or closure/review blockers. This is UI-only state classification and does not add provider cache, SQLite, scoring, review-promotion, or experiment writers. |
 
 ## Current Data Source Status
 
@@ -108,6 +111,13 @@ The current branch contains these V35 execution commits:
 
 Recent gates run during this checkpoint:
 
+- `npm.cmd test` in `frontend/atomreasonx` first failed after adding the workflow task handoff status test because the workflow rows did not distinguish `local queued`, `admitted`, `restored snapshot`, or `review blocked`; it then passed with 53 Vitest tests after adding bounded UI classification. A read-only review found that `restored snapshot` was ambiguous with current-session execution; after adding explicit frontend `handoff_source` provenance for current-session execution versus restore projection, `npm.cmd test` passed again with 53 tests.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the workflow task handoff status UI slice, then passed again after the provenance-marker review fix. A final read-only review found no P0/P1 blockers and two P2 restore-boundary hardening items; after strict nested restored-task config allowlisting and direct rejection coverage for `handoff_source: "current_session_execution"` in restore payloads, `npm.cmd test` passed with 53 Vitest tests and `npm.cmd run build` passed again.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_context_budget_script.ps1` passed after adding the 70% proactive context warning and retaining the 80% hard handoff gate.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_agent_hygiene_script.ps1` passed after hygiene began printing successful context-budget child output.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-agent-hygiene.ps1 -RepositoryRoot (git rev-parse --show-toplevel)` passed and showed the context-budget child check output.
+- Explicit context-budget checks passed for `-ContextUsagePercent 70` with a visible `WARN:` and for `-ContextUsagePercent 80 -HandoffPath plans/v35-current-context-handoff-20260725.md`.
+- `git diff --check`, `Test-Path uv.lock`, and `git rev-list --left-right --count main...origin/main` passed before the workflow task handoff status commit; `uv.lock` was absent and `main...origin/main` was `0 0`.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/workflowtask ./cmd/spiroctl -v` passed after persisted NOMAD restore, including read-only restore, missing-ledger empty report, tampered validation-summary rejection, and CLI restore output.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_context_budget_script.ps1` passed, proving the executable context-budget gate fails at 80% without a handoff and accepts a repository handoff under `docs/` or `plans/`.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_agent_hygiene_script.ps1` passed, including the Git `core.hooksPath=.githooks` requirement and the hygiene-to-context-budget hook call.
