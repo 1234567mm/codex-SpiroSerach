@@ -17,6 +17,7 @@ import (
 	"spirosearch/internal/localbackend"
 	"spirosearch/internal/materialsproject"
 	"spirosearch/internal/nomadperla"
+	"spirosearch/internal/oqmd"
 	"spirosearch/internal/providercache"
 	"spirosearch/internal/pubchem"
 	"spirosearch/internal/readonlyapi"
@@ -103,7 +104,7 @@ func runWithDependencies(
 		return runSourceClosurePromote(args)
 	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl source-provider test-connection oqmd | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -349,7 +350,7 @@ func runSourceProviderTestConnection(args []string, materialsProjectProbe materi
 	if !ok {
 		return sourceProviderTestConnectionUsageError()
 	}
-	if provider != materialsproject.ProviderName && provider != pubchem.ProviderName {
+	if provider != materialsproject.ProviderName && provider != pubchem.ProviderName && provider != oqmd.ProviderName {
 		return fmt.Errorf("unsupported source-provider test-connection provider: %s", provider)
 	}
 	registryPath, err := defaultSourceRegistryPath()
@@ -366,6 +367,9 @@ func runSourceProviderTestConnection(args []string, materialsProjectProbe materi
 	}
 	if provider == pubchem.ProviderName {
 		return runPubChemProbe(entry)
+	}
+	if provider == oqmd.ProviderName {
+		return runOQMDProbe(entry)
 	}
 	apiKey := ""
 	keySource := ""
@@ -460,6 +464,30 @@ func runPubChemProbe(entry sourceregistry.Entry) error {
 	}{
 		SchemaVersion:  "v36.pubchem_connection_probe.v1",
 		Provider:       pubchem.ProviderName,
+		Status:         "validated",
+		ReadOnly:       true,
+		LiveEnabled:    entry.LiveEnabled(),
+		RequiresAPIKey: false,
+		SourceURL:      entry.BaseURL,
+	}
+	if !entry.LiveEnabled() {
+		report.Status = "blocked"
+	}
+	return json.NewEncoder(os.Stdout).Encode(report)
+}
+
+func runOQMDProbe(entry sourceregistry.Entry) error {
+	report := struct {
+		SchemaVersion  string `json:"schema_version"`
+		Provider       string `json:"provider"`
+		Status         string `json:"status"`
+		ReadOnly       bool   `json:"read_only"`
+		LiveEnabled    bool   `json:"live_enabled"`
+		RequiresAPIKey bool   `json:"requires_api_key"`
+		SourceURL      string `json:"source_url"`
+	}{
+		SchemaVersion:  "v36.oqmd_connection_probe.v1",
+		Provider:       oqmd.ProviderName,
 		Status:         "validated",
 		ReadOnly:       true,
 		LiveEnabled:    entry.LiveEnabled(),
