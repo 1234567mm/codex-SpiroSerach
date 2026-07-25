@@ -485,6 +485,59 @@
   },
   {
     "schema_version": "v35.data_source_profile.v1",
+    "provider": "oqmd",
+    "display_name": "OQMD",
+    "source_family": "computed_materials",
+    "base_url": "https://oqmd.org/oqmdapi",
+    "license_hint": "OQMD CC BY 4.0; preserve OQMD attribution",
+    "license_scope": "source_record",
+    "trust_level": "T2_computed_db",
+    "default_curation_status": "machine_extracted",
+    "rate_limit": {
+      "requests_per_second": 10,
+      "backoff_strategy": "exponential"
+    },
+    "requires_api_key": false,
+    "cache_ttl_hours": 168,
+    "allowed_output_fields": [
+      "name",
+      "entry_id",
+      "band_gap",
+      "delta_e",
+      "stability",
+      "composition",
+      "spacegroup",
+      "volume",
+      "prototype",
+      "computed",
+      "resolution_status",
+      "license"
+    ],
+    "review_triggers": [
+      "missing_band_gap",
+      "band_gap_zero_suspicious",
+      "query_no_results"
+    ],
+    "go_migration_state": "go_shadow_ready",
+    "python_bridge_required": false,
+    "typescript_surface": "source_coverage_and_settings_only",
+    "disambiguation_required": false,
+    "operational_status": "active",
+    "capabilities": [
+      "electronic_structure",
+      "computed_material_summary"
+    ],
+    "execution_modes": [
+      "direct"
+    ],
+    "last_verified_at": "2026-07-25",
+    "data_library_path": null,
+    "v35_slice": "out_of_current_slice",
+    "acquisition_mode": "api_lookup",
+    "distribution_policy": "derived_facts_with_source_pointers"
+  },
+  {
+    "schema_version": "v35.data_source_profile.v1",
     "provider": "nomad_perla_psc",
     "display_name": "NOMAD PERLA PSC",
     "source_family": "psc_device_performance",
