@@ -410,8 +410,8 @@ func TestSourceProviderTestConnectionMaterialsProjectUsesInjectedProbeWithoutSec
 }
 
 func TestSourceProviderTestConnectionRejectsUnsupportedProvider(t *testing.T) {
-	err := run([]string{"source-provider", "test-connection", "pubchem"})
-	if err == nil || !strings.Contains(err.Error(), "unsupported source-provider test-connection provider: pubchem") {
+	err := run([]string{"source-provider", "test-connection", "nonexistent_provider"})
+	if err == nil || !strings.Contains(err.Error(), "unsupported source-provider test-connection provider: nonexistent_provider") {
 		t.Fatalf("unsupported provider error mismatch: %v", err)
 	}
 }
