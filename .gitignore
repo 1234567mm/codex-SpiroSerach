@@ -53,3 +53,7 @@ frontend/atomreasonx/src-tauri/target/
 frontend/atomreasonx/.vitest/
 frontend/atomreasonx/src-tauri/binaries/*
 !frontend/atomreasonx/src-tauri/binaries/README.md
+
+# Build artifacts
+spiroctl.exe
+*.exe
