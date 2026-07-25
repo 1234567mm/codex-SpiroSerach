@@ -85,6 +85,16 @@ Current required references:
   `https://nomad-lab.eu/prod/v1/staging/gui/analyze/apis`
 - FAIRmat NOMAD perovskite database:
   `https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database`
+- Perovskite Database Project:
+  Jacobsson et al., *Nature Energy* 2022, DOI: 10.1038/s41560-021-00941-3
+- PERLA (post-2021 PSC data):
+  Shabih et al., arXiv:2601.17807, 2026
+- Harvard Clean Energy Project (CEPDB):
+  `https://www.matter.toronto.edu/basic-content-page/data-download`
+- PubChemQC B3LYP/6-31G*:
+  Nakata et al., arXiv:2305.18454, 2023
+- OQMD: `https://oqmd.org`
+- JARVIS (NIST): `https://jarvis.nist.gov`
 - DeepSeek-Reasonix:
   `https://github.com/esengine/DeepSeek-Reasonix`
 - Cherry Studio:

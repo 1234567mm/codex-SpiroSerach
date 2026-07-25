@@ -101,6 +101,20 @@ Current durable references include:
   `https://nomad-lab.eu/prod/v1/staging/gui/analyze/apis`
 - FAIRmat NOMAD perovskite database:
   `https://github.com/FAIRmat-NFDI/nomad-perovskite-solar-cells-database`
+- Perovskite Database Project:
+  Jacobsson et al., *Nature Energy* 2022, DOI: 10.1038/s41560-021-00941-3
+  (42,400+ PSC devices, HTL field complete, available via NOMAD API)
+- PERLA (post-2021 PSC data):
+  Shabih et al., arXiv:2601.17807, 2026
+- Harvard Clean Energy Project (CEPDB):
+  `https://www.matter.toronto.edu/basic-content-page/data-download`
+  (2.3M OPV molecules, HOMO/LUMO/gap, academic use)
+- PubChemQC B3LYP/6-31G*:
+  Nakata et al., arXiv:2305.18454, 2023 (86M molecules, CC BY 4.0)
+- OQMD: `https://oqmd.org`
+  (1.41M materials, band_gap API filtering, CC BY 4.0)
+- JARVIS (NIST): `https://jarvis.nist.gov`
+  (80K+ materials, dual band gap values)
 - DeepSeek-Reasonix:
   `https://github.com/esengine/DeepSeek-Reasonix`
 - Cherry Studio:
