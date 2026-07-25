@@ -110,16 +110,22 @@ export const projectWorkflowTaskExecutionReport = (
   workspace: AtomReasonXWorkspaceState,
   report: OperatorTaskExecutionReport,
 ): AtomReasonXWorkspaceState => {
-  if (!isProjectableExecutionReport(report)) {
+  let normalizedReport: OperatorTaskExecutionReport;
+  try {
+    normalizedReport = validateOperatorTaskExecutionReport(report);
+  } catch {
+    return workspace;
+  }
+  if (!isProjectableExecutionReport(normalizedReport)) {
     return workspace;
   }
   const taskIndex = workspace.operator_tasks.findIndex(task => (
-    task.task_id === report.task_id
+    task.task_id === normalizedReport.task_id
     && task.action_type === EXECUTABLE_NOMAD_ACTION
     && task.provider === EXECUTABLE_NOMAD_PROVIDER
     && task.admission_status === "admitted"
     && task.admission_source === "operator_task_ledger"
-    && task.admission_hash === report.admission_hash
+    && task.admission_hash === normalizedReport.admission_hash
   ));
   if (taskIndex < 0 || workspace.operator_tasks[taskIndex].execution_report) {
     return workspace;
@@ -131,7 +137,7 @@ export const projectWorkflowTaskExecutionReport = (
     return {
       ...task,
       config: { ...task.config },
-      execution_report: cloneExecutionReport(report),
+      execution_report: cloneExecutionReport(normalizedReport),
     };
   });
   return {

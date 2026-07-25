@@ -36,13 +36,15 @@ export const WorkflowView: React.FC<{
   operatorTasks?: HtlOperatorTaskSummary[];
   commandDispatcher?: WorkbenchCommandDispatcher;
   workflowTaskExecutor?: WorkflowTaskExecutor;
-  onWorkflowTaskExecuted?: (report: OperatorTaskExecutionReport) => void;
+  workflowProjectionKey?: string;
+  onWorkflowTaskExecuted?: (report: OperatorTaskExecutionReport, projectionKey?: string) => void;
 }> = ({
   workflow,
   commandActions,
   operatorTasks = [],
   commandDispatcher,
   workflowTaskExecutor,
+  workflowProjectionKey,
   onWorkflowTaskExecuted,
 }) => {
   const [executingTaskIds, setExecutingTaskIds] = React.useState<Set<string>>(() => new Set());
@@ -51,9 +53,10 @@ export const WorkflowView: React.FC<{
       return;
     }
     setExecutingTaskIds(previous => new Set(previous).add(task.task_id));
+    const startedProjectionKey = workflowProjectionKey;
     try {
       const report = await workflowTaskExecutor.execute(task);
-      onWorkflowTaskExecuted?.(report);
+      onWorkflowTaskExecuted?.(report, startedProjectionKey);
     } finally {
       setExecutingTaskIds(previous => {
         const next = new Set(previous);
@@ -61,7 +64,7 @@ export const WorkflowView: React.FC<{
         return next;
       });
     }
-  }, [executingTaskIds, onWorkflowTaskExecuted, workflowTaskExecutor]);
+  }, [executingTaskIds, onWorkflowTaskExecuted, workflowProjectionKey, workflowTaskExecutor]);
 
   return (
     <section className="workflow-view">

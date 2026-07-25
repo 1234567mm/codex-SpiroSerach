@@ -119,6 +119,21 @@ Recent gates run during this checkpoint:
 - `npm.cmd test` in `frontend/atomreasonx` first failed as expected after adding the NOMAD execution-report projection contract because `projectWorkflowTaskExecutionReport` and `onWorkflowTaskExecuted` were missing; it then passed with 49 Vitest tests after implementation.
 - `npm.cmd run build` in `frontend/atomreasonx` passed after adding the UI-local execution report projection.
 - `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -Command "[Environment]::SetEnvironmentVariable('PYTHONPATH','src','Process'); .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v"` passed outside sandbox with 31 tests after the execution report projection. Sandboxed `uv run` still failed on the local uv cache, and sandboxed `.venv` still hit the known uv trampoline permission issue.
+- Planck review found a P1 risk that `projectWorkflowTaskExecutionReport` could preserve uncontracted extra fields into UI state. The fix now normalizes through `validateOperatorTaskExecutionReport` before projection and adds hostile extra-field regressions for writer-shaped metadata, executable path, and credential-shaped fields.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 49 Vitest tests after the Planck review fix.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the Planck review fix.
+- `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -Command "[Environment]::SetEnvironmentVariable('PYTHONPATH','src','Process'); .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v"` passed outside sandbox with 31 tests after the Planck review fix.
+- Locke review found a P2 stale completion risk where an in-flight execution
+  report could repopulate UI state after the active workspace changed, and a
+  P3 test gap around source-string-only WorkflowView coverage. The fix now
+  carries `workspaceResetKey` through the execution callback, drops stale
+  completions against a ref of the latest key, and adds a server-rendered
+  WorkflowView test for report rows and disabled executed tasks.
+- `npm.cmd test` in `frontend/atomreasonx` passed with 50 Vitest tests after the
+  Locke review fix.
+- `npm.cmd run build` in `frontend/atomreasonx` passed after the Locke review
+  fix.
+- `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -Command "[Environment]::SetEnvironmentVariable('PYTHONPATH','src','Process'); .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v"` passed outside sandbox with 31 tests after the Locke review fix.
 
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/runartifact ./cmd/spiroctl -v` passed for the run artifact slice.

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import fixture from "../fixtures/atomreasonx-ui-fixture.json";
 import type {
   AtomReasonXCommandResult,
@@ -68,6 +70,7 @@ import {
   submitSourceSettingsCommand,
 } from "../components/SettingsModal";
 import {
+  WorkflowView,
   buildWorkflowCommandPayload,
   canSubmitWorkflowCommandAction,
   submitWorkflowCommandAction,
@@ -498,6 +501,7 @@ describe("AtomReasonX contract fixtures", () => {
     expect(workflowSource).toContain("operatorTasks");
     expect(workflowSource).toContain("operator-task-list");
     expect(workflowSource).toContain("workflowTaskExecutor");
+    expect(workflowSource).toContain("workflowProjectionKey");
     expect(workflowSource).toContain("onWorkflowTaskExecuted");
     expect(workflowSource).toContain("execution_report");
     expect(workflowSource).toContain("source_manifest_path");
@@ -505,9 +509,88 @@ describe("AtomReasonX contract fixtures", () => {
     expect(workflowSource).toContain("execute(task)");
     expect(appShellSource).toContain("operatorTasks={workspace.operator_tasks}");
     expect(appShellSource).toContain("workflowTaskExecutor={workflowTaskExecutor}");
+    expect(appShellSource).toContain("workflowProjectionKey={workflowProjectionKey}");
     expect(appShellSource).toContain("onWorkflowTaskExecuted={onWorkflowTaskExecuted}");
+    expect(Object.values(MAIN_MODULE)[0]).toContain("workspaceResetKeyRef");
+    expect(Object.values(MAIN_MODULE)[0]).toContain("projectionKey !== workspaceResetKeyRef.current");
     expect(workflowSource).not.toContain("workbench-read-adapter");
     expect(workflowSource).not.toContain("read-only-artifact-adapter");
+  });
+
+  it("renders workflow execution report rows and disables executed tasks", () => {
+    const workspace = fixture as unknown as AtomReasonXWorkspaceState;
+    const admittedTask = {
+      schema_version: "v35.operator_task.v1",
+      task_id: "task-start_nomad_sync-ab12cd",
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      provider_scope: "source",
+      status: "queued",
+      queue_scope: "operator_local",
+      declared_effects: ["provider_sync_jobs"],
+      writes_authorized: false,
+      execution_started: false,
+      created_at: null,
+      config: { transport: "operator_task_queue", runtime_writes: false },
+      admission_status: "admitted",
+      admission_hash: "a".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger",
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const report = {
+      schema_version: OPERATOR_TASK_EXECUTION_SCHEMA_VERSION,
+      task_id: admittedTask.task_id,
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      admission_hash: admittedTask.admission_hash,
+      execution_status: "source_snapshot_written",
+      write_authorization_scope: "source_snapshot_only",
+      live_calls_authorized: true,
+      provider_cache_written: false,
+      local_backend_written: false,
+      scoring_written: false,
+      experiment_written: false,
+      started_at: "2026-07-25T00:00:00Z",
+      target_data_library_path: `data/lib/nomad_perla_psc/snapshots/run-${admittedTask.task_id}`,
+      source_manifest_path: `data/lib/nomad_perla_psc/snapshots/run-${admittedTask.task_id}/source-manifest.json`,
+      normalized_record_count: 2,
+      provider_response_hash: "b".repeat(64),
+      raw_search_hash: "c".repeat(64),
+      raw_archive_hash: "d".repeat(64),
+      archive_status: "rate_limited",
+      review_required: true,
+      review_reasons: ["archive_rate_limited"],
+    } satisfies OperatorTaskExecutionReport;
+    const executor = { execute: async () => report };
+    const admittedMarkup = renderToStaticMarkup(React.createElement(WorkflowView, {
+      workflow: workspace.workflow,
+      commandActions: [],
+      operatorTasks: [admittedTask],
+      workflowTaskExecutor: executor,
+      workflowProjectionKey: "fixture:perovskite_htl_screening:0",
+      onWorkflowTaskExecuted: () => undefined,
+    }));
+    const executedMarkup = renderToStaticMarkup(React.createElement(WorkflowView, {
+      workflow: workspace.workflow,
+      commandActions: [],
+      operatorTasks: [{ ...admittedTask, execution_report: report }],
+      workflowTaskExecutor: executor,
+      workflowProjectionKey: "fixture:perovskite_htl_screening:0",
+      onWorkflowTaskExecuted: () => undefined,
+    }));
+
+    expect(admittedMarkup).toContain(">Execute</button>");
+    expect(admittedMarkup).not.toContain("operator-task-report");
+    expect(executedMarkup).toContain("operator-task-report");
+    expect(executedMarkup).toContain("source_snapshot_written");
+    expect(executedMarkup).toContain("2 records");
+    expect(executedMarkup).toContain("rate_limited");
+    expect(executedMarkup).toContain("archive_rate_limited");
+    expect(executedMarkup).toContain(report.source_manifest_path);
+    expect(executedMarkup).toContain("disabled");
+    expect(executedMarkup).not.toContain("api_key");
+    expect(executedMarkup).not.toContain("readonly_token");
+    expect(executedMarkup).not.toContain("spiroctl.exe");
   });
 
   it("reads Go readonly run envelopes through a side-effect-free transport facade", async () => {
@@ -1705,6 +1788,12 @@ describe("AtomReasonX contract fixtures", () => {
       ...report,
       task_id: "task-start_nomad_sync-unknown",
     });
+    const hostileExtras = [
+      { ...report, provider_cache_path: "data/provider_cache/index.json" },
+      { ...report, spiroctl_path: "C:\\tools\\spiroctl.exe" },
+      { ...report, api_key: "mp-secret" },
+      { ...report, writer_metadata: { local_backend_written: true } },
+    ] as unknown as OperatorTaskExecutionReport[];
 
     expect(projected).not.toBe(workspaceWithAdmittedTask);
     expect(projected.operator_tasks[0].execution_report).toMatchObject({
@@ -1723,6 +1812,9 @@ describe("AtomReasonX contract fixtures", () => {
     expect(canExecuteWorkflowTask(projected.operator_tasks[0])).toBe(false);
     expect(duplicate).toBe(projected);
     expect(unrelated).toBe(workspaceWithAdmittedTask);
+    for (const hostileReport of hostileExtras) {
+      expect(projectWorkflowTaskExecutionReport(workspaceWithAdmittedTask, hostileReport)).toBe(workspaceWithAdmittedTask);
+    }
     expect(workspaceWithAdmittedTask.operator_tasks[0].execution_report).toBeUndefined();
     expect(projected.knowledge_library).toEqual(workspaceWithAdmittedTask.knowledge_library);
     expect(JSON.stringify(projected.operator_tasks)).not.toContain("api_key");

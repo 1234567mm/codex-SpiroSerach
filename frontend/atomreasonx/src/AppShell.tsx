@@ -33,7 +33,8 @@ export const AppShell: React.FC<{
   onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
   commandDispatcher?: WorkbenchCommandDispatcher;
   workflowTaskExecutor?: WorkflowTaskExecutor;
-  onWorkflowTaskExecuted?: (report: OperatorTaskExecutionReport) => void;
+  workflowProjectionKey?: string;
+  onWorkflowTaskExecuted?: (report: OperatorTaskExecutionReport, projectionKey?: string) => void;
 }> = ({
   workspace,
   onOpenSettings,
@@ -44,6 +45,7 @@ export const AppShell: React.FC<{
   onApplyReadonlyRunOutputDir,
   commandDispatcher,
   workflowTaskExecutor,
+  workflowProjectionKey,
   onWorkflowTaskExecuted,
 }) => {
   return (
@@ -72,6 +74,7 @@ export const AppShell: React.FC<{
               operatorTasks={workspace.operator_tasks}
               commandDispatcher={commandDispatcher}
               workflowTaskExecutor={workflowTaskExecutor}
+              workflowProjectionKey={workflowProjectionKey}
               onWorkflowTaskExecuted={onWorkflowTaskExecuted}
             />
           </div>

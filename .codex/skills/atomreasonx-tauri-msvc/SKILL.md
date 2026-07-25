@@ -60,6 +60,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/invoke-msvc-carg
   and shell plugins out of TypeScript surfaces. Validate Tauri reports with
   typed Rust structs plus frontend contract tests before claiming the bridge is
   safe.
+- Before projecting Rust/Tauri command reports into TypeScript UI state,
+  normalize through the runtime validator or copy an explicit allowlist of
+  fields. Do not spread raw report objects into workspace state.
+- Long-running Tauri command completions must carry or capture a workspace/run
+  projection key, and the frontend must drop stale completions after the active
+  readonly output directory or workspace state changes.
+- Source-string sentinels are useful drift guards, but behavior that crosses a
+  React component boundary also needs a render-oriented test proving the
+  visible state and disabled/enabled controls.
 
 ## Verification Slices
 

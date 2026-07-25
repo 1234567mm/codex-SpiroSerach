@@ -64,6 +64,8 @@ const AtomReasonXRoot: React.FC = () => {
   const workspaceResetKey = loadedWorkspace
     ? `${readonlyOutputDir ?? "fixture"}:${loadedWorkspace.active_workspace}:${loadedWorkspace.source_settings.config_version}`
     : `${readonlyOutputDir ?? "fixture"}:not-ready`;
+  const workspaceResetKeyRef = React.useRef(workspaceResetKey);
+  workspaceResetKeyRef.current = workspaceResetKey;
 
   React.useEffect(() => {
     setProjectedWorkspace(null);
@@ -89,8 +91,11 @@ const AtomReasonXRoot: React.FC = () => {
     }))
     : undefined;
   const workflowTaskExecutor = visibleWorkspace && !runtimeReadAdapter.readOnly ? runtimeWorkflowTaskExecutor : undefined;
-  const onWorkflowTaskExecuted = React.useCallback((report: OperatorTaskExecutionReport) => {
-    if (!visibleWorkspace) {
+  const onWorkflowTaskExecuted = React.useCallback((
+    report: OperatorTaskExecutionReport,
+    projectionKey?: string,
+  ) => {
+    if (!visibleWorkspace || projectionKey !== workspaceResetKeyRef.current) {
       return;
     }
     setProjectedWorkspace(current => {
@@ -138,6 +143,7 @@ const AtomReasonXRoot: React.FC = () => {
       onApplyReadonlyRunOutputDir={applyReadonlyRunOutputDir}
       commandDispatcher={commandDispatcher}
       workflowTaskExecutor={workflowTaskExecutor}
+      workflowProjectionKey={workspaceResetKey}
       onWorkflowTaskExecuted={onWorkflowTaskExecuted}
     />
   );
