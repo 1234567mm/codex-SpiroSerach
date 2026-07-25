@@ -113,6 +113,7 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertEqual(profiles["materials_project"]["api_key_env"], "MATERIALS_PROJECT_API_KEY")
         self.assertEqual(profiles["materials_project"]["go_migration_state"], "go_shadow_ready")
         self.assertEqual(profiles["nomad_perla_psc"]["go_migration_state"], "go_shadow_ready")
+        self.assertEqual(profiles["nomad_perovskite_schema"]["go_migration_state"], "go_shadow_ready")
         self.assertTrue(profiles["nomad_perla_psc"]["python_bridge_required"])
         self.assertTrue(
             {
