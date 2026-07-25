@@ -133,7 +133,10 @@ Recent gates run during this checkpoint:
 - `$env:PYTHONPATH='src'; uv run python -m unittest tests.test_atomreasonx_frontend tests.test_atomreasonx_contracts -v` passed outside sandbox with 40 tests after the Tauri bridge slice; sandboxed Python hit local uv trampoline/cache permissions.
 - `$env:PYTHONPATH='src'; uv run python -m unittest discover tests -v` passed outside sandbox with 926 tests and 9 skipped after the Tauri bridge slice; generated root `uv.lock` was removed again.
 - `git diff --cached --check` passed before committing the Tauri bridge slice.
-- Rust-native `rustfmt` and `cargo test` remain environment-blocked on this machine: `rustfmt.exe` is not installed for the stable MSVC toolchain, and MSVC `link.exe` is not on PATH.
+- Earlier direct Rust commands were environment-sensitive; use the repository
+  wrapper for current evidence. `npm.cmd run tauri:fmt`, `npm.cmd run
+  tauri:test`, and `npm.cmd run tauri:build:app` now prove the wrapper path for
+  Rust formatting, tests, and release app linking.
 - `npm.cmd test` in `frontend/atomreasonx` passed with 28 Vitest tests after the readonly workspace adapter slice.
 - `npm.cmd run build` in `frontend/atomreasonx` passed after the readonly workspace adapter slice.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./...` passed after the readonly workspace adapter slice.
@@ -173,9 +176,11 @@ Recent gates run during this checkpoint:
 - `npm.cmd run build` in `frontend/atomreasonx` passed after bundled sidecar enablement.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed after bundled sidecar enablement.
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest discover tests -q` passed outside sandbox with 934 tests and 9 skipped after bundled sidecar enablement.
-- `npm.cmd run tauri:build` proved the release script order by completing `sidecar:build`, `sidecar:check`, and frontend `beforeBuildCommand`; the installer build then failed at Rust compile because MSVC `link.exe` is not installed.
-- `cargo fmt --check` remains environment-blocked because `cargo-fmt.exe` is not installed for `stable-x86_64-pc-windows-msvc`.
-- `cargo test` remains environment-blocked by crates.io proxy access, and `cargo test --offline` reaches compilation but fails because MSVC `link.exe` is not on PATH.
+- Historical bundled-sidecar evidence before the MSVC wrapper was complete:
+  `npm.cmd run tauri:build` proved script order through `sidecar:build`,
+  `sidecar:check`, and frontend `beforeBuildCommand`, then failed in direct
+  Rust compilation because `link.exe` was not on PATH. This is superseded by
+  the 2026-07-25 wrapper evidence below.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed for the P3 source closure readiness gate, including blocked current PubChemQC and Materials Cloud fixtures plus a synthetic PubChemQC ready manifest.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-v35-read-validation.ps1 -RepositoryRoot D:\1-QRS\qorder_pr\codex-SpiroSerach` passed with JSON checks proving `source-snapshot validate` accepts current fixtures while `source-closure validate` blocks PubChemQC and Materials Cloud production/scientific closure claims.
 - `$env:GOCACHE=(Join-Path (Get-Location) '.cache\go-build'); go test -count=1 ./internal/sourcesnapshot ./cmd/spiroctl -v` passed after adding machine-readable PubChemQC and Materials Cloud `source-closure requirements` reports.
@@ -208,8 +213,16 @@ Recent gates run during this checkpoint:
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_config_command_plane tests.test_atomreasonx_contracts -v` passed outside sandbox with 58 tests after review fixes for the Materials Project command transport slice; sandboxed `.venv` Python remained blocked by local `uv` trampoline permissions.
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 26 tests after a Rust bridge source cleanup that removed obsolete redaction helper code.
 - `git diff --check`, `scripts/check-agent-hygiene.ps1`, and `Test-Path uv.lock` passed after the Materials Project command transport review fixes. Broader full-suite reruns were intentionally omitted because the post-review fixes were bounded to config command runtime, source-setting command transport contracts, Tauri bridge source policy, local secret validation, and stage status documentation.
-- `cargo fmt --check` remains environment-blocked because `cargo-fmt.exe` is not installed for `stable-x86_64-pc-windows-msvc`.
-- `cargo check --offline` remains environment-blocked because MSVC `link.exe` is not on PATH.
+- The older direct `cargo fmt`/`cargo check --offline` blocker should be
+  interpreted as a missing developer-shell environment, not current linker
+  status. Current Windows desktop verification must use
+  `scripts/invoke-msvc-cargo.ps1`.
+- `npm.cmd run tauri:test` passed on 2026-07-25 with 11 Rust tests through the
+  wrapper, resolving the current `link.exe` availability check.
+- `npm.cmd run tauri:build:app` passed on 2026-07-25: sidecar build, bundled
+  sidecar preflight, frontend production build, and Rust release linking all
+  completed, producing
+  `frontend/atomreasonx/src-tauri/target/release/atomreasonx.exe`.
 - `npm.cmd test` in `frontend/atomreasonx` passed with 40 Vitest tests after the AtomReasonX source-settings command projection slice, including out-of-order stale accepted result regression coverage.
 - `npm.cmd run build` in `frontend/atomreasonx` passed after the AtomReasonX source-settings command projection slice.
 - `$env:PYTHONPATH='src'; .\.venv\Scripts\python.exe -m unittest tests.test_atomreasonx_contracts -v` passed outside sandbox with 27 tests after the AtomReasonX source-settings command projection slice; sandboxed `.venv` Python remained blocked by local `uv` trampoline permissions.
@@ -257,8 +270,10 @@ Recent gates run during this checkpoint:
    read-adapter-only boundary and must not expose executable paths or tokens.
 2. Packaging preflight is executable, the release-owned Go `spiroctl` sidecar
    build policy is available, and Tauri production bundling now declares
-   `bundle.externalBin = ["binaries/spiroctl"]`. Installer verification still
-   requires a Rust desktop build environment with MSVC `link.exe` and `rustfmt`.
+   `bundle.externalBin = ["binaries/spiroctl"]`. The Rust desktop build
+   environment is now verified through `scripts/invoke-msvc-cargo.ps1` for
+   tests and `tauri:build:app`; full installer verification still requires
+   WiX/MSI bundling closure.
 3. Keep read transport side-effect free. Config command transport is now
    separate and idempotent for source/model settings; workflow commands such as
    NOMAD sync and snapshot imports now have an explicit UI-local operator task

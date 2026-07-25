@@ -37,6 +37,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/invoke-msvc-carg
 
 - Prefer `scripts/invoke-msvc-cargo.ps1` over direct `cargo` or `tauri` on
   Windows unless the shell is already a confirmed VS developer environment.
+- Treat `npm.cmd run tauri:test` as the fastest proof that `VsDevCmd` and
+  `link.exe` are wired correctly for Rust tests. Treat
+  `npm.cmd run tauri:build:app` as the proof that sidecar build, frontend
+  production build, and Tauri release app linking all work without MSI
+  bundling.
 - `tauri:build:app` includes sidecar build, sidecar preflight, frontend build,
   and Rust release build without MSI bundling. Use it when WiX acquisition is
   not the behavior under test.
@@ -63,3 +68,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/invoke-msvc-carg
 | Rust bridge or report schema | `npm.cmd run tauri:fmt`, `npm.cmd run tauri:test`, `npm.cmd test`, `npm.cmd run build`, Python contract sentinel |
 | Sidecar packaging or Tauri config | `npm.cmd run sidecar:build`, `npm.cmd run sidecar:check`, `npm.cmd run tauri:build:app`; run `npm.cmd run tauri:build` when MSI/WiX bundling is in scope |
 | Workflow execution bridge | Rust tests, Vitest contracts, Python contracts, V35 read validation, hygiene |
+
+## Current Environment Note
+
+On 2026-07-25, the Windows wrapper resolved Visual Studio Build Tools at
+`D:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools`.
+`npm.cmd run tauri:test` passed with 11 Rust tests, and
+`npm.cmd run tauri:build:app` completed sidecar build, bundled sidecar
+preflight, frontend production build, and Rust release linking, producing
+`frontend/atomreasonx/src-tauri/target/release/atomreasonx.exe`. Future
+link-related failures should first inspect wrapper discovery or a changed local
+toolchain before treating `link.exe` as generally unavailable.

@@ -87,3 +87,10 @@ npm.cmd run tauri:test
 npm.cmd run tauri:build:app
 npm.cmd run tauri:build
 ```
+
+`npm.cmd run tauri:test` is the fast linker smoke test. `npm.cmd run
+tauri:build:app` is the desktop app build gate for sidecar, frontend, and Rust
+release linking without MSI bundling. On 2026-07-25 both passed through the
+wrapper against Visual Studio Build Tools 18; remaining full-installer failures
+should be classified separately as WiX/MSI bundling issues unless the app build
+itself stops before `Built application at:`.
