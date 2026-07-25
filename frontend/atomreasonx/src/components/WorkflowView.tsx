@@ -25,7 +25,8 @@ type WorkflowTaskHandoffState =
   | "admitted-ready"
   | "current-session-snapshot"
   | "restored-snapshot"
-  | "review-blocked";
+  | "review-blocked"
+  | "closure-blocked";
 
 const WORKFLOW_TASK_HANDOFF_LABELS: Record<WorkflowTaskHandoffState, string> = {
   "local-queued": "local queued",
@@ -33,12 +34,17 @@ const WORKFLOW_TASK_HANDOFF_LABELS: Record<WorkflowTaskHandoffState, string> = {
   "current-session-snapshot": "current session snapshot",
   "restored-snapshot": "restored snapshot",
   "review-blocked": "review blocked",
+  "closure-blocked": "closure blocked",
 };
 
 export const workflowTaskHandoffState = (task: HtlOperatorTaskSummary): WorkflowTaskHandoffState => {
   const report = task.execution_report;
   if (report?.review_required) {
     return "review-blocked";
+  }
+  // Closure-blocked: snapshot exists but archive data has issues that prevent closure promotion
+  if (report && !report.review_required && isClosureBlockedArchiveStatus(report.archive_status)) {
+    return "closure-blocked";
   }
   if (report && task.handoff_source === "restored_snapshot") {
     return "restored-snapshot";
@@ -51,6 +57,9 @@ export const workflowTaskHandoffState = (task: HtlOperatorTaskSummary): Workflow
   }
   return "local-queued";
 };
+
+const isClosureBlockedArchiveStatus = (status: string): boolean =>
+  status === "unavailable" || status === "rate_limited" || status === "schema_unrecognized" || status === "empty";
 
 export const submitWorkflowCommandAction = (
   commandDispatcher: WorkbenchCommandDispatcher,

@@ -704,6 +704,22 @@ describe("AtomReasonX contract fixtures", () => {
         review_reasons: ["nomad_schema_unrecognized"],
       }),
     } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const closureBlockedTask = {
+      ...baseTask,
+      task_id: "task-start_nomad_sync-ee55",
+      admission_status: "admitted" as const,
+      admission_hash: "e".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+      execution_report: executionReportForTask({
+        task_id: "task-start_nomad_sync-ee55",
+        admission_hash: "e".repeat(64),
+      }, {
+        archive_status: "unavailable",
+        review_required: false,
+        review_reasons: [],
+      }),
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
     const currentSessionTask = projectWorkflowTaskExecutionReport({
       ...workspace,
       operator_tasks: [admittedTask],
@@ -713,7 +729,7 @@ describe("AtomReasonX contract fixtures", () => {
     const markup = renderToStaticMarkup(React.createElement(WorkflowView, {
       workflow: workspace.workflow,
       commandActions: [],
-      operatorTasks: [baseTask, admittedTask, currentSessionTask, normalizedRestoredTask, reviewBlockedTask],
+      operatorTasks: [baseTask, admittedTask, currentSessionTask, normalizedRestoredTask, reviewBlockedTask, closureBlockedTask],
       workflowTaskExecutor: executor,
       workflowProjectionKey: "fixture:perovskite_htl_screening:1",
       onWorkflowTaskExecuted: () => undefined,
@@ -724,6 +740,7 @@ describe("AtomReasonX contract fixtures", () => {
     expect(markup).toContain("current session snapshot");
     expect(markup).toContain("restored snapshot");
     expect(markup).toContain("review blocked");
+    expect(markup).toContain("closure blocked");
     expect(markup).toContain("nomad_schema_unrecognized");
     expect(normalizedRestoredTask.execution_report).toBeDefined();
     expect(markup).toContain(normalizedRestoredTask.execution_report!.source_manifest_path);
@@ -732,6 +749,7 @@ describe("AtomReasonX contract fixtures", () => {
     expect(markup).toContain("operator-task-row operator-task-row--current-session-snapshot");
     expect(markup).toContain("operator-task-row operator-task-row--restored-snapshot");
     expect(markup).toContain("operator-task-row operator-task-row--review-blocked");
+    expect(markup).toContain("operator-task-row operator-task-row--closure-blocked");
     expect(markup).not.toContain("api_key");
     expect(markup).not.toContain("readonly_token");
     expect(markup).not.toContain("spiroctl.exe");
