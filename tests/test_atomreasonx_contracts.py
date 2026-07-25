@@ -184,6 +184,7 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertEqual(coverage["pubchemqc"]["provider_kind"], settings["pubchemqc"]["provider_kind"])
         self.assertEqual(coverage["pubchemqc"]["automatic_acquisition"], profiles["pubchemqc"]["acquisition_mode"])
         self.assertEqual(profiles["materials_cloud"]["quarantine_state"], "manual_import_required")
+        self.assertEqual(profiles["materials_cloud"]["go_migration_state"], "go_shadow_ready")
         self.assertEqual(profiles["hopv15"]["dataset_version"], "figshare-v4-fixture")
         self.assertIn("citation", profiles["opv_db"]["required_citation"].lower())
 

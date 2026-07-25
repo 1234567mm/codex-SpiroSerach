@@ -501,7 +501,7 @@ func TestSourceRegistryMarksHopv15AndOpvDbGoShadowReady(t *testing.T) {
 	}
 
 	materialsCloud := index["materials_cloud"]
-	if materialsCloud.GoMigrationState != "parity_required" || !materialsCloud.PythonBridgeRequired || !materialsCloud.LocalDataset() {
+	if materialsCloud.GoMigrationState != "go_shadow_ready" || !materialsCloud.PythonBridgeRequired || !materialsCloud.LocalDataset() {
 		t.Fatalf("unexpected Materials Cloud migration profile: %#v", materialsCloud)
 	}
 	for _, field := range []string{"metadata_only", "review_required", "review_reasons", "required_citation"} {

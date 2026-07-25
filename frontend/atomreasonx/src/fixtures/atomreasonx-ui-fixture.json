@@ -860,7 +860,7 @@
         "required_citation": "Materials Cloud archive record; cite record DOI, version, license, and citation.",
         "last_verified_at": null,
         "quarantine_state": "manual_import_required",
-        "go_migration_state": "parity_required",
+        "go_migration_state": "go_shadow_ready",
         "python_bridge_required": true,
         "typescript_surface": "settings_and_import_commands",
         "requires_api_key": false,

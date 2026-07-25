@@ -650,7 +650,7 @@
       "identity_ambiguous",
       "metadata_only_not_scientific_fact"
     ],
-    "go_migration_state": "parity_required",
+    "go_migration_state": "go_shadow_ready",
     "python_bridge_required": true,
     "typescript_surface": "settings_and_import_commands",
     "disambiguation_required": false,
