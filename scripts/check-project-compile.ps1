@@ -38,7 +38,7 @@ function Get-ChangedPaths {
         [string[]]$ProvidedPaths
     )
 
-    if ($null -ne $ProvidedPaths -and $ProvidedPaths.Count -gt 0) {
+    if ($null -ne $ProvidedPaths) {
         return @($ProvidedPaths |
             ForEach-Object { $_ -split ',' } |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
@@ -55,7 +55,7 @@ function Get-ChangedPaths {
 function Resolve-CompileTargets {
     param(
         [Parameter(Mandatory = $true)][string]$RequestedScope,
-        [Parameter(Mandatory = $true)][string[]]$Paths
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Paths
     )
 
     if ($RequestedScope -eq 'All') { return @('Python', 'Go', 'Frontend', 'Rust') }
@@ -84,7 +84,7 @@ function Get-PythonCompileInputs {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$RequestedScope,
-        [Parameter(Mandatory = $true)][string[]]$Paths
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Paths
     )
 
     if ($RequestedScope -eq 'Auto') {
@@ -103,7 +103,7 @@ function Invoke-PythonCompile {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$RequestedScope,
-        [Parameter(Mandatory = $true)][string[]]$Paths,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Paths,
         [string]$Executable
     )
 

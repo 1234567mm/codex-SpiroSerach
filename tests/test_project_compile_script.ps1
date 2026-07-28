@@ -10,8 +10,9 @@ function Invoke-Plan {
     param([Parameter(Mandatory = $true)][string]$Scope, [string[]]$Paths = @())
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:CheckerPath,
         '-RepositoryRoot', $script:RepositoryRoot, '-Scope', $Scope)
-    if ($Paths.Count -gt 0) {
-        $arguments += @('-ChangedPath', ($Paths -join ','))
+    if ($Paths.Count -gt 0 -or $Scope -ne 'Auto') {
+        $changedPathArgument = if ($Paths.Count -gt 0) { $Paths -join ',' } else { ' ' }
+        $arguments += @('-ChangedPath', $changedPathArgument)
     }
     $arguments += '-PlanOnly'
     $output = & $script:PowerShellPath @arguments 2>&1
@@ -43,6 +44,14 @@ $docs = Invoke-Plan -Scope 'Auto' -Paths @('docs/project-hooks.md')
 Assert-True ($docs.ExitCode -eq 0) "Documentation auto plan failed: $($docs.Output)"
 Assert-Contains $docs.Output 'SKIP: no changed paths require a compilation check.'
 Write-Output 'PASS: documentation-only paths skip compilation'
+
+$explicitPython = Invoke-Plan -Scope 'Python'
+Assert-True ($explicitPython.ExitCode -eq 0) "Explicit Python plan failed in a clean worktree: $($explicitPython.Output)"
+Assert-Contains $explicitPython.Output 'PLAN: Python'
+$explicitGo = Invoke-Plan -Scope 'Go'
+Assert-True ($explicitGo.ExitCode -eq 0) "Explicit Go plan failed in a clean worktree: $($explicitGo.Output)"
+Assert-Contains $explicitGo.Output 'PLAN: Go'
+Write-Output 'PASS: explicit scopes work without changed paths'
 
 $all = Invoke-Plan -Scope 'All'
 Assert-True ($all.ExitCode -eq 0) "All plan failed: $($all.Output)"
