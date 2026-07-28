@@ -1,0 +1,4 @@
+interface:
+  display_name: "Compile Verify"
+  short_description: "Run fast, scoped compilation checks"
+  default_prompt: "Use $compile-verify to verify the affected SpiroSearch modules compile."

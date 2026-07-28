@@ -62,6 +62,7 @@ graph is insufficient.
 Use repository skills when their trigger applies:
 
 - `worktree-tdd` for implementation or behavior changes
+- `compile-verify` for fast, path-aware compilation checks during module work
 - `contract-debugging` for failing tests, schemas, payloads, and boundary issues
 - `artifact-validation` for schemas, manifests, JSONL, cache indexes, and viewer
   inputs

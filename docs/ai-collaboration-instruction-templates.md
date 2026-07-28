@@ -122,7 +122,7 @@ Treat project capabilities as required when their trigger applies:
 `codebase-memory-mcp`, `worktree-tdd`, `contract-debugging`,
 `artifact-validation`, `review-ship`, `context-handoff`, `find-skills`,
 `grilling`, `domain-modeling`, `grill-with-docs`, `to-spec`, `to-tickets`, and
-`upstream-skill-sync`. They live with the repository and define
+`upstream-skill-sync`, and `compile-verify`. They live with the repository and define
 repository-specific behavior.
 
 Global capabilities such as general brainstorming, debugging, TDD, code review,

@@ -110,6 +110,7 @@ Project capabilities in `.codex/skills/` define required repository workflows:
 
 - `codebase-memory-mcp` for code discovery and architecture tracing.
 - `worktree-tdd` for implementation or behavior changes.
+- `compile-verify` for fast, path-aware Python, Go, TypeScript, and Rust compilation checks.
 - `contract-debugging` for failing tests, schemas, payloads, and adapter or
   provider boundary failures.
 - `artifact-validation` for JSON artifacts, manifests, JSONL, indexes, and
