@@ -120,7 +120,11 @@ class AtomReasonXSidecarPackagingTests(unittest.TestCase):
         self.assertIn("-RequireBundledSidecar", scripts["sidecar:check"])
         self.assertEqual(
             scripts["tauri:build"],
-            "npm run sidecar:build && npm run sidecar:check && tauri build",
+            "npm run sidecar:build && npm run sidecar:check && "
+            "powershell.exe -NoProfile -ExecutionPolicy Bypass "
+            "-File ../../scripts/invoke-msvc-cargo.ps1 -RepositoryRoot ../.. "
+            "-WorkingDirectory frontend/atomreasonx "
+            "-CommandName .\\node_modules\\.bin\\tauri.cmd build",
         )
 
     def test_production_preflight_rejects_missing_target_sidecar_contract(self) -> None:

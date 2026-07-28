@@ -167,6 +167,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                     "nomad_perovskite_schema",
                     "openalex",
                     "opv_db",
+                    "oqmd",
                     "pubchem",
                     "pubchemqc",
                 ],
