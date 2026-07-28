@@ -20,6 +20,11 @@ from spirosearch.contracts import (
 )
 from spirosearch.enrichment_runtime import run_enrichment
 from spirosearch.local_config import FileSecretStore, LocalConfigStore
+from spirosearch.local_source_import import (
+    SnapshotImportError,
+    import_hopv15_snapshot,
+    import_opv_db_snapshot,
+)
 from spirosearch.paper_ingest import run_paper_ingest
 from spirosearch.pipeline import load_candidates, run_screening, write_report, write_report_directory
 from spirosearch.public_device_baseline import build_public_device_snapshot
@@ -40,6 +45,8 @@ def main() -> int:
         return _main_validate_artifacts(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "dataset-import":
         return _main_dataset_import(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "local-source-import":
+        return _main_local_source_import(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "beard-cole-import":
         return _main_beard_cole_import(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "model-evaluate":
@@ -292,6 +299,38 @@ def _main_dataset_import(argv: list[str]) -> int:
     except (OSError, ValueError, json.JSONDecodeError):
         print("dataset-import failed validation; verify the local source and source manifest", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
+    return EXIT_SUCCESS
+
+
+def _main_local_source_import(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Create an immutable local source snapshot without network access.")
+    parser.add_argument("source_id", choices=("hopv15", "opv_db"))
+    parser.add_argument("--source", required=True, help="Explicit local raw HOPV15 file or OPV-DB ZIP.")
+    parser.add_argument("--snapshots-root", required=True, help="Ignored local snapshots directory for the selected source.")
+    parser.add_argument("--retrieved-at", required=True, help="Acquisition timestamp retained in the source manifest.")
+    args = parser.parse_args(argv)
+
+    try:
+        importer = import_hopv15_snapshot if args.source_id == "hopv15" else import_opv_db_snapshot
+        result = importer(args.source, args.snapshots_root, retrieved_at=args.retrieved_at)
+    except (OSError, SnapshotImportError, ValueError, json.JSONDecodeError) as exc:
+        print(f"local-source-import failed validation: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION_ERROR
+
+    print(
+        json.dumps(
+            {
+                "source_id": result.source_id,
+                "manifest_path": str(result.manifest_path),
+                "normalized_record_count": result.normalized_record_count,
+                "blocked_record_count": result.blocked_record_count,
+                "quarantine_status": result.quarantine_status,
+                "reused": result.reused,
+                "write_authorization_scope": "source_snapshot_only",
+            },
+            sort_keys=True,
+        )
+    )
     return EXIT_SUCCESS
 
 

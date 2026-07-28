@@ -17,6 +17,10 @@ const (
 	ClosureEvidenceSchemaVersion     = "v35.source_closure_evidence.v1"
 	ClosureReadinessSchemaVersion    = "v35.source_closure_readiness.v1"
 	ClosureRequirementsSchemaVersion = "v35.source_closure_requirements.v1"
+	ClosurePromotionSchemaVersion    = "v36.source_closure_promotion.v1"
+	localSourceImporterVersion       = "v36.local_source_import.v1"
+	hopv15NormalizerVersion          = "hopv15-normalizer-v2"
+	opvDbNormalizerVersion           = "opv-db-normalizer-v2"
 )
 
 var (
@@ -32,7 +36,26 @@ var (
 		"units",
 	)
 	closureRequirementStatuses = closureSetOf("inputs_required")
-	closureRequirementSources  = closureSetOf(pubchemqcProvider, materialsCloudProvider, nomadPerlaProvider)
+	hopv15ClosureAllowedFields = closureSetOf(
+		"molecule_id", "smiles", "inchi", "inchi_key", "conformer_id",
+		"homo_ev", "lumo_ev", "band_gap_ev", "pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor",
+		"source_doi", "required_citation", "license", "computed", "method", "basis_set",
+		"lineage", "review_required", "review_reasons", "identity_resolution_status",
+	)
+	opvDbClosureAllowedFields = closureSetOf(
+		"record_id", "donor_identity", "acceptor_identity", "donor_source_identifier", "acceptor_source_identifier",
+		"donor_smiles", "acceptor_smiles", "donor_inchi_key", "acceptor_inchi_key",
+		"pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor", "source_doi", "required_citation",
+		"validation_flag", "license", "computed", "benchmark_split", "quality_annotation",
+		"lineage", "review_required", "review_reasons", "identity_resolution_status",
+	)
+	closureRequirementSources = closureSetOf(
+		hopv15Provider,
+		opvDbProvider,
+		pubchemqcProvider,
+		materialsCloudProvider,
+		nomadPerlaProvider,
+	)
 )
 
 const nomadPerlaProvider = "nomad_perla_psc"
@@ -84,6 +107,33 @@ func BuildClosureRequirementsReport(sourceID string) (ClosureRequirementsReport,
 		report.Notes = []string{
 			"Live PubChemQC API mode remains quarantined until response schema, terms, rate limits, and uptime behavior are verified.",
 			"Python remains the bridge for large geometry and chemistry-specific validation until parity evidence exists.",
+		}
+	case hopv15Provider:
+		report.Requirements = []ClosureRequirement{
+			requirement("hopv15_local_raw_snapshot", "operator_input", "A local HOPV15 raw file must be imported into an immutable data/lib/hopv15/snapshots directory; the root fixture is not dataset evidence.", "source-snapshot", "manual_import"),
+			requirement("hopv15_checksum_manifest", "checksum", "Raw file, normalized records, license, attribution, data dictionary, and validation reports must have byte counts and SHA-256 entries in the snapshot manifest.", "source-snapshot", "source-closure"),
+			requirement("hopv15_parser_and_unit_reports", "parser_boundary", "The block parser, accepted fields, and HOPV15 energy/device units must be recorded in manifest-listed reports.", "source-closure", "provider_response"),
+			requirement("hopv15_identity_and_lineage", "record_content", "Every normalized HOPV15 fact must retain InChIKey, source DOI, and raw-record lineage; missing identifiers are review/blocking state.", "source-closure", "review_gate"),
+			requirement("hopv15_license_and_citation", "license", "Dataset license and citation evidence must be manifest-listed before facts are admitted.", "source-closure", "artifact_policy"),
+			requirement("hopv15_source_snapshot_only_authorization", "authorization", "HOPV15 import writes only a local source snapshot and must not write provider cache, SQLite, scoring, review promotion, or experiments.", "source-closure", "operator_task_execution"),
+		}
+		report.Notes = []string{
+			"The versioned root manifest and records.json remain contract fixtures; full HOPV15 output stays in ignored snapshots/.",
+			"HOPV15 photovoltaic metrics are OPV evidence and are not direct PSC HTL ranking inputs.",
+		}
+	case opvDbProvider:
+		report.Requirements = []ClosureRequirement{
+			requirement("opv_db_local_raw_snapshot", "operator_input", "A local OPV-DB release archive must be imported into an immutable data/lib/opv_db/snapshots directory; the root fixture is not dataset evidence.", "source-snapshot", "manual_import"),
+			requirement("opv_db_checksum_manifest", "checksum", "Raw archive, normalized records, license, attribution, data dictionary, and validation reports must have byte counts and SHA-256 entries in the snapshot manifest.", "source-snapshot", "source-closure"),
+			requirement("opv_db_parser_and_unit_reports", "parser_boundary", "The device/material join, PCE consistency checks, and Voc/Jsc/FF/PCE units must be recorded in manifest-listed reports.", "source-closure", "provider_response"),
+			requirement("opv_db_identity_review_routing", "review_gate", "Missing stable donor or acceptor identity must stay as source lineage with review blockers; names and SMILES must not be guessed into canonical identities.", "source-closure", "review_gate"),
+			requirement("opv_db_license_and_citation", "license", "OPV-DB license, release citation, and third-party attribution must be manifest-listed before facts are admitted.", "source-closure", "artifact_policy"),
+			requirement("opv_db_psc_scoring_guardrail", "review_gate", "OPV device metrics must remain excluded from direct perovskite HTL scoring.", "source-closure", "scoring_gate"),
+			requirement("opv_db_source_snapshot_only_authorization", "authorization", "OPV-DB import writes only a local source snapshot and must not write provider cache, SQLite, scoring, review promotion, or experiments.", "source-closure", "operator_task_execution"),
+		}
+		report.Notes = []string{
+			"The versioned root manifest and records.json remain contract fixtures; full OPV-DB output stays in ignored snapshots/.",
+			"Record-level identity ambiguity is preserved as review metadata, not silently resolved by a chemistry dependency or external service.",
 		}
 	case materialsCloudProvider:
 		report.Requirements = []ClosureRequirement{
@@ -270,6 +320,10 @@ func evaluateClosureReadiness(dir string, manifest Manifest, records []map[strin
 	}
 
 	switch manifest.SourceID {
+	case hopv15Provider:
+		evaluateHopv15Closure(dir, manifest, records, evidence, add)
+	case opvDbProvider:
+		evaluateOpvDbClosure(dir, manifest, records, evidence, add)
 	case pubchemqcProvider:
 		evaluatePubChemQCClosure(dir, manifest, records, evidence, add)
 	case materialsCloudProvider:
@@ -284,6 +338,251 @@ func evaluateClosureReadiness(dir string, manifest Manifest, records []map[strin
 		report.ClosureGateStatus = "pass"
 	}
 	return report
+}
+
+type localSourceParserReport struct {
+	SchemaVersion         string            `json:"schema_version"`
+	SourceID              string            `json:"source_id"`
+	RawRecordCount        int               `json:"raw_record_count"`
+	NormalizedRecordCount int               `json:"normalized_record_count"`
+	BlockedRecordCount    int               `json:"blocked_record_count"`
+	AcceptedFields        []string          `json:"accepted_fields"`
+	BlockedRecords        []json.RawMessage `json:"blocked_records"`
+	SourceGlobalBlockers  []string          `json:"source_global_blockers"`
+}
+
+type localSourceUnitValidationReport struct {
+	SchemaVersion string `json:"schema_version"`
+	SourceID      string `json:"source_id"`
+	Status        string `json:"status"`
+	Checks        []struct {
+		Field  string `json:"field"`
+		Unit   string `json:"unit"`
+		Status string `json:"status"`
+	} `json:"checks"`
+}
+
+type localSourceLicenseReview struct {
+	SchemaVersion    string `json:"schema_version"`
+	SourceID         string `json:"source_id"`
+	Status           string `json:"status"`
+	License          string `json:"license"`
+	RequiredCitation string `json:"required_citation"`
+}
+
+type localSourceValidationSummary struct {
+	SchemaVersion         string            `json:"schema_version"`
+	SourceID              string            `json:"source_id"`
+	RawRecordCount        int               `json:"raw_record_count"`
+	NormalizedRecordCount int               `json:"normalized_record_count"`
+	BlockedRecordCount    int               `json:"blocked_record_count"`
+	ReviewBlockers        []json.RawMessage `json:"review_blockers"`
+	SourceGlobalBlockers  []string          `json:"source_global_blockers"`
+	Status                string            `json:"status"`
+}
+
+func evaluateHopv15Closure(
+	dir string,
+	manifest Manifest,
+	records []map[string]any,
+	evidence *ClosureEvidence,
+	add func(string),
+) {
+	evaluateLocalSnapshotContract(dir, manifest, records, evidence, "spirosearch-hopv15-local-importer", hopv15NormalizerVersion, "hopv15", hopv15ClosureAllowedFields, add)
+	for _, record := range records {
+		if err := validateHopv15Record(record); err != nil {
+			add("hopv15_record_validation_failed")
+		}
+		if stringField(record, "identity_resolution_status") != "resolved" {
+			add("hopv15_identity_resolution_missing")
+		}
+		if stringField(record, "source_doi") == "" || stringField(record, "inchi_key") == "" {
+			add("hopv15_identity_resolution_missing")
+		}
+	}
+}
+
+func evaluateOpvDbClosure(
+	dir string,
+	manifest Manifest,
+	records []map[string]any,
+	evidence *ClosureEvidence,
+	add func(string),
+) {
+	evaluateLocalSnapshotContract(dir, manifest, records, evidence, "spirosearch-opv-db-local-importer", opvDbNormalizerVersion, "opv_db", opvDbClosureAllowedFields, add)
+	for _, record := range records {
+		if err := validateOpvDbRecord(record); err != nil {
+			add("opv_db_record_validation_failed")
+		}
+		switch stringField(record, "identity_resolution_status") {
+		case "resolved":
+			if stringField(record, "donor_inchi_key") == "" || stringField(record, "acceptor_inchi_key") == "" {
+				add("opv_db_identity_resolution_invalid")
+			}
+		case "review_required":
+			if !boolField(record, "review_required", false) || !hasReviewReasons(record) {
+				add("opv_db_identity_review_missing")
+			}
+		default:
+			add("opv_db_identity_review_missing")
+		}
+	}
+}
+
+func evaluateLocalSnapshotContract(
+	dir string,
+	manifest Manifest,
+	records []map[string]any,
+	evidence *ClosureEvidence,
+	expectedImporter string,
+	expectedNormalizer string,
+	reasonPrefix string,
+	allowedFields map[string]bool,
+	add func(string),
+) {
+	if manifest.Importer.Name != expectedImporter ||
+		manifest.Importer.Version != localSourceImporterVersion ||
+		manifest.Importer.NormalizerVersion != expectedNormalizer {
+		add(reasonPrefix + "_importer_contract_invalid")
+	}
+	if manifestFileRoles(manifest)["data_dictionary"] == 0 {
+		add(reasonPrefix + "_data_dictionary_missing")
+	}
+	if evidence == nil ||
+		strings.TrimSpace(evidence.RecordParserReport) == "" ||
+		strings.TrimSpace(evidence.UnitValidationReport) == "" ||
+		strings.TrimSpace(evidence.RecordLicenseReview) != "record_specific_complete" {
+		add(reasonPrefix + "_closure_evidence_incomplete")
+		return
+	}
+	if strings.TrimSpace(dir) == "" {
+		return
+	}
+	if err := validateLocalSourceReportBodies(dir, manifest, records, evidence, reasonPrefix, allowedFields); err != nil {
+		add(err.Error())
+	}
+}
+
+func validateLocalSourceReportBodies(
+	dir string,
+	manifest Manifest,
+	records []map[string]any,
+	evidence *ClosureEvidence,
+	reasonPrefix string,
+	allowedFields map[string]bool,
+) error {
+	var parserReport localSourceParserReport
+	if err := loadLocalSourceReport(dir, manifest, evidence.RecordParserReport, &parserReport); err != nil {
+		return errors.New(reasonPrefix + "_record_parser_report_invalid")
+	}
+	for _, field := range parserReport.AcceptedFields {
+		if !allowedFields[field] {
+			return errors.New(reasonPrefix + "_unknown_scientific_field")
+		}
+	}
+	for _, record := range records {
+		for field := range record {
+			if !allowedFields[field] {
+				return errors.New(reasonPrefix + "_unknown_scientific_field")
+			}
+		}
+	}
+	if parserReport.SchemaVersion != "v36.local_source_parser_report.v1" ||
+		parserReport.SourceID != manifest.SourceID ||
+		parserReport.RawRecordCount < 0 ||
+		parserReport.NormalizedRecordCount != len(records) ||
+		parserReport.BlockedRecordCount < 0 ||
+		parserReport.RawRecordCount != parserReport.NormalizedRecordCount+parserReport.BlockedRecordCount ||
+		len(parserReport.BlockedRecords) != parserReport.BlockedRecordCount ||
+		len(parserReport.AcceptedFields) == 0 ||
+		len(parserReport.SourceGlobalBlockers) != 0 {
+		return errors.New(reasonPrefix + "_record_parser_report_invalid")
+	}
+
+	var unitReport localSourceUnitValidationReport
+	if err := loadLocalSourceReport(dir, manifest, evidence.UnitValidationReport, &unitReport); err != nil {
+		return errors.New(reasonPrefix + "_unit_validation_report_invalid")
+	}
+	if unitReport.SchemaVersion != "v36.local_source_unit_validation.v1" ||
+		unitReport.SourceID != manifest.SourceID ||
+		unitReport.Status != "pass" || len(unitReport.Checks) == 0 {
+		return errors.New(reasonPrefix + "_unit_validation_report_invalid")
+	}
+	for _, check := range unitReport.Checks {
+		if strings.TrimSpace(check.Field) == "" || strings.TrimSpace(check.Unit) == "" || check.Status != "pass" {
+			return errors.New(reasonPrefix + "_unit_validation_report_invalid")
+		}
+	}
+
+	var licenseReview localSourceLicenseReview
+	if err := loadLocalSourceReport(dir, manifest, "record-license-review.json", &licenseReview); err != nil {
+		return errors.New(reasonPrefix + "_record_license_review_invalid")
+	}
+	if licenseReview.SchemaVersion != "v36.local_source_license_review.v1" ||
+		licenseReview.SourceID != manifest.SourceID ||
+		licenseReview.Status != "complete" ||
+		strings.TrimSpace(licenseReview.License) == "" ||
+		strings.TrimSpace(licenseReview.RequiredCitation) == "" {
+		return errors.New(reasonPrefix + "_record_license_review_invalid")
+	}
+
+	var summary localSourceValidationSummary
+	if err := loadLocalSourceReport(dir, manifest, "validation-summary.json", &summary); err != nil {
+		return errors.New(reasonPrefix + "_validation_summary_invalid")
+	}
+	if summary.SchemaVersion != "v36.local_source_validation_summary.v1" ||
+		summary.SourceID != manifest.SourceID ||
+		summary.Status != "pass" ||
+		summary.RawRecordCount < 0 ||
+		summary.NormalizedRecordCount != len(records) ||
+		summary.BlockedRecordCount < 0 ||
+		summary.RawRecordCount != summary.NormalizedRecordCount+summary.BlockedRecordCount ||
+		len(summary.ReviewBlockers) != summary.BlockedRecordCount ||
+		len(summary.SourceGlobalBlockers) != 0 {
+		return errors.New(reasonPrefix + "_validation_summary_invalid")
+	}
+	return nil
+}
+
+func loadLocalSourceReport(dir string, manifest Manifest, relativePath string, target any) error {
+	if strings.TrimSpace(relativePath) == "" || !manifestFilePathListed(manifest, relativePath) {
+		return errors.New("report path is missing from manifest")
+	}
+	path, err := JoinSafe(dir, relativePath)
+	if err != nil {
+		return err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return errors.New("report contains multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func hasReviewReasons(record map[string]any) bool {
+	value, ok := record["review_reasons"]
+	if !ok || value == nil {
+		return false
+	}
+	if values, ok := value.([]any); ok {
+		return len(values) > 0
+	}
+	if values, ok := value.([]string); ok {
+		return len(values) > 0
+	}
+	return false
 }
 
 type nomadExecutionValidationSummary struct {

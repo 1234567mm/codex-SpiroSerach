@@ -16,6 +16,11 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from spirosearch.local_backend import LocalBackendDatabase
+from spirosearch.local_source_import import (
+    SnapshotImportError,
+    import_hopv15_snapshot,
+    import_opv_db_snapshot,
+)
 from spirosearch.local_config import LocalConfigStore, build_sanitized_source_config_status
 from spirosearch.nomad_sync import NomadHtlSyncJob, NomadSyncConfig
 from spirosearch.source_registry import load_source_registry
@@ -664,13 +669,59 @@ class HtlWorkbenchCommandPlane:
                 ["provider_sync_jobs"],
                 [_effect(action_type, "provider_sync_jobs", {"job_id": job_id, "status": status})],
             )
-        snapshot_import_sources = {
-            "import_hopv15_snapshot": "hopv15",
-            "import_opv_db_snapshot": "opv_db",
-            "import_pubchemqc_snapshot": "pubchemqc",
+        local_snapshot_import_sources = {
+            "import_hopv15_snapshot": ("hopv15", import_hopv15_snapshot),
+            "import_opv_db_snapshot": ("opv_db", import_opv_db_snapshot),
         }
-        if action_type in snapshot_import_sources:
-            source_id = snapshot_import_sources[action_type]
+        if action_type in local_snapshot_import_sources:
+            source_id, importer = local_snapshot_import_sources[action_type]
+            source_path = str(payload.get("source_path", "")).strip()
+            retrieved_at = str(payload.get("retrieved_at", "")).strip()
+            data_library_root = str(payload.get("data_library_root", "data/lib")).strip()
+            if not source_path or not retrieved_at or not data_library_root:
+                return _rejected(
+                    action_type,
+                    idempotency_key,
+                    actor_id,
+                    "invalid_payload",
+                    "source_path, retrieved_at, and data_library_root are required for an offline local source import.",
+                )
+            try:
+                result = importer(
+                    source_path,
+                    f"{data_library_root}/{source_id}/snapshots",
+                    retrieved_at=retrieved_at,
+                )
+            except (OSError, SnapshotImportError, ValueError) as exc:
+                return _rejected(
+                    action_type,
+                    idempotency_key,
+                    actor_id,
+                    "invalid_local_source",
+                    str(exc),
+                )
+            detail = {
+                "source_id": source_id,
+                "manifest_path": str(result.manifest_path),
+                "status": "source_snapshot_written",
+                "quarantine_status": result.quarantine_status,
+                "normalized_record_count": result.normalized_record_count,
+                "blocked_record_count": result.blocked_record_count,
+                "reused": result.reused,
+                "write_authorization_scope": "source_snapshot_only",
+            }
+            return _command_result(
+                action_type,
+                "accepted",
+                idempotency_key,
+                actor_id,
+                "source_snapshot_written",
+                f"{source_id} local source snapshot written without network access.",
+                ["source_snapshot"],
+                [_effect(action_type, "source_snapshot", detail)],
+            )
+        if action_type == "import_pubchemqc_snapshot":
+            source_id = "pubchemqc"
             try:
                 manifest_path = _validate_source_manifest_path(
                     source_id,

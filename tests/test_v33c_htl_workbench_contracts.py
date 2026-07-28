@@ -6,6 +6,8 @@ import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from spirosearch.htl_workbench import (
     HTL_WORKFLOW_TARGET_FIELDS,
@@ -242,44 +244,88 @@ class WorkbenchCommandPlaneTests(unittest.TestCase):
         actions = {
             "import_hopv15_snapshot": "hopv15",
             "import_opv_db_snapshot": "opv_db",
-            "import_pubchemqc_snapshot": "pubchemqc",
         }
         with TemporaryDirectory() as td:
             db = _make_db(td)
             plane = HtlWorkbenchCommandPlane(db)
-            for index, (action, source_id) in enumerate(actions.items(), start=1):
-                result = plane.execute(
-                    action,
-                    {"manifest_path": f"data/lib/{source_id}/source-manifest.json"},
-                    idempotency_key=f"snapshot-{index}",
-                )
+            results = {
+                "hopv15": SimpleNamespace(
+                    source_id="hopv15",
+                    manifest_path=Path("data/lib/hopv15/snapshots/hopv15-fixture/source-manifest.json"),
+                    normalized_record_count=1,
+                    blocked_record_count=0,
+                    quarantine_status="ready",
+                    reused=False,
+                ),
+                "opv_db": SimpleNamespace(
+                    source_id="opv_db",
+                    manifest_path=Path("data/lib/opv_db/snapshots/opv_db-fixture/source-manifest.json"),
+                    normalized_record_count=1,
+                    blocked_record_count=0,
+                    quarantine_status="ready",
+                    reused=False,
+                ),
+            }
+            with patch("spirosearch.htl_workbench.import_hopv15_snapshot", return_value=results["hopv15"]) as hopv_import, patch(
+                "spirosearch.htl_workbench.import_opv_db_snapshot", return_value=results["opv_db"]
+            ) as opv_import:
+                for index, (action, source_id) in enumerate(actions.items(), start=1):
+                    result = plane.execute(
+                        action,
+                        {
+                            "source_path": f"data/lib/{source_id}/raw-source.bin",
+                            "data_library_root": "data/lib",
+                            "retrieved_at": "2026-07-27T00:00:00+00:00",
+                        },
+                        idempotency_key=f"snapshot-{index}",
+                    )
 
-                self.assertEqual(result["status"], "accepted")
-                self.assertEqual(result["audit"]["declared_effects"], ["source_import_tasks"])
-                self.assertEqual(result["output_artifacts"][0]["detail"]["source_id"], source_id)
-                self.assertEqual(result["output_artifacts"][0]["detail"]["status"], "queued")
+                    self.assertEqual(result["status"], "accepted")
+                    self.assertEqual(result["audit"]["declared_effects"], ["source_snapshot"])
+                    detail = result["output_artifacts"][0]["detail"]
+                    self.assertEqual(detail["source_id"], source_id)
+                    self.assertEqual(detail["status"], "source_snapshot_written")
+                    self.assertTrue(detail["manifest_path"].endswith("source-manifest.json"))
+                    self.assertEqual(detail["write_authorization_scope"], "source_snapshot_only")
 
-    def test_snapshot_import_rejects_unsafe_manifest_paths_before_queueing(self) -> None:
+            hopv_import.assert_called_once_with(
+                "data/lib/hopv15/raw-source.bin",
+                "data/lib/hopv15/snapshots",
+                retrieved_at="2026-07-27T00:00:00+00:00",
+            )
+            opv_import.assert_called_once_with(
+                "data/lib/opv_db/raw-source.bin",
+                "data/lib/opv_db/snapshots",
+                retrieved_at="2026-07-27T00:00:00+00:00",
+            )
+
+    def test_pubchemqc_snapshot_import_remains_a_manifest_queued_action(self) -> None:
+        with TemporaryDirectory() as td:
+            db = _make_db(td)
+            result = HtlWorkbenchCommandPlane(db).execute(
+                "import_pubchemqc_snapshot",
+                {"manifest_path": "data/lib/pubchemqc/source-manifest.json"},
+                idempotency_key="pubchemqc-snapshot",
+            )
+
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["audit"]["declared_effects"], ["source_import_tasks"])
+        detail = result["output_artifacts"][0]["detail"]
+        self.assertEqual(detail["source_id"], "pubchemqc")
+        self.assertEqual(detail["status"], "queued")
+
+    def test_snapshot_import_requires_explicit_local_source_and_retrieved_at(self) -> None:
         with TemporaryDirectory() as td:
             db = _make_db(td)
             plane = HtlWorkbenchCommandPlane(db)
-            unsafe_paths = (
-                "../source-manifest.json",
-                "data/lib/opv_db/source-manifest.json",
-                "data/lib/hopv15/../source-manifest.json",
-                "file://data/lib/hopv15/source-manifest.json",
-                "C:/data/lib/hopv15/source-manifest.json",
+            result = plane.execute(
+                "import_hopv15_snapshot",
+                {"source_path": "data/lib/hopv15/HOPV_15_revised_2.data"},
+                idempotency_key="snapshot-missing-retrieved-at",
             )
 
-            for index, manifest_path in enumerate(unsafe_paths, start=1):
-                with self.subTest(manifest_path=manifest_path):
-                    result = plane.execute(
-                        "import_hopv15_snapshot",
-                        {"manifest_path": manifest_path},
-                        idempotency_key=f"unsafe-snapshot-{index}",
-                    )
-                    self.assertEqual(result["status"], "rejected")
-                    self.assertEqual(result["reason_code"], "unsafe_manifest_path")
+            self.assertEqual(result["status"], "rejected")
+            self.assertEqual(result["reason_code"], "invalid_payload")
 
     def test_workbench_commands_reject_unauthorized_role(self) -> None:
         with TemporaryDirectory() as td:

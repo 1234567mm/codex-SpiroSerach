@@ -139,6 +139,12 @@ class ProviderSchemaTests(unittest.TestCase):
             {"name", "version", "normalizer_version"}.issubset(set(importer["required"]))
         )
 
+    def test_source_closure_requirements_schema_includes_local_import_sources(self):
+        schema = self._schema("source-closure-requirements.schema.json")
+
+        source_ids = set(schema["properties"]["source_id"]["enum"])
+        self.assertTrue({"hopv15", "opv_db"}.issubset(source_ids))
+
     def test_source_snapshot_manifest_schema_rejects_unsafe_file_paths(self):
         schema = self._schema("source-snapshot-manifest.schema.json")
         base_manifest = {

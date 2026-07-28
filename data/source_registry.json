@@ -383,6 +383,10 @@
       "record_id",
       "donor_identity",
       "acceptor_identity",
+      "donor_source_identifier",
+      "acceptor_source_identifier",
+      "donor_smiles",
+      "acceptor_smiles",
       "donor_inchi_key",
       "acceptor_inchi_key",
       "pce_percent",
@@ -390,11 +394,16 @@
       "jsc_ma_cm2",
       "fill_factor",
       "source_doi",
+      "required_citation",
       "validation_flag",
       "license",
       "computed",
       "benchmark_split",
-      "quality_annotation"
+      "quality_annotation",
+      "lineage",
+      "review_required",
+      "review_reasons",
+      "identity_resolution_status"
     ],
     "review_triggers": [
       "missing_source_doi",
@@ -421,7 +430,8 @@
     "data_library_path": "data/lib/opv_db",
     "v35_slice": "p0_local_snapshot",
     "acquisition_mode": "local_snapshot",
-    "distribution_policy": "derived_facts_with_source_pointers"
+    "distribution_policy": "derived_facts_with_source_pointers",
+    "probe_notes": "The tracked root manifest is fixture-only. The offline importer writes full OPV-DB snapshots to ignored snapshots/ and requires an explicit source-snapshot plus source-closure validation before any separate promotion decision."
   },
   {
     "schema_version": "v35.data_source_profile.v1",
@@ -451,11 +461,17 @@
       "pce_percent",
       "voc_v",
       "jsc_ma_cm2",
+      "fill_factor",
       "source_doi",
+      "required_citation",
       "license",
       "computed",
       "method",
-      "basis_set"
+      "basis_set",
+      "lineage",
+      "review_required",
+      "review_reasons",
+      "identity_resolution_status"
     ],
     "review_triggers": [
       "missing_source_doi",
@@ -481,7 +497,8 @@
     "data_library_path": "data/lib/hopv15",
     "v35_slice": "p0_local_snapshot",
     "acquisition_mode": "local_snapshot",
-    "distribution_policy": "derived_facts_with_source_pointers"
+    "distribution_policy": "derived_facts_with_source_pointers",
+    "probe_notes": "The tracked root manifest is fixture-only. The offline importer writes full HOPV15 snapshots to ignored snapshots/ and requires an explicit source-snapshot plus source-closure validation before any separate promotion decision."
   },
   {
     "schema_version": "v35.data_source_profile.v1",

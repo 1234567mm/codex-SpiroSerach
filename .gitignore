@@ -24,6 +24,7 @@ data/lib/*/downloads/
 data/lib/operator_tasks/*.jsonl
 data/lib/operator_tasks/**/*.jsonl
 data/lib/**/*.zip
+data/lib/**/*.data
 data/lib/**/*.tar
 data/lib/**/*.tar.gz
 data/lib/**/*.tgz

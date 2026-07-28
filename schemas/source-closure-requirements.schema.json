@@ -13,7 +13,15 @@
   ],
   "properties": {
     "schema_version": { "const": "v35.source_closure_requirements.v1" },
-    "source_id": { "enum": ["pubchemqc", "materials_cloud", "nomad_perla_psc"] },
+    "source_id": {
+      "enum": [
+        "hopv15",
+        "opv_db",
+        "pubchemqc",
+        "materials_cloud",
+        "nomad_perla_psc"
+      ]
+    },
     "status": { "enum": ["inputs_required"] },
     "requirements": {
       "type": "array",

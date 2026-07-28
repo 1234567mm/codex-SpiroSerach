@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from spirosearch.local_source_import import normalized_records_path
 from spirosearch.providers.base import ProviderResponse
 
 
@@ -39,12 +40,32 @@ class Hopv15LocalProvider:
             "pce_percent",
             "voc_v",
             "jsc_ma_cm2",
+            "fill_factor",
             "source_doi",
+            "required_citation",
             "license",
             "computed",
             "method",
             "basis_set",
+            "review_required",
+            "review_reasons",
+            "identity_resolution_status",
+            "lineage",
         ]
+
+    @classmethod
+    def from_snapshot_manifest(cls, manifest_path: str | Path) -> "Hopv15LocalProvider":
+        """Create a provider only after the selected local snapshot validates."""
+
+        manifest_path = Path(manifest_path)
+        records_path = normalized_records_path(manifest_path, expected_source_id=cls.provider_name)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return cls(
+            data_path=records_path,
+            retrieved_at=str(manifest["retrieved_at"]),
+            license_hint=str(manifest["license_hint"]),
+            source_url=str(manifest["source_url"]),
+        )
 
     def load_records(self) -> list[dict[str, Any]]:
         payload = json.loads(self.data_path.read_text(encoding="utf-8"))
@@ -96,13 +117,22 @@ class Hopv15LocalProvider:
             "smiles": str(record.get("smiles", "")),
             "inchi_key": str(record.get("inchi_key", "")),
             "source_doi": str(record.get("source_doi", "")),
+            "required_citation": str(record.get("required_citation", "")),
             "license": str(record.get("license", self.license_hint)),
             "computed": bool(record.get("computed", True)),
         }
         for key in ("inchi", "conformer_id", "method", "basis_set"):
             if record.get(key):
                 normalized[key] = str(record[key])
-        for key in ("homo_ev", "lumo_ev", "band_gap_ev", "pce_percent", "voc_v", "jsc_ma_cm2"):
+        for key in ("homo_ev", "lumo_ev", "band_gap_ev", "pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor"):
             if key in record and record[key] is not None:
                 normalized[key] = float(record[key])
+        if "review_required" in record:
+            normalized["review_required"] = bool(record["review_required"])
+        if isinstance(record.get("review_reasons"), list):
+            normalized["review_reasons"] = [str(item) for item in record["review_reasons"]]
+        if record.get("identity_resolution_status"):
+            normalized["identity_resolution_status"] = str(record["identity_resolution_status"])
+        if isinstance(record.get("lineage"), Mapping):
+            normalized["lineage"] = dict(record["lineage"])
         return normalized

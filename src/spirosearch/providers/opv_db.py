@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from spirosearch.local_source_import import normalized_records_path
 from spirosearch.providers.base import ProviderResponse
 
 
@@ -34,6 +35,10 @@ class OpvDbLocalProvider:
             "record_id",
             "donor_identity",
             "acceptor_identity",
+            "donor_source_identifier",
+            "acceptor_source_identifier",
+            "donor_smiles",
+            "acceptor_smiles",
             "donor_inchi_key",
             "acceptor_inchi_key",
             "pce_percent",
@@ -41,12 +46,31 @@ class OpvDbLocalProvider:
             "jsc_ma_cm2",
             "fill_factor",
             "source_doi",
+            "required_citation",
             "validation_flag",
             "license",
             "computed",
             "benchmark_split",
             "quality_annotation",
+            "review_required",
+            "review_reasons",
+            "identity_resolution_status",
+            "lineage",
         ]
+
+    @classmethod
+    def from_snapshot_manifest(cls, manifest_path: str | Path) -> "OpvDbLocalProvider":
+        """Create a provider only after the selected local snapshot validates."""
+
+        manifest_path = Path(manifest_path)
+        records_path = normalized_records_path(manifest_path, expected_source_id=cls.provider_name)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return cls(
+            data_path=records_path,
+            retrieved_at=str(manifest["retrieved_at"]),
+            license_hint=str(manifest["license_hint"]),
+            source_url=str(manifest["source_url"]),
+        )
 
     def load_records(self) -> list[dict[str, Any]]:
         payload = json.loads(self.data_path.read_text(encoding="utf-8"))
@@ -97,14 +121,32 @@ class OpvDbLocalProvider:
             "donor_identity": str(record.get("donor_identity", "")),
             "acceptor_identity": str(record.get("acceptor_identity", "")),
             "source_doi": str(record.get("source_doi", "")),
+            "required_citation": str(record.get("required_citation", "")),
             "validation_flag": str(record.get("validation_flag", "unvalidated")),
             "license": str(record.get("license", self.license_hint)),
             "computed": False,
         }
-        for key in ("donor_inchi_key", "acceptor_inchi_key", "benchmark_split", "quality_annotation"):
+        for key in (
+            "donor_smiles",
+            "acceptor_smiles",
+            "donor_inchi_key",
+            "acceptor_inchi_key",
+            "donor_source_identifier",
+            "acceptor_source_identifier",
+            "benchmark_split",
+            "quality_annotation",
+        ):
             if record.get(key):
                 normalized[key] = str(record[key])
         for key in ("pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor"):
             if key in record and record[key] is not None:
                 normalized[key] = float(record[key])
+        if "review_required" in record:
+            normalized["review_required"] = bool(record["review_required"])
+        if isinstance(record.get("review_reasons"), list):
+            normalized["review_reasons"] = [str(item) for item in record["review_reasons"]]
+        if record.get("identity_resolution_status"):
+            normalized["identity_resolution_status"] = str(record["identity_resolution_status"])
+        if isinstance(record.get("lineage"), Mapping):
+            normalized["lineage"] = dict(record["lineage"])
         return normalized

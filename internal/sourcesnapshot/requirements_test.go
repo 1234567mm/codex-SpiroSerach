@@ -76,6 +76,54 @@ func TestClosureRequirementsReportForNomadPerlaPSC(t *testing.T) {
 	}
 }
 
+func TestClosureRequirementsReportForLocalImportSources(t *testing.T) {
+	tests := []struct {
+		name     string
+		sourceID string
+		codes    []string
+	}{
+		{
+			name:     "HOPV15",
+			sourceID: hopv15Provider,
+			codes: []string{
+				"hopv15_local_raw_snapshot",
+				"hopv15_checksum_manifest",
+				"hopv15_parser_and_unit_reports",
+				"hopv15_identity_and_lineage",
+				"hopv15_license_and_citation",
+				"hopv15_source_snapshot_only_authorization",
+			},
+		},
+		{
+			name:     "OPV-DB",
+			sourceID: opvDbProvider,
+			codes: []string{
+				"opv_db_local_raw_snapshot",
+				"opv_db_checksum_manifest",
+				"opv_db_parser_and_unit_reports",
+				"opv_db_identity_review_routing",
+				"opv_db_license_and_citation",
+				"opv_db_psc_scoring_guardrail",
+				"opv_db_source_snapshot_only_authorization",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			report, err := BuildClosureRequirementsReport(tc.sourceID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, code := range tc.codes {
+				if !hasRequirementCode(report, code) {
+					t.Fatalf("missing %s requirement %q in %#v", tc.name, code, report.Requirements)
+				}
+			}
+		})
+	}
+}
+
 func TestClosureRequirementsRejectsUnknownSource(t *testing.T) {
 	if _, err := BuildClosureRequirementsReport("unknown"); err == nil {
 		t.Fatalf("expected unknown source rejection")

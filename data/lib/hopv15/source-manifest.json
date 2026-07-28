@@ -22,5 +22,5 @@
   },
   "normalized_record_count": 1,
   "quarantine_status": "fixture_only",
-  "notes": "Minimal local fixture for offline provider tests; not the full HOPV15 dump."
+  "notes": "Minimal local fixture for offline provider tests, not the full HOPV15 dump; full local imports are written under ignored snapshots/."
 }

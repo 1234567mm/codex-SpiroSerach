@@ -43,6 +43,7 @@ var (
 		"pce_percent",
 		"voc_v",
 		"jsc_ma_cm2",
+		"fill_factor",
 		"homo_ev",
 		"lumo_ev",
 		"band_gap_ev",
@@ -50,11 +51,20 @@ var (
 		"basis_set",
 		"computed",
 		"license",
+		"required_citation",
+		"lineage",
+		"review_required",
+		"review_reasons",
+		"identity_resolution_status",
 	)
 	opvDbAllowedFields = setOf(
 		"record_id",
 		"donor_identity",
 		"acceptor_identity",
+		"donor_source_identifier",
+		"acceptor_source_identifier",
+		"donor_smiles",
+		"acceptor_smiles",
 		"donor_inchi_key",
 		"acceptor_inchi_key",
 		"pce_percent",
@@ -62,11 +72,16 @@ var (
 		"jsc_ma_cm2",
 		"fill_factor",
 		"source_doi",
+		"required_citation",
 		"validation_flag",
 		"license",
 		"computed",
 		"benchmark_split",
 		"quality_annotation",
+		"lineage",
+		"review_required",
+		"review_reasons",
+		"identity_resolution_status",
 	)
 	pubchemqcAllowedFields = setOf(
 		"pubchem_cid",
@@ -530,15 +545,15 @@ func validateHopv15Record(record map[string]any) error {
 }
 
 func validateOpvDbRecord(record map[string]any) error {
-	for _, field := range []string{
-		"source_doi",
-		"license",
-		"record_id",
-		"donor_identity",
-		"acceptor_identity",
-	} {
+	for _, field := range []string{"source_doi", "license", "record_id"} {
 		if stringField(record, field) == "" {
 			return fmt.Errorf("%s is required", field)
+		}
+	}
+	if stringField(record, "donor_identity") == "" || stringField(record, "acceptor_identity") == "" {
+		if stringField(record, "donor_smiles") == "" || stringField(record, "acceptor_smiles") == "" ||
+			!boolField(record, "review_required", false) || !hasReviewReasons(record) {
+			return errors.New("ambiguous OPV component identity requires SMILES and review blockers")
 		}
 	}
 	for _, field := range []string{"pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor"} {
@@ -697,17 +712,19 @@ func validateMaterialsCloudScientificClosureEvidence(manifest Manifest) error {
 
 func normalizeHopv15Record(record map[string]any) map[string]any {
 	normalized := map[string]any{
-		"molecule_id": stringField(record, "molecule_id"),
-		"smiles":      stringField(record, "smiles"),
-		"inchi_key":   stringField(record, "inchi_key"),
-		"source_doi":  stringField(record, "source_doi"),
-		"license":     stringField(record, "license"),
-		"computed":    boolField(record, "computed", true),
+		"molecule_id":       stringField(record, "molecule_id"),
+		"smiles":            stringField(record, "smiles"),
+		"inchi_key":         stringField(record, "inchi_key"),
+		"source_doi":        stringField(record, "source_doi"),
+		"required_citation": stringField(record, "required_citation"),
+		"license":           stringField(record, "license"),
+		"computed":          boolField(record, "computed", true),
 	}
 	putOptionalString(normalized, record, "inchi")
 	putOptionalString(normalized, record, "conformer_id")
 	putOptionalString(normalized, record, "method")
 	putOptionalString(normalized, record, "basis_set")
+	putOptionalReviewMetadata(normalized, record)
 	for _, field := range []string{
 		"homo_ev",
 		"lumo_ev",
@@ -727,14 +744,20 @@ func normalizeOpvDbRecord(record map[string]any) map[string]any {
 		"donor_identity":    stringField(record, "donor_identity"),
 		"acceptor_identity": stringField(record, "acceptor_identity"),
 		"source_doi":        stringField(record, "source_doi"),
+		"required_citation": stringField(record, "required_citation"),
 		"validation_flag":   defaultStringField(record, "validation_flag", "unvalidated"),
 		"license":           stringField(record, "license"),
 		"computed":          false,
 	}
 	putOptionalString(normalized, record, "donor_inchi_key")
 	putOptionalString(normalized, record, "acceptor_inchi_key")
+	putOptionalString(normalized, record, "donor_source_identifier")
+	putOptionalString(normalized, record, "acceptor_source_identifier")
+	putOptionalString(normalized, record, "donor_smiles")
+	putOptionalString(normalized, record, "acceptor_smiles")
 	putOptionalString(normalized, record, "benchmark_split")
 	putOptionalString(normalized, record, "quality_annotation")
+	putOptionalReviewMetadata(normalized, record)
 	for _, field := range []string{"pce_percent", "voc_v", "jsc_ma_cm2", "fill_factor"} {
 		putOptionalFloat(normalized, record, field)
 	}
@@ -917,4 +940,17 @@ func putOptionalFloat(target map[string]any, record map[string]any, field string
 			target[field] = value
 		}
 	}
+}
+
+func putOptionalReviewMetadata(target map[string]any, record map[string]any) {
+	if value, ok := record["lineage"]; ok && value != nil {
+		target["lineage"] = value
+	}
+	if _, ok := record["review_required"]; ok {
+		target["review_required"] = boolField(record, "review_required", false)
+	}
+	if value, ok := record["review_reasons"]; ok && value != nil {
+		target["review_reasons"] = value
+	}
+	putOptionalString(target, record, "identity_resolution_status")
 }
