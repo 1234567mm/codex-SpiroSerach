@@ -599,6 +599,12 @@ class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):
         restore_schema = (REPO_ROOT / "schemas" / "operator-task-restore.schema.json").read_text(
             encoding="utf-8",
         )
+        promotion_schema = (REPO_ROOT / "schemas" / "operator-task-promotion.schema.json").read_text(
+            encoding="utf-8",
+        )
+        go_closure = (REPO_ROOT / "internal" / "sourcesnapshot" / "closure.go").read_text(
+            encoding="utf-8",
+        )
         cli = (REPO_ROOT / "cmd" / "spiroctl" / "main.go").read_text(encoding="utf-8")
         nomad_admission = (REPO_ROOT / "internal" / "nomadperla" / "admission.go").read_text(
             encoding="utf-8",
@@ -612,16 +618,25 @@ class TestV35WorkflowTaskAdmissionContracts(unittest.TestCase):
         self.assertIn("v35.operator_task_execution.v1", execution_schema)
         self.assertIn("v35.operator_task_restore.v1", go_restore)
         self.assertIn("v35.operator_task_restore.v1", restore_schema)
+        self.assertIn("v36.operator_task_promotion.v1", promotion_schema)
+        self.assertIn("v36.operator_task_promotion.v1", go_closure)
         self.assertIn("workflow-task", cli)
         self.assertIn("admit", cli)
         self.assertIn("execute", cli)
         self.assertIn("restore", cli)
+        self.assertIn("promote", cli)
         self.assertIn("--authorize-live-provider-calls", cli)
         self.assertIn("source_snapshot_only", go_execution)
         self.assertIn('"provider_cache_written"', execution_schema)
         self.assertIn('"local_backend_written"', execution_schema)
         self.assertIn('"scoring_written"', execution_schema)
         self.assertIn('"experiment_written"', execution_schema)
+        self.assertIn('"provider_cache_written"', promotion_schema)
+        self.assertIn('"local_backend_written"', promotion_schema)
+        self.assertIn('"scoring_written"', promotion_schema)
+        self.assertIn('"experiment_written"', promotion_schema)
+        self.assertIn("readiness_only", promotion_schema)
+        self.assertIn("readiness_only", go_closure)
         self.assertIn("v35.nomad_admission_plan.v1", nomad_admission)
         self.assertIn("live_calls_authorized", schema)
         self.assertRegex(nomad_admission, r"LiveCallsAuthorized:\s+false")

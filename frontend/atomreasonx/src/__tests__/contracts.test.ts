@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import fixture from "../fixtures/atomreasonx-ui-fixture.json";
 import type {
   AtomReasonXCommandResult,
+  HtlWorkflowPreview,
   OperatorTaskExecutionReport,
   AtomReasonXWorkspaceState,
 } from "../contracts/types";
@@ -81,6 +82,7 @@ import {
   buildWorkflowCommandPayload,
   canSubmitWorkflowCommandAction,
   submitWorkflowCommandAction,
+  workflowTaskPromotionState,
 } from "../components/WorkflowView";
 
 const COMMAND_CONTROL_MODULES = import.meta.glob<string>("../components/{WorkflowView,SettingsModal}.tsx", {
@@ -750,6 +752,86 @@ describe("AtomReasonX contract fixtures", () => {
     expect(markup).toContain("operator-task-row operator-task-row--restored-snapshot");
     expect(markup).toContain("operator-task-row operator-task-row--review-blocked");
     expect(markup).toContain("operator-task-row operator-task-row--closure-blocked");
+    expect(markup).toContain("operator-task-promotion--promotion_blocked");
+    expect(markup).toContain("promotion blocked");
+    expect(markup).not.toContain("api_key");
+    expect(markup).not.toContain("readonly_token");
+    expect(markup).not.toContain("spiroctl.exe");
+  });
+
+  it("classifies workflow task promotion state from writer authorization fields", () => {
+    const baseTask = {
+      schema_version: "v35.operator_task.v1",
+      task_id: "task-start_nomad_sync-ff66",
+      action_type: "start_nomad_sync",
+      provider: "nomad_perla_psc",
+      provider_scope: "source",
+      status: "queued",
+      queue_scope: "operator_local",
+      declared_effects: ["provider_sync_jobs"],
+      writes_authorized: false,
+      execution_started: false,
+      created_at: null,
+      config: {
+        transport: "operator_task_queue",
+        runtime_writes: false,
+        config_source: "workflow_command_allowlist",
+      },
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const queuedTask = { ...baseTask };
+    const blockedTask = {
+      ...baseTask,
+      task_id: "task-start_nomad_sync-gg77",
+      admission_status: "admitted" as const,
+      admission_hash: "g".repeat(64),
+      ledger_path: DEFAULT_OPERATOR_TASK_LEDGER_PATH,
+      admission_source: "operator_task_ledger" as const,
+      execution_report: executionReportForTask({
+        task_id: "task-start_nomad_sync-gg77",
+        admission_hash: "g".repeat(64),
+      }),
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const cacheTask = {
+      ...blockedTask,
+      task_id: "task-start_nomad_sync-hh88",
+      admission_hash: "h".repeat(64),
+      execution_report: executionReportForTask({
+        task_id: "task-start_nomad_sync-hh88",
+        admission_hash: "h".repeat(64),
+      }, {
+        provider_cache_written: true,
+      }),
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+    const scoringTask = {
+      ...blockedTask,
+      task_id: "task-start_nomad_sync-ii99",
+      admission_hash: "i".repeat(64),
+      execution_report: executionReportForTask({
+        task_id: "task-start_nomad_sync-ii99",
+        admission_hash: "i".repeat(64),
+      }, {
+        provider_cache_written: true,
+        scoring_written: true,
+      }),
+    } satisfies AtomReasonXWorkspaceState["operator_tasks"][number];
+
+    expect(workflowTaskPromotionState(queuedTask)).toBeUndefined();
+    expect(workflowTaskPromotionState(blockedTask)).toBe("promotion_blocked");
+    expect(workflowTaskPromotionState(cacheTask)).toBe("promoted_to_cache");
+    expect(workflowTaskPromotionState(scoringTask)).toBe("promoted_to_scoring");
+
+    const markup = renderToStaticMarkup(React.createElement(WorkflowView, {
+      workflow: fixture.workflow as unknown as HtlWorkflowPreview,
+      commandActions: [],
+      operatorTasks: [blockedTask, cacheTask, scoringTask],
+      onWorkflowTaskExecuted: () => undefined,
+    }));
+    expect(markup).toContain("promotion blocked");
+    expect(markup).toContain("promoted to cache");
+    expect(markup).toContain("promoted to scoring");
+    expect(markup).toContain("operator-task-promotion--promotion_blocked");
+    expect(markup).toContain("operator-task-promotion--promoted_to_cache");
+    expect(markup).toContain("operator-task-promotion--promoted_to_scoring");
     expect(markup).not.toContain("api_key");
     expect(markup).not.toContain("readonly_token");
     expect(markup).not.toContain("spiroctl.exe");

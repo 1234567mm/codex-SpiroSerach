@@ -37,6 +37,33 @@ const WORKFLOW_TASK_HANDOFF_LABELS: Record<WorkflowTaskHandoffState, string> = {
   "closure-blocked": "closure blocked",
 };
 
+export type WorkflowTaskPromotionState =
+  | "promotion_blocked"
+  | "promoted_to_cache"
+  | "promoted_to_scoring";
+
+const WORKFLOW_TASK_PROMOTION_LABELS: Record<WorkflowTaskPromotionState, string> = {
+  promotion_blocked: "promotion blocked",
+  promoted_to_cache: "promoted to cache",
+  promoted_to_scoring: "promoted to scoring",
+};
+
+export const workflowTaskPromotionState = (
+  task: HtlOperatorTaskSummary,
+): WorkflowTaskPromotionState | undefined => {
+  const report = task.execution_report;
+  if (!report) {
+    return undefined;
+  }
+  if (report.scoring_written) {
+    return "promoted_to_scoring";
+  }
+  if (report.provider_cache_written) {
+    return "promoted_to_cache";
+  }
+  return "promotion_blocked";
+};
+
 export const workflowTaskHandoffState = (task: HtlOperatorTaskSummary): WorkflowTaskHandoffState => {
   const report = task.execution_report;
   if (report?.review_required) {
@@ -142,10 +169,16 @@ export const WorkflowView: React.FC<{
           {operatorTasks.map(task => {
             const report = task.execution_report;
             const handoffState = workflowTaskHandoffState(task);
+            const promotionState = workflowTaskPromotionState(task);
             return (
               <div key={task.task_id} className={`operator-task-row operator-task-row--${handoffState}`}>
                 <strong>{task.action_type}</strong>
                 <span>{WORKFLOW_TASK_HANDOFF_LABELS[handoffState]}</span>
+                {promotionState && (
+                  <span className={`operator-task-promotion operator-task-promotion--${promotionState}`}>
+                    {WORKFLOW_TASK_PROMOTION_LABELS[promotionState]}
+                  </span>
+                )}
                 <span>{report?.execution_status ?? task.status}</span>
                 <span>{task.provider ?? "workspace"}</span>
                 <button

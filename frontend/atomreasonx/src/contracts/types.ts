@@ -175,10 +175,10 @@ export interface OperatorTaskExecutionReport {
   execution_status: "source_snapshot_written";
   write_authorization_scope: "source_snapshot_only";
   live_calls_authorized: true;
-  provider_cache_written: false;
-  local_backend_written: false;
-  scoring_written: false;
-  experiment_written: false;
+  provider_cache_written: boolean;
+  local_backend_written: boolean;
+  scoring_written: boolean;
+  experiment_written: boolean;
   started_at: string;
   target_data_library_path: string;
   source_manifest_path: string;

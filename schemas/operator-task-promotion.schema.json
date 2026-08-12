@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spirosearch.local/schemas/operator-task-promotion.schema.json",
+  "title": "OperatorTaskPromotionReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_id",
+    "action",
+    "ready",
+    "promotion_scope",
+    "manifest_path",
+    "record_count",
+    "provider_cache_written",
+    "local_backend_written",
+    "scoring_written",
+    "experiment_written"
+  ],
+  "properties": {
+    "schema_version": { "const": "v36.operator_task_promotion.v1" },
+    "source_id": { "type": "string", "minLength": 1 },
+    "action": { "const": "promote" },
+    "ready": { "const": true },
+    "promotion_scope": { "const": "readiness_only" },
+    "manifest_path": { "type": "string", "minLength": 1 },
+    "record_count": { "type": "integer", "minimum": 0 },
+    "provider_cache_written": { "const": false },
+    "local_backend_written": { "const": false },
+    "scoring_written": { "const": false },
+    "experiment_written": { "const": false }
+  }
+}

@@ -14,13 +14,13 @@ import (
 )
 
 const (
-	ClosureEvidenceSchemaVersion     = "v35.source_closure_evidence.v1"
-	ClosureReadinessSchemaVersion    = "v35.source_closure_readiness.v1"
-	ClosureRequirementsSchemaVersion = "v35.source_closure_requirements.v1"
-	ClosurePromotionSchemaVersion    = "v36.source_closure_promotion.v1"
-	localSourceImporterVersion       = "v36.local_source_import.v1"
-	hopv15NormalizerVersion          = "hopv15-normalizer-v2"
-	opvDbNormalizerVersion           = "opv-db-normalizer-v2"
+	ClosureEvidenceSchemaVersion       = "v35.source_closure_evidence.v1"
+	ClosureReadinessSchemaVersion      = "v35.source_closure_readiness.v1"
+	ClosureRequirementsSchemaVersion   = "v35.source_closure_requirements.v1"
+	OperatorTaskPromotionSchemaVersion = "v36.operator_task_promotion.v1"
+	localSourceImporterVersion         = "v36.local_source_import.v1"
+	hopv15NormalizerVersion            = "hopv15-normalizer-v2"
+	opvDbNormalizerVersion             = "opv-db-normalizer-v2"
 )
 
 var (
@@ -957,4 +957,68 @@ func manifestFilePathListed(manifest Manifest, relativePath string) bool {
 
 func isFixtureVersion(version string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(version)), "fixture")
+}
+
+// OperatorTaskPromotionReport is the machine-readable promotion record emitted
+// by `spiroctl source-closure promote`. The promotion_scope is readiness_only:
+// the command validates closure readiness and declares that no downstream
+// writer (provider cache, local backend/SQLite, scoring, or experiments) has
+// been touched. Downstream writes require a separate explicit writer gate.
+type OperatorTaskPromotionReport struct {
+	SchemaVersion        string `json:"schema_version"`
+	SourceID             string `json:"source_id"`
+	Action               string `json:"action"`
+	Ready                bool   `json:"ready"`
+	PromotionScope       string `json:"promotion_scope"`
+	ManifestPath         string `json:"manifest_path"`
+	RecordCount          int    `json:"record_count"`
+	ProviderCacheWritten bool   `json:"provider_cache_written"`
+	LocalBackendWritten  bool   `json:"local_backend_written"`
+	ScoringWritten       bool   `json:"scoring_written"`
+	ExperimentWritten    bool   `json:"experiment_written"`
+}
+
+// BuildOperatorTaskPromotionReport constructs a promotion record for a source
+// snapshot that already passed the closure readiness gate. The report is
+// readiness-only: all four writer authorization fields are false, matching the
+// operator-task-promotion schema contract.
+func BuildOperatorTaskPromotionReport(manifestPath string, report ClosureReadinessReport) OperatorTaskPromotionReport {
+	return OperatorTaskPromotionReport{
+		SchemaVersion:        OperatorTaskPromotionSchemaVersion,
+		SourceID:             report.SourceID,
+		Action:               "promote",
+		Ready:                true,
+		PromotionScope:       "readiness_only",
+		ManifestPath:         manifestPath,
+		RecordCount:          report.RecordCount,
+		ProviderCacheWritten: false,
+		LocalBackendWritten:  false,
+		ScoringWritten:       false,
+		ExperimentWritten:    false,
+	}
+}
+
+// ValidateOperatorTaskPromotionReport enforces the operator-task-promotion
+// contract: readiness_only scope, action=promote, ready=true, and no downstream
+// writer may be claimed.
+func ValidateOperatorTaskPromotionReport(report OperatorTaskPromotionReport) error {
+	if report.SchemaVersion != OperatorTaskPromotionSchemaVersion {
+		return fmt.Errorf("promotion schema_version = %q, want %q", report.SchemaVersion, OperatorTaskPromotionSchemaVersion)
+	}
+	if report.Action != "promote" {
+		return fmt.Errorf("promotion action = %q, want promote", report.Action)
+	}
+	if !report.Ready {
+		return fmt.Errorf("promotion ready = false")
+	}
+	if report.PromotionScope != "readiness_only" {
+		return fmt.Errorf("promotion_scope = %q, want readiness_only", report.PromotionScope)
+	}
+	if report.ProviderCacheWritten || report.LocalBackendWritten || report.ScoringWritten || report.ExperimentWritten {
+		return fmt.Errorf("readiness-only promotion must not claim downstream writer writes")
+	}
+	if strings.TrimSpace(report.ManifestPath) == "" {
+		return fmt.Errorf("promotion manifest_path is empty")
+	}
+	return nil
 }

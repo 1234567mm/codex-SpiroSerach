@@ -432,35 +432,22 @@ func runSourceClosurePromote(args []string) error {
 		}
 		return &sourcesnapshot.ClosureReadinessError{Report: report}
 	}
-	promotion := struct {
-		SchemaVersion string `json:"schema_version"`
-		SourceID      string `json:"source_id"`
-		Action        string `json:"action"`
-		Ready         bool   `json:"ready"`
-		PromotionScope string `json:"promotion_scope"`
-		ManifestPath  string `json:"manifest_path"`
-		RecordCount   int    `json:"record_count"`
-	}{
-		SchemaVersion: "v36.source_closure_promotion.v1",
-		SourceID:      manifest.SourceID,
-		Action:        "promote",
-		Ready:         true,
-		PromotionScope: "readiness_only",
-		ManifestPath:  manifestPath,
-		RecordCount:   report.RecordCount,
+	promotion := sourcesnapshot.BuildOperatorTaskPromotionReport(manifestPath, report)
+	if err := sourcesnapshot.ValidateOperatorTaskPromotionReport(promotion); err != nil {
+		return fmt.Errorf("promotion contract invalid: %w", err)
 	}
 	return json.NewEncoder(os.Stdout).Encode(promotion)
 }
 
 func runPubChemProbe(entry sourceregistry.Entry) error {
 	report := struct {
-		SchemaVersion string `json:"schema_version"`
-		Provider      string `json:"provider"`
-		Status        string `json:"status"`
-		ReadOnly      bool   `json:"read_only"`
-		LiveEnabled   bool   `json:"live_enabled"`
-		RequiresAPIKey bool  `json:"requires_api_key"`
-		SourceURL     string `json:"source_url"`
+		SchemaVersion  string `json:"schema_version"`
+		Provider       string `json:"provider"`
+		Status         string `json:"status"`
+		ReadOnly       bool   `json:"read_only"`
+		LiveEnabled    bool   `json:"live_enabled"`
+		RequiresAPIKey bool   `json:"requires_api_key"`
+		SourceURL      string `json:"source_url"`
 	}{
 		SchemaVersion:  "v36.pubchem_connection_probe.v1",
 		Provider:       pubchem.ProviderName,
