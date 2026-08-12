@@ -43,6 +43,7 @@ func main() {
 type readonlyServeFunc func(addr string, outputDir string, readonlyToken string, handler *readonlyserver.Handler) error
 type materialsProjectProbeFunc func(context.Context, sourceregistry.Entry, materialsproject.ProbeOptions) (materialsproject.ConnectionProbeReport, error)
 type nomadTransportFactoryFunc func() nomadperla.Transport
+type pubchemTransportFactoryFunc func() pubchem.Transport
 
 type readonlyServeAnnouncement struct {
 	BaseURL       string `json:"base_url"`
@@ -53,19 +54,25 @@ type readonlyServeAnnouncement struct {
 }
 
 func run(args []string) error {
-	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection, nil)
+	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection, nil, nil)
 }
 
 func runWithReadonlyServer(args []string, serve readonlyServeFunc) error {
-	return runWithDependencies(args, serve, materialsproject.ProbeConnection, nil)
+	return runWithDependencies(args, serve, materialsproject.ProbeConnection, nil, nil)
 }
 
 func runWithMaterialsProjectProbe(args []string, probe materialsProjectProbeFunc) error {
-	return runWithDependencies(args, serveReadonlyHTTP, probe, nil)
+	return runWithDependencies(args, serveReadonlyHTTP, probe, nil, nil)
 }
 
 func runWithNomadTransport(args []string, transport nomadperla.Transport) error {
 	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection, func() nomadperla.Transport {
+		return transport
+	}, nil)
+}
+
+func runWithPubChemTransport(args []string, transport pubchem.Transport) error {
+	return runWithDependencies(args, serveReadonlyHTTP, materialsproject.ProbeConnection, nil, func() pubchem.Transport {
 		return transport
 	})
 }
@@ -75,6 +82,7 @@ func runWithDependencies(
 	serve readonlyServeFunc,
 	materialsProjectProbe materialsProjectProbeFunc,
 	nomadTransportFactory nomadTransportFactoryFunc,
+	pubchemTransportFactory pubchemTransportFactoryFunc,
 ) error {
 	if len(args) >= 3 && args[0] == "readonly-run" && args[1] == "serve" {
 		outputDir, addr, ok := parseReadonlyServeArgs(args)
@@ -94,6 +102,9 @@ func runWithDependencies(
 	if len(args) >= 3 && args[0] == "source-provider" && args[1] == "test-connection" {
 		return runSourceProviderTestConnection(args, materialsProjectProbe)
 	}
+	if len(args) >= 3 && args[0] == "source-provider" && args[1] == "lookup" {
+		return runSourceProviderLookup(args, pubchemTransportFactory)
+	}
 	if len(args) >= 3 && args[0] == "workflow-task" {
 		return runWorkflowTask(args, nomadTransportFactory)
 	}
@@ -104,7 +115,7 @@ func runWithDependencies(
 		return runSourceClosurePromote(args)
 	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl source-provider test-connection oqmd | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl source-provider test-connection oqmd | spiroctl source-provider lookup pubchem --name <name> [--cache <path> --authorize-cache-write] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -405,6 +416,151 @@ func parseSourceProviderTestConnectionArgs(args []string) (string, string, bool)
 
 func sourceProviderTestConnectionUsageError() error {
 	return fmt.Errorf("usage: spiroctl source-provider test-connection materials_project [--formula <formula>]")
+}
+
+func runSourceProviderLookup(args []string, pubchemTransportFactory pubchemTransportFactoryFunc) error {
+	if len(args) < 5 || args[1] != "lookup" {
+		return fmt.Errorf("usage: spiroctl source-provider lookup pubchem --name <name> [--cache <path> --authorize-cache-write] | spiroctl source-provider lookup materials_project --formula <formula> [--cache <path> --authorize-cache-write]")
+	}
+	provider := args[2]
+	if (provider != pubchem.ProviderName && provider != materialsproject.ProviderName) || args[3] != "--name" && args[3] != "--formula" {
+		return fmt.Errorf("usage: spiroctl source-provider lookup pubchem --name <name> [--cache <path> --authorize-cache-write] | spiroctl source-provider lookup materials_project --formula <formula> [--cache <path> --authorize-cache-write]")
+	}
+	queryFlag := args[3]
+	queryValue := strings.TrimSpace(args[4])
+	if queryValue == "" {
+		return fmt.Errorf("lookup %s is required", strings.TrimPrefix(queryFlag, "--"))
+	}
+	cachePath := ""
+	authorizeCacheWrite := false
+	for index := 5; index < len(args); index++ {
+		switch args[index] {
+		case "--cache":
+			if index+1 >= len(args) {
+				return fmt.Errorf("--cache requires a path")
+			}
+			index++
+			cachePath = strings.TrimSpace(args[index])
+			if cachePath == "" {
+				return fmt.Errorf("--cache path is required")
+			}
+		case "--authorize-cache-write":
+			authorizeCacheWrite = true
+		default:
+			return fmt.Errorf("unknown lookup argument: %s", args[index])
+		}
+	}
+	if authorizeCacheWrite && cachePath == "" {
+		return fmt.Errorf("--authorize-cache-write requires --cache <path>")
+	}
+	if cachePath != "" && !authorizeCacheWrite {
+		return fmt.Errorf("--cache <path> requires --authorize-cache-write")
+	}
+
+	registryPath, err := defaultSourceRegistryPath()
+	if err != nil {
+		return err
+	}
+	entries, err := sourceregistry.LoadFile(registryPath)
+	if err != nil {
+		return err
+	}
+	entry, ok := sourceregistry.IndexByProvider(entries)[provider]
+	if !ok {
+		return fmt.Errorf("source provider is missing from registry: %s", provider)
+	}
+	if !entry.LiveEnabled() {
+		return fmt.Errorf("%s is not live enabled by source registry", provider)
+	}
+	lookupReport := struct {
+		SchemaVersion    string              `json:"schema_version"`
+		Provider         string              `json:"provider"`
+		Status           string              `json:"status"`
+		LiveTransport    bool                `json:"live_transport"`
+		CacheWritten     bool                `json:"cache_written"`
+		CachePath        string              `json:"cache_path,omitempty"`
+		ProviderResponse pubchemResponseJSON `json:"provider_response"`
+	}{
+		SchemaVersion: "v37.source_live_lookup.v1",
+		Provider:      provider,
+		Status:        "resolved",
+		CacheWritten:  false,
+	}
+	var response providercache.ProviderResponse
+	switch provider {
+	case pubchem.ProviderName:
+		if queryFlag != "--name" {
+			return fmt.Errorf("pubchem lookup requires --name")
+		}
+		options := pubchem.Options{RetrievedAt: time.Now().UTC().Format(time.RFC3339)}
+		if pubchemTransportFactory != nil {
+			options.Transport = pubchemTransportFactory()
+		}
+		client, err := pubchem.NewFromRegistry(entry, options)
+		if err != nil {
+			return err
+		}
+		response, err = client.LookupName(context.Background(), queryValue)
+		if err != nil {
+			return err
+		}
+		lookupReport.LiveTransport = pubchemTransportFactory == nil
+	case materialsproject.ProviderName:
+		if queryFlag != "--formula" {
+			return fmt.Errorf("materials_project lookup requires --formula")
+		}
+		apiKey := strings.TrimSpace(os.Getenv("MATERIALS_PROJECT_API_KEY"))
+		client, err := materialsproject.NewFromRegistry(entry, materialsproject.Options{
+			APIKey:      apiKey,
+			RetrievedAt: time.Now().UTC().Format(time.RFC3339),
+		})
+		if err != nil {
+			return err
+		}
+		response, err = client.LookupFormula(context.Background(), queryValue)
+		if err != nil {
+			return err
+		}
+		lookupReport.LiveTransport = apiKey != ""
+	default:
+		return fmt.Errorf("unsupported lookup provider: %s", provider)
+	}
+	lookupReport.ProviderResponse = pubchemResponseJSON(response)
+	if cachePath != "" && authorizeCacheWrite {
+		root, err := workflowTaskRepositoryRoot()
+		if err != nil {
+			return err
+		}
+		key, err := providercache.KeyFor(provider, response.Query)
+		if err != nil {
+			return err
+		}
+		record := providercache.Record{
+			ContractVersion: providercache.ContractVersion,
+			CacheKey:        key,
+			Response:        providercacheResponseMap(response),
+		}
+		if err := providercache.AppendRecord(root, cachePath, record); err != nil {
+			return err
+		}
+		lookupReport.CacheWritten = true
+		lookupReport.CachePath = cachePath
+	}
+	return json.NewEncoder(os.Stdout).Encode(lookupReport)
+}
+
+type pubchemResponseJSON providercache.ProviderResponse
+
+func providercacheResponseMap(response providercache.ProviderResponse) map[string]any {
+	payload, err := json.Marshal(response)
+	if err != nil {
+		return map[string]any{}
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return map[string]any{}
+	}
+	return raw
 }
 
 func runSourceClosureRequirements(args []string) error {

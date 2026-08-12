@@ -2,6 +2,9 @@ import unittest
 import json
 from pathlib import Path
 
+# ORACLE REFERENCE (V37.1): PubChem identity lookup moved to the Go live
+# provider (`spiroctl source-provider lookup pubchem`). This Python oracle
+# suite stays for parity testing until the E2 deprecation cleanup phase.
 from spirosearch.providers.pubchem import PubChemHTTPStatusError, PubChemPUGRestProvider
 from spirosearch.source_registry import load_source_registry
 

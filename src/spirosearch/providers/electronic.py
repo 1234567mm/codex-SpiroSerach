@@ -206,6 +206,18 @@ class NOMADElectronicProvider:
             return self._post_transport(url, body, headers)
 
 class MaterialsProjectProvider:
+    """Materials Project computed material provider.
+
+    DEPRECATED (V37.1, 2026-08-12): the Go live provider is the production
+    runtime for Materials Project formula lookup. `spiroctl source-provider
+    lookup materials_project --formula <formula> [--cache <path>
+    --authorize-cache-write]` executes the same lookup through the Go client
+    (real HTTP, API key from MATERIALS_PROJECT_API_KEY, rate limiter, provider
+    cache integration, ProviderResponse contract). This Python class is kept
+    as the oracle reference for parity testing until the E2 deprecation
+    cleanup phase; new Materials Project live calls should not start here.
+    """
+
     provider_name = "materials_project"
 
     def __init__(

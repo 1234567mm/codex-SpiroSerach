@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
 )
 
 const ContractVersion = "provider-cache-v1"
@@ -108,3 +111,129 @@ func (r Record) Validate() error {
 	}
 	return nil
 }
+
+// AppendRecord appends one provider cache record as a JSONL line under the
+// repository-relative cache path. The path must be a safe relative path that
+// does not escape the repository root or traverse symlink/junction ancestors.
+func AppendRecord(root string, cacheRelPath string, record Record) error {
+	if err := ValidateRelativePath(cacheRelPath); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(cacheRelPath, ".jsonl") {
+		return fmt.Errorf("provider cache path must end in .jsonl: %s", cacheRelPath)
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("provider cache repository root invalid: %w", err)
+	}
+	targetAbs, err := filepath.Abs(filepath.Join(rootAbs, filepath.FromSlash(cacheRelPath)))
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(rootAbs, targetAbs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("provider cache path escapes repository root: %s", cacheRelPath)
+	}
+	if err := rejectPathRedirects(rootAbs, filepath.ToSlash(rel)); err != nil {
+		return err
+	}
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	line, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("provider cache encode failed: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(targetAbs), 0o755); err != nil {
+		return fmt.Errorf("provider cache parent create failed: %w", err)
+	}
+	handle, err := os.OpenFile(targetAbs, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("provider cache open failed: %w", err)
+	}
+	defer handle.Close()
+	if _, err := handle.Write(append(line, '\n')); err != nil {
+		return fmt.Errorf("provider cache write failed: %w", err)
+	}
+	return nil
+}
+
+// ValidateRelativePath rejects absolute, escaping, and redirect-capable
+// relative paths so provider cache writes stay inside the repository.
+func ValidateRelativePath(relativePath string) error {
+	value := strings.TrimSpace(relativePath)
+	if value == "" {
+		return errors.New("provider cache path is required")
+	}
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "file://") ||
+		filepath.IsAbs(value) ||
+		strings.HasPrefix(value, "/") ||
+		strings.HasPrefix(value, "\\") ||
+		strings.Contains(value, "\\") ||
+		strings.Contains(value, ":") {
+		return fmt.Errorf("unsafe provider cache path: %s", relativePath)
+	}
+	for _, part := range strings.Split(value, "/") {
+		if part == "" || part == "." || part == ".." {
+			return fmt.Errorf("unsafe provider cache path: %s", relativePath)
+		}
+	}
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(value)))
+	if clean != value {
+		return fmt.Errorf("unsafe provider cache path: %s", relativePath)
+	}
+	return nil
+}
+
+func rejectPathRedirects(rootAbs string, relSlash string) error {
+	current := rootAbs
+	if info, err := os.Lstat(current); err != nil {
+		return err
+	} else if looksRedirected(info) {
+		return fmt.Errorf("provider cache root is a redirect")
+	}
+	for _, part := range strings.Split(relSlash, "/") {
+		if part == "" {
+			return fmt.Errorf("provider cache path is unsafe")
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if looksRedirected(info) {
+			return fmt.Errorf("provider cache path traverses a redirect: %s", relSlash)
+		}
+	}
+	return nil
+}
+
+func looksRedirected(info os.FileInfo) bool {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return true
+	}
+	sys := reflect.ValueOf(info.Sys())
+	if !sys.IsValid() {
+		return false
+	}
+	if sys.Kind() == reflect.Pointer {
+		if sys.IsNil() {
+			return false
+		}
+		sys = sys.Elem()
+	}
+	if sys.Kind() != reflect.Struct {
+		return false
+	}
+	field := sys.FieldByName("FileAttributes")
+	if !field.IsValid() || !field.CanUint() {
+		return false
+	}
+	return field.Uint()&windowsFileAttributeReparsePoint != 0
+}
+
+const windowsFileAttributeReparsePoint = 0x400

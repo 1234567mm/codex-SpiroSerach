@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"spirosearch/internal/materialsproject"
+	"spirosearch/internal/pubchem"
 	"spirosearch/internal/readonlyserver"
 	"spirosearch/internal/sourceregistry"
 	"spirosearch/internal/sourcesnapshot"
@@ -414,6 +415,121 @@ func TestSourceProviderTestConnectionRejectsUnsupportedProvider(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "unsupported source-provider test-connection provider: nonexistent_provider") {
 		t.Fatalf("unsupported provider error mismatch: %v", err)
 	}
+}
+
+func TestSourceProviderLookupPubChemEmitsLiveLookupReport(t *testing.T) {
+	properties := loadPubChemFixture(t, "spiro_ometad_properties.json")
+	synonyms := loadPubChemFixture(t, "spiro_ometad_synonyms.json")
+	output, err := captureStdout(func() error {
+		return runWithPubChemTransport(
+			[]string{"source-provider", "lookup", "pubchem", "--name", "spiro-ometad"},
+			pubchem.TransportFunc(func(_ context.Context, requestURL string) (map[string]any, error) {
+				if strings.HasSuffix(requestURL, "/synonyms/JSON") {
+					return synonyms, nil
+				}
+				return properties, nil
+			}),
+		)
+	})
+	if err != nil {
+		t.Fatalf("runWithPubChemTransport() error = %v", err)
+	}
+	var report struct {
+		SchemaVersion string `json:"schema_version"`
+		Provider      string `json:"provider"`
+		Status        string `json:"status"`
+		LiveTransport bool   `json:"live_transport"`
+		CacheWritten  bool   `json:"cache_written"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("lookup output is not JSON: %v\n%s", err, output)
+	}
+	if report.SchemaVersion != "v37.source_live_lookup.v1" ||
+		report.Provider != "pubchem" ||
+		report.Status != "resolved" ||
+		report.LiveTransport ||
+		report.CacheWritten {
+		t.Fatalf("live lookup report mismatch: %#v", report)
+	}
+	if !strings.Contains(output, `"response_id"`) || !strings.Contains(output, `"inchi_key"`) {
+		t.Fatalf("lookup output missing provider response fields: %s", output)
+	}
+	if strings.Contains(output, "spiroctl.exe") || strings.Contains(output, "api_key") {
+		t.Fatalf("lookup output leaked executable or secret state: %s", output)
+	}
+}
+
+func TestSourceProviderLookupPubChemRequiresCacheAuthorizationPair(t *testing.T) {
+	properties := loadPubChemFixture(t, "spiro_ometad_properties.json")
+	transport := pubchem.TransportFunc(func(_ context.Context, requestURL string) (map[string]any, error) {
+		return properties, nil
+	})
+	cacheOnlyErr := runWithPubChemTransport([]string{"source-provider", "lookup", "pubchem", "--name", "x", "--cache", "data/lib/provider_cache/x.jsonl"}, transport)
+	if cacheOnlyErr == nil || !strings.Contains(cacheOnlyErr.Error(), "requires --authorize-cache-write") {
+		t.Fatalf("expected --cache without authorization rejection, got %v", cacheOnlyErr)
+	}
+	authOnlyErr := runWithPubChemTransport([]string{"source-provider", "lookup", "pubchem", "--name", "x", "--authorize-cache-write"}, transport)
+	if authOnlyErr == nil || !strings.Contains(authOnlyErr.Error(), "requires --cache") {
+		t.Fatalf("expected --authorize-cache-write without --cache rejection, got %v", authOnlyErr)
+	}
+}
+
+func TestSourceProviderLookupPubChemWritesAuthorizedCache(t *testing.T) {
+	properties := loadPubChemFixture(t, "spiro_ometad_properties.json")
+	output, err := captureStdout(func() error {
+		return runWithPubChemTransport(
+			[]string{
+				"source-provider", "lookup", "pubchem", "--name", "spiro-ometad",
+				"--cache", "data/lib/provider_cache/provider-cache.jsonl",
+				"--authorize-cache-write",
+			},
+			pubchem.TransportFunc(func(_ context.Context, requestURL string) (map[string]any, error) {
+				if strings.HasSuffix(requestURL, "/synonyms/JSON") {
+					return loadPubChemFixture(t, "spiro_ometad_synonyms.json"), nil
+				}
+				return properties, nil
+			}),
+		)
+	})
+	if err != nil {
+		t.Fatalf("authorized cache lookup error = %v", err)
+	}
+	if !strings.Contains(output, `"cache_written":true`) {
+		t.Fatalf("cache_written not set: %s", output)
+	}
+	root, err := workflowTaskRepositoryRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(root, "data", "lib", "provider_cache", "provider-cache.jsonl")
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("authorized cache write did not create %s: %v", cachePath, err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(cachePath)
+		_ = os.Remove(filepath.Dir(cachePath))
+	})
+}
+
+func TestSourceProviderLookupMaterialsProjectRequiresAPIKey(t *testing.T) {
+	t.Setenv("MATERIALS_PROJECT_API_KEY", "")
+	err := run([]string{"source-provider", "lookup", "materials_project", "--formula", "CsPbI3"})
+	if err == nil || !strings.Contains(err.Error(), "API key is required") {
+		t.Fatalf("expected missing key rejection, got %v", err)
+	}
+}
+
+func loadPubChemFixture(t *testing.T, filename string) map[string]any {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "providers", "pubchem", filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	return payload
 }
 
 func TestWorkflowTaskValidateAcceptsStartNomadSync(t *testing.T) {
@@ -1245,4 +1361,24 @@ func createSpiroctlBackendFixture(t *testing.T, full bool) string {
 		}
 	}
 	return dbPath
+}
+
+func BenchmarkSpiroctlSourceRegistryValidate(b *testing.B) {
+	registryPath := filepath.Join("..", "..", "data", "source_registry.json")
+	b.ResetTimer()
+	for index := 0; index < b.N; index++ {
+		if err := run([]string{"source-registry", "validate", registryPath}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSpiroctlRunArtifactsValidate(b *testing.B) {
+	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+	b.ResetTimer()
+	for index := 0; index < b.N; index++ {
+		if err := run([]string{"run-artifacts", "validate", outputDir}); err != nil {
+			b.Fatal(err)
+		}
+	}
 }

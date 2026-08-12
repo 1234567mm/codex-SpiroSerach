@@ -4,6 +4,10 @@ import unittest
 from pathlib import Path
 from urllib.error import HTTPError
 
+# ORACLE REFERENCE (V37.1): Materials Project formula lookup moved to the Go
+# live provider (`spiroctl source-provider lookup materials_project`). This
+# Python oracle suite stays for parity testing until the E2 deprecation
+# cleanup phase; NOMAD/PubChemQC paths remain non-deprecated.
 from spirosearch.providers.electronic import MaterialsProjectProvider, NOMADElectronicProvider, PubChemQCProvider
 from spirosearch.source_registry import ApiKeyManager, load_source_registry
 

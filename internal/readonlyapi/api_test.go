@@ -239,3 +239,22 @@ func intPtr(value int) *int {
 func stringPtr(value string) *string {
 	return &value
 }
+
+func BenchmarkAPIEnvelopeDelivery(b *testing.B) {
+	outputDir := filepath.Join("..", "..", "tests", "fixtures", "artifact_viewer", "v11_diagnostic_run")
+	api, err := Open(outputDir)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for index := 0; index < b.N; index++ {
+		envelope := api.Manifest()
+		if envelope.Status != "available" {
+			b.Fatalf("manifest envelope status = %s", envelope.Status)
+		}
+		scoring := api.ScoringView()
+		if scoring.Status != "available" {
+			b.Fatalf("scoring envelope status = %s", scoring.Status)
+		}
+	}
+}

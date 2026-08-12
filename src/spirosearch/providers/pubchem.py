@@ -31,6 +31,17 @@ class PubChemHTTPStatusError(Exception):
 
 
 class PubChemPUGRestProvider:
+    """PubChem PUG REST identity provider.
+
+    DEPRECATED (V37.1, 2026-08-12): the Go live provider is the production
+    runtime for PubChem identity lookup. `spiroctl source-provider lookup
+    pubchem --name <name> [--cache <path> --authorize-cache-write]` executes
+    the same lookup through the Go client (real HTTP, rate limiter, provider
+    cache integration, ProviderResponse contract). This Python class is kept
+    as the oracle reference for parity testing until the E2 deprecation
+    cleanup phase; new PubChem live calls should not start here.
+    """
+
     provider_name = "pubchem"
 
     def __init__(

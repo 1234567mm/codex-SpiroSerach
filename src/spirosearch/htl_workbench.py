@@ -780,6 +780,10 @@ class HtlWorkbenchCommandPlane:
                 [_effect(action_type, "source_import_tasks", detail)],
             )
         if action_type == "refresh_pubchem_identity_cache":
+            # DEPRECATED (V37.1): PubChem identity cache refresh should move to
+            # `spiroctl source-provider lookup pubchem --name <name> --cache
+            # <path> --authorize-cache-write` (Go live provider). This Python
+            # queue path is kept as oracle reference until E2 cleanup.
             candidate_ids = payload.get("candidate_ids", ())
             if not isinstance(candidate_ids, Sequence) or isinstance(candidate_ids, (str, bytes)):
                 return _rejected(

@@ -173,3 +173,99 @@ func providerResponseJSON(t *testing.T, provider string, query string, normalize
 	}
 	return string(raw)
 }
+
+func providerResponseJSONMap(t *testing.T, provider string, query string, normalized map[string]any) map[string]any {
+	t.Helper()
+	raw := providerResponseJSON(t, provider, query, normalized, "2026-08-12T00:00:00+00:00")
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatal(err)
+	}
+	return payload
+}
+
+func TestAppendRecordWritesJSONLUnderRepositoryRoot(t *testing.T) {
+	root := t.TempDir()
+	key, err := KeyFor("pubchem", "Spiro-OMeTAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := Record{
+		ContractVersion: ContractVersion,
+		CacheKey:        key,
+		Response:        providerResponseJSONMap(t, "pubchem", "Spiro-OMeTAD", map[string]any{"cid": 1}),
+	}
+	relPath := "data/lib/provider_cache/provider-cache.jsonl"
+	if err := AppendRecord(root, relPath, record); err != nil {
+		t.Fatalf("AppendRecord() error = %v", err)
+	}
+	if err := AppendRecord(root, relPath, record); err != nil {
+		t.Fatalf("AppendRecord() second error = %v", err)
+	}
+	records, err := LoadFile(filepath.Join(root, filepath.FromSlash(relPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("records = %d, want 2", len(records))
+	}
+}
+
+func TestAppendRecordRejectsUnsafePaths(t *testing.T) {
+	root := t.TempDir()
+	record := Record{ContractVersion: ContractVersion, CacheKey: "k", Response: map[string]any{"contract_version": "provider-response-v1"}}
+	cases := []string{
+		"../provider-cache.jsonl",
+		"/abs/provider-cache.jsonl",
+		`C:\provider-cache.jsonl`,
+		"data/lib/provider_cache/../cache.jsonl",
+		"data/lib/provider_cache/nested/cache.txt",
+	}
+	for _, path := range cases {
+		if err := AppendRecord(root, path, record); err == nil {
+			t.Fatalf("AppendRecord(%q) expected error", path)
+		}
+	}
+}
+
+func BenchmarkProviderCacheLatest(b *testing.B) {
+	key, err := KeyFor("pubchem", "Spiro-OMeTAD")
+	if err != nil {
+		b.Fatal(err)
+	}
+	records := make([]Record, 0, 100)
+	for index := 0; index < 100; index++ {
+		response := ProviderResponse{
+			ContractVersion: ProviderResponseContractVersion,
+			Provider:        "pubchem",
+			Query:           "Spiro-OMeTAD",
+			Normalized:      map[string]any{"cid": index},
+			SourceURL:       "fixture://providers/pubchem",
+			RetrievedAt:     "2026-08-12T00:00:00+00:00",
+			LicenseHint:     "public-domain",
+			RawHash:         "raw-hash-bench",
+			Confidence:      0.91,
+			TrustLevel:      "T3_literature_machine",
+		}
+		response.ResponseID = response.ComputedResponseID()
+		payload, err := json.Marshal(response)
+		if err != nil {
+			b.Fatal(err)
+		}
+		var raw map[string]any
+		if err := json.Unmarshal(payload, &raw); err != nil {
+			b.Fatal(err)
+		}
+		records = append(records, Record{
+			ContractVersion: ContractVersion,
+			CacheKey:        key,
+			Response:        raw,
+		})
+	}
+	b.ResetTimer()
+	for index := 0; index < b.N; index++ {
+		if _, err := Latest(records, "pubchem", "Spiro-OMeTAD"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
