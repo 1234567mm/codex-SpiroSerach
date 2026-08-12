@@ -1,8 +1,9 @@
 # V36 Architecture And Data Pipeline Evolution Plan
 
-> Status: active
+> Status: closed
 > Date: 2026-07-25
-> Status updated: 2026-08-12 (active per 09 review; first slice A1+B3 and V36.1 delivered, closure pending)
+> Status updated: 2026-08-12 (closed per C0 closure slice; see `plans/v36-architecture-and-data-pipeline-evolution-closure.md`)
+> Integration HEAD SHA: `9868302`
 > Previous phase: V35 (data source Go+TypeScript migration, merged to main)
 > Scope: next-phase architecture upgrade beyond data-source migration
 
