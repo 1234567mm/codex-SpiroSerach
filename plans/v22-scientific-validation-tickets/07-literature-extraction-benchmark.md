@@ -1,6 +1,6 @@
 # T22-07 Literature extraction benchmark
 
-Status: pending
+Status: complete
 Source plan: `plans/v22-independent-data-and-scientific-validation-spec.md`
 
 ## What to build

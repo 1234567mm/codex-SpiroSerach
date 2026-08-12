@@ -1,6 +1,6 @@
 # T22-04 Independent snapshot overlap removal
 
-Status: pending
+Status: complete
 Source plan: `plans/v22-independent-data-and-scientific-validation-spec.md`
 
 ## What to build

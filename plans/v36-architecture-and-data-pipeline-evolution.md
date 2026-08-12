@@ -1,8 +1,9 @@
 # V36 Architecture And Data Pipeline Evolution Plan
 
-> Status: draft_planning  
-> Date: 2026-07-25  
-> Previous phase: V35 (data source Go+TypeScript migration, merged to main)  
+> Status: active
+> Date: 2026-07-25
+> Status updated: 2026-08-12 (active per 09 review; first slice A1+B3 and V36.1 delivered, closure pending)
+> Previous phase: V35 (data source Go+TypeScript migration, merged to main)
 > Scope: next-phase architecture upgrade beyond data-source migration
 
 ## Phase Summary

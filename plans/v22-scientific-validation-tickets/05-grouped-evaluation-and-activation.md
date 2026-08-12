@@ -1,6 +1,6 @@
 # T22-05 Grouped evaluation and activation
 
-Status: pending
+Status: complete
 Source plan: `plans/v22-independent-data-and-scientific-validation-spec.md`
 
 ## What to build

@@ -1,6 +1,7 @@
 # V22 Independent Data And Scientific Validation Closure Spec
 
 Status: local implementation spec  
+Integration HEAD SHA: `ba78613` (V22 closed; tickets T22-01..T22-08 complete per 09 review, 2026-08-12)
 Source: `plans/v20-v25-integrated-delivery-roadmap.md` V22 charter
 
 ## Problem Statement

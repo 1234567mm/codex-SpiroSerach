@@ -1,9 +1,15 @@
 # SpiroSearch V20–V25 Integrated Delivery Roadmap
 
-> Status: strategic planning baseline
+> Status: strategic planning baseline (historical; V19–V36 delivered as of 2026-08-12)
 > Date: 2026-07-14
 > Audited start SHA: `14d3447891c854beb832246fb0fb3618cb7627d1`
 > Detailed implementation scope: V20 only; V21–V25 are gated version charters
+>
+> **Status update (2026-08-12, per 09 review)**: V19–V25 charters below are
+> historical. V19–V36 have all been implemented, merged to `main`, and closed
+> (see §10). V36 is `active` with closure items pending. Forward planning moved
+> to `plans/v37-future-direction-and-task-breakdown-plan.md`; this roadmap is
+> kept as the audited V20–V25 baseline, not as the live execution queue.
 
 ## 1. Program Objective
 
@@ -338,6 +344,10 @@ Replan the version when any condition occurs:
 
 ### 6.6 Current Execution Queue
 
+> **Historical snapshot (2026-07-14).** V19 was the active version at the time
+> this roadmap was written. As of the 09 review (2026-08-12) the queue below is
+> fully delivered: V19–V36 are merged and closed; see §10 and the V37 plan.
+
 | Queue | Version | Allowed work |
 | --- | --- | --- |
 | Active next | V19 | create/approve P0–P7 tickets, then implement P0 |
@@ -438,3 +448,27 @@ These are not scheduled versions:
 Each requires a new proposal tied to quantitative evidence that current
 repositories, models, datasets, or experiment handoffs are insufficient. None
 is automatically authorized by completing V25.
+
+## 10. V23–V36 Delivery Confirmation (09 Review, 2026-08-12)
+
+The 09 project progress review confirmed the V23–V36 versions named by the
+07 review are implemented, merged to `main`, and closed:
+
+| Version | Scope | Status |
+| --- | --- | --- |
+| V23 | Controlled review and recompute command plane | Delivered, closed |
+| V24 | Auditable active learning and experiment handoff | Delivered, closed |
+| V25 | Production hardening and reproducible release | Delivered, closed |
+| V26 | Post-V25 multi-agent audit and improvement | Delivered, closed |
+| V27 | Production activation and scientific readiness | Delivered, closed |
+| V28 | Evidence-gated scale and validation (multi-slice) | Delivered, closed |
+| V29 | Local LLM + NOMAD data integration research | Delivered, closed |
+| V30 | Plan preview | Delivered, closed |
+| V33/V33c/V34 | Configurable platform, AtomReasonX workbench, HTL workbench | Delivered, closed |
+| V35 | Data source Go+TypeScript migration (major architecture upgrade) | Delivered, closed |
+| V36 | Architecture and data pipeline evolution | **Active**; first slice A1+B3 and V36.1 delivered; closure items pending |
+
+Forward planning continues in
+`plans/v37-future-direction-and-task-breakdown-plan.md`. Parked future
+proposals listed in §9 remain admission-gated and are not automatically
+authorized by V36 completion.

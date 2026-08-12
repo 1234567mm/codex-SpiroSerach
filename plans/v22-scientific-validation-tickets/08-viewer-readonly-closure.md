@@ -1,6 +1,6 @@
 # T22-08 Viewer, read-only surfaces, and closure gates
 
-Status: pending
+Status: complete
 Source plan: `plans/v22-independent-data-and-scientific-validation-spec.md`
 
 ## What to build
