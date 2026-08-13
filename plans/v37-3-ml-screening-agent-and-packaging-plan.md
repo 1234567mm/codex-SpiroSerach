@@ -115,6 +115,18 @@ complete. Install/uninstall smoke test and NSIS retry deferred to the
 operator (install modifies the system; no signing this phase per user
 decision).
 
+NSIS DONE 2026-08-13: WiX/NSIS are Tauri's cached build tools (not
+installed into the system PATH — `wix --version` won't find them; they
+live under `%LOCALAPPDATA%\tauri\`). NSIS was downloaded manually
+(nsis-3.11.zip → `%LOCALAPPDATA%\tauri\NSIS\makensis.exe`) because the
+Tauri download step kept hitting its global timeout. Full `tauri build`
+then produced both installers with updater signatures:
+- `bundle\msi\AtomReasonX_0.1.0_x64_en-US.msi` (7MB) + `.msi.sig`
+- `bundle\nsis\AtomReasonX_0.1.0_x64-setup.exe` (5.4MB) + `.exe.sig`
+Local signing requires `TAURI_SIGNING_PRIVATE_KEY` (file CONTENT, not
+path — Tauri 2 bundler reads only the content env var) plus
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; CI uses the same two secrets.
+
 CEPDB status (completed 2026-08-13): dump imported (3.32B rows), analysis
 layer switched to DuckDB+Parquet (measured ~21x faster, ~59x smaller than
 SQLite intermediate; see `plans/cepd-data-layer-architecture.md`); HTL
