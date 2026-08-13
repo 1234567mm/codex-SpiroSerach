@@ -32,20 +32,27 @@ enter scoring directly.
 
 ## 2. Module Task Breakdown (A–F)
 
-### A. Layered Screening Framework (Large) — first to implement
+### A. Layered Screening Framework (Large) — first to implement — DONE 2026-08-12
 
-- Define a `ScreeningModule` registration interface: `layer` enum
-  (htl/etl/perovskite/electrode/interface) + target windows + weights +
-  hard filters + data-source selection, all parameterized.
-- Migrate HTL constants out of `screening_policy.py`
-  (`HTL_SCREENING_WEIGHTS`, `HOMO_WINDOW`, `LUMO_WINDOW`, `BAND_GAP_MIN`) into
-  registered profiles; Spiro screening = registered module
-  `spiro_replacement_conventional_nip_v1` (already drafted in
-  `htl_scoring.py` `HTLTargetProfile`).
-- Screening entry (workflow task / CLI) accepts `--layer <name>`; adding a new
-  layer = registering a profile, no engine change.
-- Acceptance: a second example layer (e.g. ETL) runs through the same engine
-  with three-state gate tests.
+Delivered in `c91bfae`:
+- `src/spirosearch/screening_modules.py`: `DeviceLayer` enum (htl/etl/
+  perovskite/electrode/interface), `ScreeningModule` parameterized profile,
+  validation (monotonic windows, weights sum to 1), registration registry
+  (`register/get/list`), sanitized summary for read surfaces, built-in ETL
+  example module (`sn02_replacement_conventional_nip_v1`, approximate
+  scientific parameters for engine-generality proof).
+- `screening_policy.py`: `ScreeningPolicy(module=...)` — module supplies
+  windows/weights/band-gap filters; default no-arg construction keeps the
+  historical HTL behavior via registered `spiro_replacement_conventional_nip_v1`
+  (single-sourced from the HTL constants); `ScreeningGateResult` carries
+  `module_id`/`layer`; optional `band_gap_max` hard filter (`BAND_GAP_TOO_HIGH`).
+- Schema: screening-input-view candidate gains additive `module_id`/`layer`.
+- Tests: `tests/test_screening_modules.py` (14) + existing suites green.
+
+Remaining sub-items for A (later wave):
+- screening entry (`--layer <name>`) wiring into `ScreeningInputViewArtifactEmitter`
+  and workflow-task/CLI surfaces (framework API is ready; emitter keeps HTL default).
+- More registered modules per layer as research needs them.
 
 ### B. Knowledge Base Wiring (Medium)
 
@@ -124,18 +131,17 @@ needed. Quark drive = cold archive backup only, never a daily transfer hop
 
 ## 5. Next-Wave Trigger And Order
 
-When the user reports "CEPDB download finished":
+CEPDB status: **deferred by user (2026-08-12)** — download too slow; revisit
+later. CEPDB no longer gates the remaining modules.
 
-1. Verify sha256 + size of `data/lib/cepd/cepdb_2013-06-21.sql.tbz`.
-2. CEPDB import slice: inspect SQL dump schema → write importer following
-   HOPV15/OPV-DB pattern (`records.json` + `source-manifest.json` with
-   checksum/license/citation gates) → filter to HTL window → keep subset
-   (T37-08; see v37-2 slice plan §4).
-3. Module A: layered screening framework (tickets from §2.A).
-4. Module C: fast filter backend + promotion writer.
-5. Module B: knowledge base wiring.
-6. V37.2 T37-05..07 NOMAD alignment (per v37-2 slice plan).
-7. Module D: model interface completion.
+Order:
+
+1. ~~CEPDB import slice~~ deferred (user decision).
+2. ~~Module A: layered screening framework~~ DONE (`c91bfae`).
+3. Module C: fast filter backend + promotion writer (next).
+4. Module B: knowledge base wiring.
+5. V37.2 T37-05..07 NOMAD alignment (per v37-2 slice plan).
+6. Module D: model interface completion.
 
 ## 6. Open Decisions (ask when reached)
 
