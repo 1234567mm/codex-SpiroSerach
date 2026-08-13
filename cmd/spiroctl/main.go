@@ -313,7 +313,75 @@ func runWorkflowTask(args []string, nomadTransportFactory nomadTransportFactoryF
 		}
 		return json.NewEncoder(os.Stdout).Encode(report)
 	}
-	return fmt.Errorf("usage: spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl>")
+	if len(args) >= 9 &&
+		args[1] == "execute" &&
+		args[2] == "--task-id" &&
+		args[4] == "--ledger" &&
+		args[6] == "--source" {
+		root, err := workflowTaskRepositoryRoot()
+		if err != nil {
+			return err
+		}
+		options := workflowtask.ExecuteHtlScreeningOptions{
+			Root:          root,
+			LedgerRelPath: args[5],
+			TaskID:        args[3],
+			SourceDir:     args[7],
+			Now:           time.Now().UTC(),
+		}
+		for index := 8; index < len(args); index++ {
+			switch args[index] {
+			case "--target":
+				if index+1 >= len(args) {
+					return fmt.Errorf("--target requires a value")
+				}
+				options.TargetRelPath = args[index+1]
+				index++
+			case "--authorize-scoring-write":
+				options.AuthorizeScoringWrite = true
+			case "--module-id":
+				if index+1 >= len(args) {
+					return fmt.Errorf("--module-id requires a value")
+				}
+				options.ModuleID = args[index+1]
+				index++
+			case "--homo-min", "--homo-max", "--lumo-min", "--lumo-max", "--band-gap-min", "--band-gap-max":
+				if index+1 >= len(args) {
+					return fmt.Errorf("%s requires a value", args[index])
+				}
+				value, err := strconv.ParseFloat(args[index+1], 64)
+				if err != nil {
+					return fmt.Errorf("%s: invalid number %q", args[index], args[index+1])
+				}
+				index++
+				switch args[index-1] {
+				case "--homo-min":
+					options.Window.HomoMin = &value
+				case "--homo-max":
+					options.Window.HomoMax = &value
+				case "--lumo-min":
+					options.Window.LumoMin = &value
+				case "--lumo-max":
+					options.Window.LumoMax = &value
+				case "--band-gap-min":
+					options.Window.BandGapMin = &value
+				case "--band-gap-max":
+					options.Window.BandGapMax = &value
+				}
+			default:
+				return fmt.Errorf("unknown screening execute argument: %s", args[index])
+			}
+		}
+		if options.TargetRelPath == "" {
+			return fmt.Errorf("screening execute requires --target <dir>")
+		}
+		report, err := workflowtask.ExecuteHtlScreening(context.Background(), options)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(report)
+	}
+	return fmt.Errorf("usage: spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --source <snapshot-dir> --target <target-dir> [--authorize-scoring-write] [--module-id <id>] [--homo-min <ev>] [--homo-max <ev>] [--lumo-min <ev>] [--lumo-max <ev>] [--band-gap-min <ev>] [--band-gap-max <ev>] | spiroctl workflow-task restore --ledger <ledger-jsonl>")
 }
 
 func workflowTaskRepositoryRoot() (string, error) {
