@@ -122,14 +122,26 @@ Slice 2 delivered (promotion writer, C-2) 2026-08-12:
   `hopv15-normalizer-v1` while the closure gate expects v2 — re-import the
   snapshot with the current importer before promoting it (fail-closed by design).
 
-### D. Model Interface Layer Completion (Medium)
+### D. Model Interface Layer Completion (Medium) — DONE 2026-08-12
 
-- Settings UI wiring: provider choice, third-party `base_url` / model id / key
-  config via `local_config` + `config_command` (no secret leakage).
-- Enable model-assisted analysis chain (literature/claim extraction) behind an
-  explicit authorization switch, admission-gated.
-- Keep the C1 screening-agent hook point (V37.3: `run_htl_screening` agent task
-  analyzes candidates via models, models never rank directly).
+Delivered:
+- SettingsModal Models panel: per-provider sanitized status (kind,
+  validation_state, has_api_key + fingerprint — never raw secrets),
+  base_url / default_model drafts for third-party endpoints, API key
+  password input, Save (config_write) / Set key (key_rotate) / Test
+  (test_connection) through the command dispatcher; controls disabled
+  with an explicit backend-unavailable notice when no dispatcher is
+  wired (no fake success).
+- AppShell passes workspace.settings into SettingsModal.
+- Extraction authorization gate: `SchemaClaimExtractor` protocol gains
+  `model_backed`; `LiteratureExtractionAgent` fails closed on
+  model-backed extractors unless `model_assisted_authorized` is
+  explicitly true — unauthorized runs produce zero claims and route the
+  document to review (`model_extraction_not_authorized`). Model outputs
+  stay outside scoring.
+- C1 hook point reserved: the authorized model path is the same entry
+  the V37.3 `run_htl_screening` agent will use for candidate analysis;
+  admission-gated, models never rank directly.
 
 ### E. Data Source Completion (Large; acquisition per §4)
 
