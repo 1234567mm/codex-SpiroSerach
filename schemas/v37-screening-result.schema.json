@@ -1,0 +1,115 @@
+{
+  "$id": "https://spirosearch.local/schemas/v37-screening-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidates": {
+      "items": {
+        "properties": {
+          "band_gap_ev": {
+            "type": "number"
+          },
+          "homo_ev": {
+            "type": "number"
+          },
+          "lumo_ev": {
+            "type": "number"
+          },
+          "material_id": {
+            "type": "string"
+          },
+          "rank": {
+            "type": "integer"
+          },
+          "record": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "record_id": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "source_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "band_gap_ev",
+          "homo_ev",
+          "lumo_ev",
+          "material_id",
+          "rank",
+          "record_id",
+          "score",
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "layer": {
+      "type": "string"
+    },
+    "module_id": {
+      "type": "string"
+    },
+    "review_reasons": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "review_required": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "source_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "stats": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "window": {
+      "properties": {
+        "band_gap_max": {
+          "type": "number"
+        },
+        "band_gap_min": {
+          "type": "number"
+        },
+        "homo_max": {
+          "type": "number"
+        },
+        "homo_min": {
+          "type": "number"
+        },
+        "lumo_max": {
+          "type": "number"
+        },
+        "lumo_min": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "layer",
+    "module_id",
+    "review_required",
+    "schema_version",
+    "window"
+  ],
+  "title": "ScreeningResult",
+  "type": "object"
+}

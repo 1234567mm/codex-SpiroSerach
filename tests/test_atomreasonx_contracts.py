@@ -94,6 +94,37 @@ class TestFixtureStructure(unittest.TestCase):
                 self.assertIn(field, candidate)
         self.assertEqual(result["stats"]["hits"], len(result["candidates"]))
 
+    def test_screening_result_ts_types_match_generated_schema(self) -> None:
+        # T37-13 drift guard: the TypeScript ScreeningResultState interface
+        # must cover every property in the schema generated from the Go struct.
+        schema = json.loads(
+            (REPO_ROOT / "schemas" / "v37-screening-result.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        ts_types = (REPO_ROOT / "frontend" / "atomreasonx" / "src" / "contracts" / "types.ts").read_text(
+            encoding="utf-8"
+        )
+        candidate_block = ts_types.split("export interface ScreeningCandidate", 1)[1].split(
+            "export interface ScreeningResultState", 1
+        )[0]
+        result_block = ts_types.split("export interface ScreeningResultState", 1)[1].split(
+            "export interface AtomReasonXWorkspaceState", 1
+        )[0]
+        schema_properties = set(schema["properties"].keys())
+        schema_candidate_properties = set(
+            schema["properties"]["candidates"]["items"]["properties"].keys()
+        )
+        candidate_properties = set(
+            re.findall(r"^\s{2}([a-z_0-9]+):", candidate_block, flags=re.MULTILINE)
+        )
+        result_properties = set(
+            re.findall(r"^\s{2}([a-z_0-9]+):", result_block, flags=re.MULTILINE)
+        )
+        self.assertEqual(candidate_properties, schema_candidate_properties)
+        self.assertEqual(result_properties, schema_properties)
+
+
 
     def test_v33c_workbench_contracts_are_present(self) -> None:
         self.assertEqual(self.fixture["source_coverage"]["lane"], "htl_only")

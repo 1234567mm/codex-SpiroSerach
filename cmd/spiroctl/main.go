@@ -25,6 +25,7 @@ import (
 	"spirosearch/internal/readonlyapi"
 	"spirosearch/internal/readonlyserver"
 	"spirosearch/internal/runartifact"
+	"spirosearch/internal/schemagen"
 	"spirosearch/internal/sourceregistry"
 	"spirosearch/internal/sourcesnapshot"
 	"spirosearch/internal/workflowtask"
@@ -115,6 +116,9 @@ func runWithDependencies(
 	}
 	if len(args) >= 2 && args[0] == "knowledge-base" {
 		return runKnowledgeBase(args)
+	}
+	if len(args) >= 2 && args[0] == "schema-generate" {
+		return runSchemaGenerate(args)
 	}
 	if len(args) >= 3 && args[0] == "source-closure" && (args[1] == "requirements" || args[1] == "promote") {
 		if args[1] == "requirements" {
@@ -991,4 +995,40 @@ func runKnowledgeBase(args []string) error {
 		}
 	}
 	return nil
+}
+
+// runSchemaGenerate generates a JSON Schema from a Go contract struct
+// (T37-13 / E1: Go struct is the single source of truth).
+func runSchemaGenerate(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: spiroctl schema-generate screening-result [--output <path>]")
+	}
+	outputPath := ""
+	if len(args) >= 4 && args[2] == "--output" {
+		outputPath = args[3]
+	}
+	switch args[1] {
+	case "screening-result":
+		schema, err := schemagen.GenerateSchema(workflowtask.ScreeningResult{}, schemagen.Options{
+			SchemaID: "https://spirosearch.local/schemas/v37-screening-result.schema.json",
+			Title:    "ScreeningResult",
+			Properties: map[string]any{
+				"additionalProperties": false,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		raw, err := schemagen.MarshalSchema(schema)
+		if err != nil {
+			return err
+		}
+		if outputPath != "" {
+			return os.WriteFile(outputPath, raw, 0o600)
+		}
+		_, err = os.Stdout.Write(raw)
+		return err
+	default:
+		return fmt.Errorf("unknown schema-generate target: %s", args[1])
+	}
 }
