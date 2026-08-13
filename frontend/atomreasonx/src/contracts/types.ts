@@ -65,7 +65,7 @@ export interface ProviderConfigStatusEntry {
   workspace_id: string | null;
 }
 
-export type ConfigProviderScope = "model" | "source";
+export type ConfigProviderScope = "model" | "source" | "local";
 export type SourceProviderKind =
   | "provider_api"
   | "local_dataset"

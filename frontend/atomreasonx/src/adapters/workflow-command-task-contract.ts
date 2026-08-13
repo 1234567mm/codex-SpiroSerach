@@ -1,18 +1,20 @@
-import type { ConfigProviderScope, HtlOperatorTaskSummary } from "../contracts/types";
+import type { HtlOperatorTaskSummary } from "../contracts/types";
 
 export const WORKFLOW_OPERATOR_TASK_SCHEMA_VERSION = "v35.operator_task.v1" as const;
 export const WORKFLOW_OPERATOR_TASK_QUEUE_SCOPE = "operator_local" as const;
 
+export type WorkflowCommandTaskProviderScope = "source" | "local" | "model";
+
 export interface WorkflowCommandTaskDefinition {
   action_type: string;
   provider: string | null;
-  provider_scope: ConfigProviderScope;
+  provider_scope: WorkflowCommandTaskProviderScope;
   declared_effects: string[];
 }
 
 type WorkflowCommandTaskDefinitionSeed = {
   provider: string | null;
-  provider_scope: ConfigProviderScope;
+  provider_scope: WorkflowCommandTaskProviderScope;
   declared_effects: string[];
 };
 
