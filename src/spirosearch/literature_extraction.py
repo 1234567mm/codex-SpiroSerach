@@ -30,16 +30,25 @@ class LiteratureExtractionAgent:
     The agent consumes local parser chunks through the existing extractor
     protocol and emits canonical domain objects. It does not call literature
     discovery providers and does not rank, score, or recommend materials.
+
+    Model-assisted extraction is fail-closed: a model-backed extractor
+    (``extractor.model_backed``) only runs when ``model_assisted_authorized``
+    is explicitly true; otherwise every document is routed to review with
+    ``model_extraction_not_authorized`` and no claims are produced.
     """
 
     extractor: SchemaClaimExtractor = field(default_factory=lambda: MockSchemaClaimExtractor({}))
     confidence_threshold: float = 0.8
+    model_assisted_authorized: bool = False
 
     def extract(self, documents: Iterable[RawDocument]) -> LiteratureExtractionResult:
         claims: list[LiteratureClaim] = []
         review_items: list[ReviewItem] = []
 
         for document in documents:
+            if getattr(self.extractor, "model_backed", False) and not self.model_assisted_authorized:
+                review_items.append(_model_extraction_unauthorized_review_item(document))
+                continue
             for chunk in document.chunks:
                 for payload in self.extractor.extract(document, chunk):
                     missing = _missing_schema_fields(payload)
@@ -132,6 +141,21 @@ def _low_confidence_review_item(claim: LiteratureClaim) -> ReviewItem:
         suggested_action="human_review_before_curation",
         assigned_queue="literature",
         source_refs=(claim.source_id, claim.chunk_id),
+    )
+
+
+def _model_extraction_unauthorized_review_item(document: RawDocument) -> ReviewItem:
+    source_id = f"doi:{document.doi}" if document.doi else document.document_id
+    return ReviewItem(
+        review_item_id=f"review:{document.document_id}:model_extraction_unauthorized",
+        target_type="raw_document",
+        target_id=document.document_id,
+        reason_code="model_extraction_not_authorized",
+        severity="high",
+        blocking_surface="dataset_curation",
+        suggested_action="authorize_model_assisted_extraction_or_use_deterministic_extractor",
+        assigned_queue="literature",
+        source_refs=(source_id,),
     )
 
 

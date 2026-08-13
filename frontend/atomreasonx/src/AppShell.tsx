@@ -95,6 +95,7 @@ export const AppShell: React.FC<{
         <SettingsModal
           categories={SETTINGS_CATEGORIES}
           sourceSettings={workspace.source_settings}
+          modelSettings={workspace.settings}
           readonlyRunConfig={readonlyRunConfig}
           readonlyRecentOutputDirs={readonlyRecentOutputDirs}
           onApplyReadonlyRunOutputDir={onApplyReadonlyRunOutputDir}

@@ -158,6 +158,7 @@ class SchemaClaimExtractor(Protocol):
     """Extractor interface returning schema-first claim payloads."""
 
     extractor_version: str
+    model_backed: bool
 
     def extract(self, document: RawDocument, chunk: RawChunk) -> tuple[dict[str, Any], ...]:
         """Extract claim payloads from a raw chunk.
@@ -185,6 +186,7 @@ class MockSchemaClaimExtractor:
 
     fixture_claims_by_chunk_id: dict[str, list[dict[str, Any]]]
     extractor_version: str = "MOCK_SCHEMA_CLAIM_EXTRACTOR"
+    model_backed: bool = False
 
     def extract(self, document: RawDocument, chunk: RawChunk) -> tuple[dict[str, Any], ...]:
         """Return MOCK schema claim payloads for a chunk.

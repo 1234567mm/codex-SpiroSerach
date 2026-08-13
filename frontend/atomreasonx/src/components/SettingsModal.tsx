@@ -5,7 +5,12 @@ import {
   type ReadonlyRunRecentOutputDir,
   type ReadonlyRunOperatorConfig,
 } from "../adapters/readonly-run-operator-config";
-import type { AtomReasonXSourceSettingsState, SourceConfigStatusEntry } from "../contracts/types";
+import type {
+  AtomReasonXSettingsState,
+  AtomReasonXSourceSettingsState,
+  ProviderConfigStatusEntry,
+  SourceConfigStatusEntry,
+} from "../contracts/types";
 
 export const SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION = "v35.source_provider_connection_probe.v1";
 export const DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA = "CsPbI3";
@@ -59,9 +64,56 @@ export const submitSourceProviderTestConnectionCommand = (
   buildSourceProviderTestConnectionPayload(source, extra),
 );
 
+export const buildModelSettingsCommandPayload = (
+  model: ProviderConfigStatusEntry,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  ...extra,
+  provider: model.provider,
+  provider_scope: "model",
+});
+
+export const buildModelConfigWritePayload = (
+  model: ProviderConfigStatusEntry,
+  config: Record<string, unknown>,
+): Record<string, unknown> => buildModelSettingsCommandPayload(model, { config });
+
+export const submitModelConfigWriteCommand = (
+  commandDispatcher: WorkbenchCommandDispatcher,
+  model: ProviderConfigStatusEntry,
+  config: Record<string, unknown>,
+): Promise<unknown> => commandDispatcher.submitAction(
+  "config_write",
+  buildModelConfigWritePayload(model, config),
+);
+
+export const submitModelKeyRotateCommand = (
+  commandDispatcher: WorkbenchCommandDispatcher,
+  model: ProviderConfigStatusEntry,
+  apiKey: string,
+): Promise<unknown> => commandDispatcher.submitAction(
+  "key_rotate",
+  buildModelSettingsCommandPayload(model, { api_key: apiKey }),
+);
+
+export const submitModelTestConnectionCommand = (
+  commandDispatcher: WorkbenchCommandDispatcher,
+  model: ProviderConfigStatusEntry,
+): Promise<unknown> => commandDispatcher.submitAction(
+  "test_connection",
+  buildModelSettingsCommandPayload(model),
+);
+
+export interface ModelConfigDraft {
+  enabled: boolean;
+  base_url: string;
+  default_model: string;
+}
+
 export const SettingsModal: React.FC<{
   categories: string[];
   sourceSettings?: AtomReasonXSourceSettingsState;
+  modelSettings?: AtomReasonXSettingsState;
   readonlyRunConfig?: ReadonlyRunOperatorConfig;
   readonlyRecentOutputDirs?: ReadonlyRunRecentOutputDir[];
   onApplyReadonlyRunOutputDir?: (outputDir: string | null) => void;
@@ -70,6 +122,7 @@ export const SettingsModal: React.FC<{
 }> = ({
   categories,
   sourceSettings,
+  modelSettings,
   readonlyRunConfig,
   readonlyRecentOutputDirs = [],
   onApplyReadonlyRunOutputDir,
@@ -78,10 +131,13 @@ export const SettingsModal: React.FC<{
 }) => {
   const [selected, setSelected] = React.useState(categories[0] ?? "General");
   const [sourceKeys, setSourceKeys] = React.useState<Record<string, string>>({});
+  const [modelKeys, setModelKeys] = React.useState<Record<string, string>>({});
+  const [modelConfigDrafts, setModelConfigDrafts] = React.useState<Record<string, ModelConfigDraft>>({});
   const [readonlyOutputDirDraft, setReadonlyOutputDirDraft] = React.useState(
     readonlyRunConfig?.outputDir ?? "",
   );
   const isDataSources = selected === "Data Sources";
+  const isModels = selected === "Models";
   const readonlyOutputDir = readonlyRunConfig?.outputDir ?? null;
   const normalizedReadonlyOutputDirDraft = normalizeReadonlyRunOutputDir(readonlyOutputDirDraft);
   const readonlyOutputDirChanged = normalizedReadonlyOutputDirDraft !== readonlyOutputDir;
@@ -90,6 +146,18 @@ export const SettingsModal: React.FC<{
   React.useEffect(() => {
     setReadonlyOutputDirDraft(readonlyRunConfig?.outputDir ?? "");
   }, [readonlyRunConfig?.outputDir]);
+
+  React.useEffect(() => {
+    const drafts: Record<string, ModelConfigDraft> = {};
+    for (const model of modelSettings?.providers ?? []) {
+      drafts[model.provider] = {
+        enabled: model.enabled,
+        base_url: model.base_url ?? "",
+        default_model: model.default_model ?? "",
+      };
+    }
+    setModelConfigDrafts(drafts);
+  }, [modelSettings]);
 
   return (
     <div className="settings-overlay" style={{
@@ -256,6 +324,126 @@ export const SettingsModal: React.FC<{
                   </span>
                 </div>
               ))}
+            </div>
+          ) : isModels ? (
+            <div style={{ display: "grid", gap: "8px" }}>
+              {!commandDispatcher && (
+                <p style={{ fontSize: "12px", color: "#fb7" }}>
+                  Model configuration backend unavailable: controls are disabled until a
+                  command dispatcher is wired.
+                </p>
+              )}
+              {(modelSettings?.providers ?? []).map((model) => {
+                const draft = modelConfigDrafts[model.provider] ?? {
+                  enabled: model.enabled,
+                  base_url: model.base_url ?? "",
+                  default_model: model.default_model ?? "",
+                };
+                return (
+                  <div key={model.provider} style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(140px, 1fr) 96px 110px minmax(180px, 1.4fr) minmax(160px, 1.2fr) minmax(180px, 1fr)",
+                    gap: "8px",
+                    alignItems: "center",
+                    padding: "8px",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                  }}>
+                    <span>
+                      <strong>{model.provider}</strong>
+                      {model.brand ? <span style={{ marginLeft: "6px", color: "#9cf" }}>{model.brand}</span> : null}
+                      <span style={{ marginLeft: "6px", color: "#889" }}>{model.provider_kind}</span>
+                    </span>
+                    <span>{model.validation_state}</span>
+                    <span>{model.has_api_key ? `key ${model.key_fingerprint ?? ""}` : "no key"}</span>
+                    <input
+                      aria-label={`${model.provider} base url`}
+                      type="text"
+                      placeholder="base_url (third-party endpoint)"
+                      value={draft.base_url}
+                      disabled={!commandDispatcher}
+                      onChange={(event) => setModelConfigDrafts({
+                        ...modelConfigDrafts,
+                        [model.provider]: { ...draft, base_url: event.currentTarget.value },
+                      })}
+                      style={{ minWidth: 0, width: "100%" }}
+                    />
+                    <input
+                      aria-label={`${model.provider} default model`}
+                      type="text"
+                      placeholder="model id"
+                      value={draft.default_model}
+                      disabled={!commandDispatcher}
+                      onChange={(event) => setModelConfigDrafts({
+                        ...modelConfigDrafts,
+                        [model.provider]: { ...draft, default_model: event.currentTarget.value },
+                      })}
+                      style={{ minWidth: 0, width: "100%" }}
+                    />
+                    <span style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      {model.requires_api_key && (
+                        <>
+                          <input
+                            aria-label={`${model.provider} API key`}
+                            type="password"
+                            placeholder="API key"
+                            value={modelKeys[model.provider] ?? ""}
+                            disabled={!commandDispatcher}
+                            onChange={(event) => setModelKeys({
+                              ...modelKeys,
+                              [model.provider]: event.currentTarget.value,
+                            })}
+                            style={{ minWidth: 0, width: "110px" }}
+                          />
+                          <button
+                            type="button"
+                            disabled={!commandDispatcher || !(modelKeys[model.provider] ?? "").trim()}
+                            onClick={() => {
+                              if (commandDispatcher) {
+                                void submitModelKeyRotateCommand(
+                                  commandDispatcher,
+                                  model,
+                                  modelKeys[model.provider] ?? "",
+                                );
+                              }
+                              setModelKeys({ ...modelKeys, [model.provider]: "" });
+                            }}
+                          >
+                            Set
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        disabled={!commandDispatcher}
+                        onClick={() => {
+                          if (commandDispatcher) {
+                            void submitModelConfigWriteCommand(commandDispatcher, model, {
+                              enabled: draft.enabled,
+                              base_url: draft.base_url,
+                              default_model: draft.default_model,
+                            });
+                          }
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!commandDispatcher || !model.has_api_key}
+                        onClick={() => {
+                          if (commandDispatcher) {
+                            void submitModelTestConnectionCommand(commandDispatcher, model);
+                          }
+                        }}
+                      >
+                        Test
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div style={{ fontSize: "13px", color: "#cfd3ff" }}>{selected}</div>
