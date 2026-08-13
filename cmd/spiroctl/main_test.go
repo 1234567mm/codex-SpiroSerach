@@ -1382,3 +1382,62 @@ func BenchmarkSpiroctlRunArtifactsValidate(b *testing.B) {
 		}
 	}
 }
+
+func TestFastScreenHopv15FixtureHtlWindow(t *testing.T) {
+	hopv15Dir := filepath.Join("..", "..", "data", "lib", "hopv15")
+	if err := run([]string{
+		"fast-screen", hopv15Dir,
+		"--homo-min", "-5.6", "--homo-max", "-5.0",
+		"--lumo-min", "-2.6", "--lumo-max", "-1.8",
+		"--band-gap-min", "2.0",
+	}); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+}
+
+func TestFastScreenHopv15FixtureMissesTightWindow(t *testing.T) {
+	hopv15Dir := filepath.Join("..", "..", "data", "lib", "hopv15")
+	runWithJSON := func(args []string) map[string]any {
+		output, err := captureStdout(func() error {
+			return run(append([]string{"fast-screen", hopv15Dir, "--json"}, args...))
+		})
+		if err != nil {
+			t.Fatalf("run() error = %v", err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(output), &payload); err != nil {
+			t.Fatalf("json unmarshal error = %v: %s", err, output)
+		}
+		return payload
+	}
+	payload := runWithJSON([]string{"--homo-min", "-4.0", "--homo-max", "-3.0"})
+	if hits := int(payload["hits"].(float64)); hits != 0 {
+		t.Fatalf("hits = %d want 0", hits)
+	}
+	if missing := int(payload["homo_missing"].(float64)); missing != 0 {
+		t.Fatalf("homo_missing = %d want 0", missing)
+	}
+	if out := int(payload["homo_out_of_window"].(float64)); out != 1 {
+		t.Fatalf("homo_out_of_window = %d want 1", out)
+	}
+}
+
+func TestFastScreenRejectsInvertedWindow(t *testing.T) {
+	hopv15Dir := filepath.Join("..", "..", "data", "lib", "hopv15")
+	if err := run([]string{"fast-screen", hopv15Dir, "--homo-min", "-4.0", "--homo-max", "-5.0"}); err == nil {
+		t.Fatal("expected inverted window error")
+	}
+}
+
+func TestFastScreenRequiresSourceDir(t *testing.T) {
+	if err := run([]string{"fast-screen"}); err == nil {
+		t.Fatal("expected usage error without source dir")
+	}
+}
+
+func TestFastScreenRejectsUnknownArgument(t *testing.T) {
+	hopv15Dir := filepath.Join("..", "..", "data", "lib", "hopv15")
+	if err := run([]string{"fast-screen", hopv15Dir, "--bogus", "1"}); err == nil {
+		t.Fatal("expected unknown argument error")
+	}
+}

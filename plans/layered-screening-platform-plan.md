@@ -63,13 +63,24 @@ Remaining sub-items for A (later wave):
 - Show local import reality: `data/lib` fixtures (git) vs downloaded raw data
   and `snapshots/` imports (local only).
 
-### C. Fast Screening Check Backend (Medium)
+### C. Fast Screening Check Backend (Medium) — slice 1 DONE 2026-08-12, slice 2 pending
 
-- Property-range filter query API: `band_gap` / `homo` / `lumo` windows over
-  providercache + local snapshots (millisecond targets, E3 baselines exist).
-- Unblock promotion writers: `scoring_written` explicit authorization moves
-  snapshot facts into `ScoringView` (promotion is currently `readiness_only`).
-- Acceptance: local snapshot → fast filter → scoring view end-to-end test.
+Slice 1 delivered (fast filter):
+- `internal/fastscreen`: read-only window filter over local snapshot records
+  (homo/lumo/band_gap ranges, nil = unconstrained), audit counts for missing
+  and out-of-window records (gaps never silently dropped), benchmark
+  1000 records ≈ 93 µs/op (< 5 ms initial threshold).
+- `spiroctl fast-screen <source-dir> [--homo-min/max] [--lumo-min/max]
+  [--band-gap-min/max] [--json]` — human report or JSON hits, validated
+  windows, real `data/lib/hopv15` fixture end-to-end test.
+- 6 package tests + 5 CLI integration tests; `go test ./...` green.
+
+Slice 2 (pending, module C-2): promotion writer unblock
+- `scoring_written` explicit authorization moves snapshot facts into the
+  scoring path (local backend SQLite + ScoringView-visible), replacing the
+  current `readiness_only` promotion. Go promote command + Python scoring
+  admission bridge; acceptance = local snapshot → fast filter → scoring view
+  end-to-end test.
 
 ### D. Model Interface Layer Completion (Medium)
 

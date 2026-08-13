@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"spirosearch/internal/fastscreen"
 	"spirosearch/internal/localbackend"
 	"spirosearch/internal/materialsproject"
 	"spirosearch/internal/nomadperla"
@@ -108,6 +110,9 @@ func runWithDependencies(
 	if len(args) >= 3 && args[0] == "workflow-task" {
 		return runWorkflowTask(args, nomadTransportFactory)
 	}
+	if len(args) >= 2 && args[0] == "fast-screen" {
+		return runFastScreen(args)
+	}
 	if len(args) >= 3 && args[0] == "source-closure" && (args[1] == "requirements" || args[1] == "promote") {
 		if args[1] == "requirements" {
 			return runSourceClosureRequirements(args)
@@ -115,7 +120,7 @@ func runWithDependencies(
 		return runSourceClosurePromote(args)
 	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl source-provider test-connection oqmd | spiroctl source-provider lookup pubchem --name <name> [--cache <path> --authorize-cache-write] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl source-provider test-connection oqmd | spiroctl source-provider lookup pubchem --name <name> [--cache <path> --authorize-cache-write] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl fast-screen <source-dir> [--homo-min <ev>] [--homo-max <ev>] [--lumo-min <ev>] [--lumo-max <ev>] [--band-gap-min <ev>] [--band-gap-max <ev>] [--json] | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -754,4 +759,70 @@ func validateKnownSourceSnapshot(dir string, manifest sourcesnapshot.Manifest) (
 	default:
 		return manifest.NormalizedRecordCount, nil
 	}
+}
+
+// runFastScreen filters normalized snapshot records by energy windows.
+// It is read-only: no provider calls, no scoring mutation, no writes.
+func runFastScreen(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: spiroctl fast-screen <source-dir> [--homo-min <ev>] [--homo-max <ev>] [--lumo-min <ev>] [--lumo-max <ev>] [--band-gap-min <ev>] [--band-gap-max <ev>] [--json]")
+	}
+	sourceDir := args[1]
+	window := fastscreen.Window{}
+	jsonOut := false
+	for index := 2; index < len(args); index++ {
+		switch args[index] {
+		case "--json":
+			jsonOut = true
+		case "--homo-min", "--homo-max", "--lumo-min", "--lumo-max", "--band-gap-min", "--band-gap-max":
+			if index+1 >= len(args) {
+				return fmt.Errorf("%s requires a value", args[index])
+			}
+			value, err := strconv.ParseFloat(args[index+1], 64)
+			if err != nil {
+				return fmt.Errorf("%s: invalid number %q", args[index], args[index+1])
+			}
+			index++
+			switch args[index-1] {
+			case "--homo-min":
+				window.HomoMin = &value
+			case "--homo-max":
+				window.HomoMax = &value
+			case "--lumo-min":
+				window.LumoMin = &value
+			case "--lumo-max":
+				window.LumoMax = &value
+			case "--band-gap-min":
+				window.BandGapMin = &value
+			case "--band-gap-max":
+				window.BandGapMax = &value
+			}
+		default:
+			return fmt.Errorf("unknown fast-screen argument: %s", args[index])
+		}
+	}
+	records, err := fastscreen.LoadRecords(sourceDir)
+	if err != nil {
+		return err
+	}
+	report, err := fastscreen.Filter(records, window)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return json.NewEncoder(os.Stdout).Encode(report)
+	}
+	fmt.Printf(
+		"ok fast-screen source=%s records=%d hits=%d homo_missing=%d lumo_missing=%d gap_missing=%d homo_out=%d lumo_out=%d gap_out=%d\n",
+		sourceDir,
+		report.SourceRecords,
+		report.Hits,
+		report.HomoMissing,
+		report.LumoMissing,
+		report.GapMissing,
+		report.HomoOut,
+		report.LumoOut,
+		report.GapOut,
+	)
+	return nil
 }
