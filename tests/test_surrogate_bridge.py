@@ -34,6 +34,51 @@ class SurrogateBridgeHandleTests(unittest.TestCase):
         self.assertEqual(response["error_code"], "unsupported_surrogate")
         self.assertIn("scikit-learn", response["message"])
 
+    def test_fit_then_predict_with_ml(self):
+        # Full fit -> predict chain against real sklearn (skipped without the
+        # optional [ml] dependency group).
+        try:
+            import sklearn  # noqa: F401
+        except ImportError:
+            self.skipTest("scikit-learn not installed (optional [ml] group)")
+        fit_response = _handle({
+            "action": "fit", "model_id": "gp-1",
+            "X": [
+                {"homo_ev": -5.1, "lumo_ev": -2.0, "band_gap_ev": 3.1},
+                {"homo_ev": -5.3, "lumo_ev": -1.9, "band_gap_ev": 3.4},
+                {"homo_ev": -4.9, "lumo_ev": -2.2, "band_gap_ev": 2.7},
+            ],
+            "y": [1.0, 0.8, 0.6],
+        })
+        self.assertTrue(fit_response["ok"], fit_response)
+        self.assertIn("fit_result", fit_response)
+        provenance = fit_response["provenance"]
+        self.assertEqual(provenance["surrogate_type"], "SKLEARN_GPR")
+        self.assertNotEqual(provenance["training_set_hash"], "")
+        self.assertIn("homo_ev", provenance["feature_names"])
+
+        predict_response = _handle({
+            "action": "predict", "model_id": "gp-1",
+            "X": [{"homo_ev": -5.2, "lumo_ev": -2.0, "band_gap_ev": 3.2}],
+        })
+        self.assertTrue(predict_response["ok"], predict_response)
+        self.assertEqual(len(predict_response["values"]), 1)
+        self.assertEqual(predict_response["provenance"]["training_set_hash"], provenance["training_set_hash"])
+
+        uncertainty_response = _handle({
+            "action": "uncertainty", "model_id": "gp-1",
+            "X": [{"homo_ev": -5.2, "lumo_ev": -2.0, "band_gap_ev": 3.2}],
+        })
+        self.assertTrue(uncertainty_response["ok"], uncertainty_response)
+        self.assertGreaterEqual(uncertainty_response["values"][0], 0.0)
+
+        acquisition_response = _handle({
+            "action": "acquisition", "model_id": "gp-1", "strategy": "ucb",
+            "X": [{"homo_ev": -5.2, "lumo_ev": -2.0, "band_gap_ev": 3.2}],
+        })
+        self.assertTrue(acquisition_response["ok"], acquisition_response)
+        self.assertEqual(len(acquisition_response["values"]), 1)
+
     def test_bridge_module_runs_as_process(self):
         # End-to-end: the module starts, answers a stop request, and exits.
         result = subprocess.run(
