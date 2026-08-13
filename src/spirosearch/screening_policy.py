@@ -4,6 +4,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from spirosearch.screening_modules import (
+    DEFAULT_HTL_MODULE_ID,
+    DeviceLayer,
+    ScreeningModule,
+    register_screening_module,
+)
+
 
 class GateStatus(str, Enum):
     PASS = "pass"
@@ -42,6 +49,26 @@ LUMO_WINDOW = (-2.60, -1.80)
 # Band gap minimum for HTL (eV)
 BAND_GAP_MIN = 2.0
 
+# Default HTL screening module (Spiro replacement, conventional n-i-p).
+# Parameters are single-sourced from the HTL constants above; the engine is
+# layer-generic via spirosearch.screening_modules.ScreeningModule.
+DEFAULT_HTL_SCREENING_MODULE = ScreeningModule(
+    module_id=DEFAULT_HTL_MODULE_ID,
+    layer=DeviceLayer.HTL,
+    display_name="Spiro-OMeTAD replacement screening (conventional n-i-p)",
+    profile_version=HTL_SCREENING_VERSION,
+    homo_window=HOMO_WINDOW,
+    lumo_window=LUMO_WINDOW,
+    band_gap_min=BAND_GAP_MIN,
+    weights=HTL_SCREENING_WEIGHTS,
+    data_source_ids=("nomad_perla_psc", "hopv15", "opv_db", "cepd", "pubchemqc"),
+    description=(
+        "Registered htl-layer module for Spiro-OMeTAD replacement screening. "
+        "This is one module of the layered screening platform, not a core engine feature."
+    ),
+)
+register_screening_module(DEFAULT_HTL_SCREENING_MODULE)
+
 
 @dataclass(frozen=True)
 class ScreeningGateResult:
@@ -53,6 +80,8 @@ class ScreeningGateResult:
     components: tuple[ScreeningComponent, ...] = ()
     blocking_review_ids: tuple[str, ...] = ()
     profile_version: str = HTL_SCREENING_VERSION
+    module_id: str = DEFAULT_HTL_MODULE_ID
+    layer: str = DeviceLayer.HTL.value
     weights: dict[str, float] = field(default_factory=lambda: dict(HTL_SCREENING_WEIGHTS))
     weighted_utility: float = 0.0
     coverage: float = 0.0
@@ -74,6 +103,8 @@ class ScreeningGateResult:
             ],
             "blocking_review_ids": list(self.blocking_review_ids),
             "profile_version": self.profile_version,
+            "module_id": self.module_id,
+            "layer": self.layer,
             "weights": dict(self.weights),
             "weighted_utility": self.weighted_utility,
             "coverage": self.coverage,
@@ -81,7 +112,12 @@ class ScreeningGateResult:
 
 
 class ScreeningPolicy:
-    """Three-state (PASS/DEFER/REJECT) evidence-aware gate for HTL candidates.
+    """Three-state (PASS/DEFER/REJECT) evidence-aware gate for layer screening.
+
+    The engine is layer-generic: a registered :class:`ScreeningModule` supplies
+    the windows, weights, and hard filters. The default (no-argument)
+    construction keeps the historical HTL behavior via
+    ``DEFAULT_HTL_SCREENING_MODULE``.
 
     - Missing evidence → DEFER (never REJECT)
     - Known, comparable, high-quality violation → REJECT
@@ -91,14 +127,31 @@ class ScreeningPolicy:
     def __init__(
         self,
         *,
+        module: ScreeningModule | None = None,
         homo_window: tuple[float, float] = HOMO_WINDOW,
         lumo_window: tuple[float, float] = LUMO_WINDOW,
         band_gap_min: float = BAND_GAP_MIN,
+        band_gap_max: float | None = None,
         weights: dict[str, float] | None = None,
     ):
+        if module is not None:
+            homo_window = module.homo_window
+            lumo_window = module.lumo_window
+            band_gap_min = module.band_gap_min
+            band_gap_max = module.band_gap_max
+            weights = dict(module.weights)
+            self.module_id = module.module_id
+            self.layer = module.layer.value
+            self.profile_version = module.profile_version
+        else:
+            default_module = DEFAULT_HTL_SCREENING_MODULE
+            self.module_id = default_module.module_id
+            self.layer = default_module.layer.value
+            self.profile_version = default_module.profile_version
         self.homo_window = homo_window
         self.lumo_window = lumo_window
         self.band_gap_min = band_gap_min
+        self.band_gap_max = band_gap_max
         self.weights = dict(weights or HTL_SCREENING_WEIGHTS)
 
     def evaluate(
@@ -216,6 +269,18 @@ class ScreeningPolicy:
                 quality=0.1,
                 evidence_ids=(bg_meta.get("evidence_id", ""),),
             ))
+        elif (
+            bg_curated
+            and self.band_gap_max is not None
+            and band_gap > self.band_gap_max
+        ):
+            codes.append("BAND_GAP_TOO_HIGH")
+            has_reject = True
+            components.append(ScreeningComponent(
+                name="band_gap", utility=0.0, observed=True,
+                quality=0.1,
+                evidence_ids=(bg_meta.get("evidence_id", ""),),
+            ))
         elif band_gap is not None:
             utility = min(1.0, band_gap / 3.0)
             components.append(ScreeningComponent(
@@ -255,6 +320,9 @@ class ScreeningPolicy:
             codes=tuple(codes),
             components=tuple(components),
             blocking_review_ids=blocking_review_ids,
+            profile_version=self.profile_version,
+            module_id=self.module_id,
+            layer=self.layer,
             weighted_utility=round(weighted_utility, 4),
             coverage=round(coverage, 4),
         )
