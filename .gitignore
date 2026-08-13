@@ -27,7 +27,10 @@ data/lib/**/*.zip
 data/lib/**/*.data
 data/lib/**/*.tar
 data/lib/**/*.tar.gz
+data/lib/**/*.tar.bz2
+data/lib/**/*.tbz
 data/lib/**/*.tgz
+data/lib/**/*.xz
 data/lib/**/*.7z
 data/lib/**/*.parquet
 data/lib/**/*.sqlite
