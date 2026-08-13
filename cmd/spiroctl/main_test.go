@@ -1441,3 +1441,55 @@ func TestFastScreenRejectsUnknownArgument(t *testing.T) {
 		t.Fatal("expected unknown argument error")
 	}
 }
+
+func TestKnowledgeBaseListRealRegistry(t *testing.T) {
+	if err := run([]string{
+		"knowledge-base", "list",
+		"--registry", filepath.Join("..", "..", "data", "source_registry.json"),
+		"--library", filepath.Join("..", ".."),
+	}); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+}
+
+func TestKnowledgeBaseListFamilyFilterJSON(t *testing.T) {
+	output, err := captureStdout(func() error {
+		return run([]string{
+			"knowledge-base", "list",
+			"--registry", filepath.Join("..", "..", "data", "source_registry.json"),
+			"--library", filepath.Join("..", ".."),
+			"--family", "opv_benchmark",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		t.Fatalf("json unmarshal error = %v: %s", err, output)
+	}
+	if payload["schema_version"] != "v37.source_catalog.v1" {
+		t.Fatalf("schema_version = %v", payload["schema_version"])
+	}
+	families := payload["families"].([]any)
+	if len(families) != 1 {
+		t.Fatalf("families = %d want 1", len(families))
+	}
+	family := families[0].(map[string]any)
+	if family["family"] != "opv_benchmark" {
+		t.Fatalf("family = %v", family["family"])
+	}
+}
+
+func TestKnowledgeBaseRejectsUnknownArgument(t *testing.T) {
+	if err := run([]string{"knowledge-base", "list", "--bogus", "x"}); err == nil {
+		t.Fatal("expected unknown argument error")
+	}
+}
+
+func TestKnowledgeBaseRequiresListSubcommand(t *testing.T) {
+	if err := run([]string{"knowledge-base"}); err == nil {
+		t.Fatal("expected usage error")
+	}
+}

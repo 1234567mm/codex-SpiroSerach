@@ -113,6 +113,9 @@ func runWithDependencies(
 	if len(args) >= 2 && args[0] == "fast-screen" {
 		return runFastScreen(args)
 	}
+	if len(args) >= 2 && args[0] == "knowledge-base" {
+		return runKnowledgeBase(args)
+	}
 	if len(args) >= 3 && args[0] == "source-closure" && (args[1] == "requirements" || args[1] == "promote") {
 		if args[1] == "requirements" {
 			return runSourceClosureRequirements(args)
@@ -855,5 +858,69 @@ func runFastScreen(args []string) error {
 		report.LumoOut,
 		report.GapOut,
 	)
+	return nil
+}
+
+// runKnowledgeBase lists the classified knowledge-base source catalog.
+// Read-only: registry + local data/lib inspection, no provider calls.
+func runKnowledgeBase(args []string) error {
+	if len(args) < 2 || args[1] != "list" {
+		return fmt.Errorf("usage: spiroctl knowledge-base list [--registry <path>] [--library <dir>] [--family <name>] [--mode <mode>] [--json]")
+	}
+	registryPath := "data/source_registry.json"
+	libraryRoot := "."
+	family := ""
+	mode := ""
+	jsonOut := false
+	for index := 2; index < len(args); index++ {
+		switch args[index] {
+		case "--json":
+			jsonOut = true
+		case "--registry", "--library", "--family", "--mode":
+			if index+1 >= len(args) {
+				return fmt.Errorf("%s requires a value", args[index])
+			}
+			value := args[index+1]
+			index++
+			switch args[index-1] {
+			case "--registry":
+				registryPath = value
+			case "--library":
+				libraryRoot = value
+			case "--family":
+				family = value
+			case "--mode":
+				mode = value
+			}
+		default:
+			return fmt.Errorf("unknown knowledge-base argument: %s", args[index])
+		}
+	}
+	entries, err := sourceregistry.LoadFile(registryPath)
+	if err != nil {
+		return err
+	}
+	catalog, err := sourceregistry.BuildCatalog(entries, libraryRoot)
+	if err != nil {
+		return err
+	}
+	catalog = sourceregistry.FilterCatalog(catalog, family, mode)
+	if jsonOut {
+		return json.NewEncoder(os.Stdout).Encode(catalog)
+	}
+	fmt.Printf("ok knowledge-base sources=%d families=%d registry=%s\n", catalog.SourceCount, catalog.FamilyCount, registryPath)
+	for _, familySummary := range catalog.Families {
+		fmt.Printf("family=%s entries=%d modes=%s\n", familySummary.Family, familySummary.EntryCount, strings.Join(familySummary.AcquisitionModes, ","))
+		for _, entry := range familySummary.Entries {
+			fmt.Printf(
+				"  %-20s status=%-13s mode=%-22s fixture=%-16s snapshots=%d\n",
+				entry.Provider,
+				entry.OperationalStatus,
+				entry.AcquisitionMode,
+				entry.FixtureStatus,
+				entry.LocalSnapshotCount,
+			)
+		}
+	}
 	return nil
 }

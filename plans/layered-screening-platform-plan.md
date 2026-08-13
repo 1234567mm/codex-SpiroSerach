@@ -54,14 +54,26 @@ Remaining sub-items for A (later wave):
   and workflow-task/CLI surfaces (framework API is ready; emitter keeps HTL default).
 - More registered modules per layer as research needs them.
 
-### B. Knowledge Base Wiring (Medium)
+### B. Knowledge Base Wiring (Medium) — slice 1 DONE 2026-08-12, slice 2 pending
 
-- Backend: category browse/search API by `source_family` / `acquisition_mode`
-  (read side, via Go readonly path).
-- Frontend: AtomReasonX Knowledge Library view switches from fixture to real
-  read state; shows per-category sources, snapshot status, fixture vs missing.
-- Show local import reality: `data/lib` fixtures (git) vs downloaded raw data
-  and `snapshots/` imports (local only).
+Slice 1 delivered (classified browse backend):
+- `internal/sourceregistry/catalog.go`: `BuildCatalog` projects the registry
+  into a knowledge-base catalog grouped by `source_family` with local library
+  reality per source — fixture contract status (from
+  `data/lib/<source>/source-manifest.json` `quarantine_status`, passed through
+  verbatim) and imported local snapshot count (ignored `snapshots/` dirs);
+  path-safe (absolute/`..` data_library_path rejected); `FilterCatalog` by
+  family and/or acquisition mode.
+- `spiroctl knowledge-base list [--registry <path>] [--library <root>]
+  [--family <name>] [--mode <mode>] [--json]` — grouped text or JSON
+  (`v37.source_catalog.v1`). Real run: 13 sources / 9 families, hopv15/opv_db
+  snapshots=2, nomad_perla_psc snapshots=1 visible.
+- 3 package tests + 4 CLI integration tests.
+
+Slice 2 (pending, module B-2): AtomReasonX wiring
+- New Source Categories view (or extension of the existing Knowledge Library
+  view) consuming the catalog read state through the AtomReasonX read adapter;
+  contracts + fixtures + component tests. Go backend above is the data source.
 
 ### C. Fast Screening Check Backend (Medium) — slice 1 DONE 2026-08-12, slice 2 pending
 
