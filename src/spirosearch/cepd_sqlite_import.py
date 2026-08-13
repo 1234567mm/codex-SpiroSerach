@@ -227,6 +227,20 @@ def stream_mysql_dump_to_sqlite(
     statement_lines: list[str] | None = None
     statement_kind = ""
     statement_table = ""
+    progress_step = progress_every_mb * 1024 * 1024
+    last_progress_step = 0
+
+    def report_progress() -> None:
+        nonlocal last_progress_step
+        step = summary["bytes_read"] // progress_step
+        if step > last_progress_step:
+            last_progress_step = step
+            print(
+                f"[cepd-import] read {summary['bytes_read'] / 1e9:.1f} GB, "
+                f"rows {summary['rows']:,}, tables {len(summary['tables'])}",
+                flush=True,
+            )
+
     with sql_path.open("r", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             summary["bytes_read"] += len(line)
@@ -242,12 +256,7 @@ def stream_mysql_dump_to_sqlite(
                     statement_kind = "insert"
                     statement_table = match.group(1) if match else ""
                 if statement_lines is None:
-                    if summary["bytes_read"] % (progress_every_mb * 1024 * 1024) < 4096:
-                        print(
-                            f"[cepd-import] read {summary['bytes_read'] / 1e9:.1f} GB, "
-                            f"rows {summary['rows']:,}, tables {len(summary['tables'])}",
-                            flush=True,
-                        )
+                    report_progress()
                     continue
                 if line.rstrip("\r\n").endswith(";"):
                     statement = "".join(statement_lines)
@@ -274,12 +283,7 @@ def stream_mysql_dump_to_sqlite(
                         elif table and table not in table_schema:
                             table_schema[table] = False
                             summary["skipped_tables"].append(table)
-                    if summary["bytes_read"] % (progress_every_mb * 1024 * 1024) < 4096:
-                        print(
-                            f"[cepd-import] read {summary['bytes_read'] / 1e9:.1f} GB, "
-                            f"rows {summary['rows']:,}, tables {len(summary['tables'])}",
-                            flush=True,
-                        )
+                    report_progress()
                 continue
             statement_lines.append(line)
             if not line.rstrip("\r\n").endswith(";"):
