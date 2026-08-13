@@ -1003,3 +1003,53 @@ func mustLoadSnapshotRecords(t *testing.T, dir string, manifest Manifest) []map[
 	}
 	return records
 }
+
+// TestPromoteScoringWriteEndToEnd drives the full C-2 Go chain on a
+// closure-ready snapshot: readiness check -> facts extraction -> scoring-write
+// promotion report. The facts file is also mirrored to a stable temp path so a
+// manual cross-language check can admit it through the Python gate.
+func TestPromoteScoringWriteEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	writeClosureReadyPubChemQCSnapshot(t, dir)
+
+	manifest, err := LoadFile(filepath.Join(dir, "source-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := BuildClosureReadinessReport(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Ready {
+		t.Fatalf("snapshot must be closure ready: %#v", report)
+	}
+	records, err := LoadSnapshotRecords(dir, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	factsPath := filepath.Join(dir, "scoring-facts.json")
+	if err := WriteSnapshotScoringFacts(manifest.SourceID, records, factsPath); err != nil {
+		t.Fatal(err)
+	}
+	promotion := BuildOperatorTaskPromotionReportWithScoringWrite(filepath.Join(dir, "source-manifest.json"), report, factsPath)
+	if err := ValidateOperatorTaskPromotionReport(promotion); err != nil {
+		t.Fatalf("promotion invalid: %v", err)
+	}
+	if promotion.PromotionScope != "scoring_write_authorized" || !promotion.ScoringWritten {
+		t.Fatalf("unexpected promotion scope: %#v", promotion)
+	}
+	raw, err := os.ReadFile(factsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document SnapshotScoringFactsFile
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Facts) != 3 {
+		t.Fatalf("facts = %d want 3", len(document.Facts))
+	}
+	if err := os.WriteFile(filepath.Join(os.TempDir(), "spirosearch-c2-e2e-facts.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}

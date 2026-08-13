@@ -60,8 +60,12 @@ func TestOperatorTaskPromotionReportMatchesJSONSchema(t *testing.T) {
 	if properties["action"].(map[string]any)["const"] != "promote" {
 		t.Fatalf("action const drifted from Go contract")
 	}
-	if properties["promotion_scope"].(map[string]any)["const"] != "readiness_only" {
-		t.Fatalf("promotion_scope const drifted from Go contract")
+	scopeEnum := stringSetFromAnySlice(properties["promotion_scope"].(map[string]any)["enum"].([]any))
+	if !scopeEnum["readiness_only"] || !scopeEnum["scoring_write_authorized"] {
+		t.Fatalf("promotion_scope enum drifted from Go contract: %v", scopeEnum)
+	}
+	if _, ok := properties["scoring_facts_path"]; !ok {
+		t.Fatalf("promotion schema missing scoring_facts_path property")
 	}
 	required := stringSetFromAnySlice(schema["required"].([]any))
 	for _, key := range []string{
@@ -86,8 +90,8 @@ func TestOperatorTaskPromotionReportMatchesJSONSchema(t *testing.T) {
 		if !ok {
 			t.Fatalf("promotion schema missing writer field %q", key)
 		}
-		if writer["const"] != false {
-			t.Fatalf("writer field %q must be const false in readiness-only promotion schema", key)
+		if writer["type"] != "boolean" {
+			t.Fatalf("writer field %q must be boolean in promotion schema", key)
 		}
 	}
 }

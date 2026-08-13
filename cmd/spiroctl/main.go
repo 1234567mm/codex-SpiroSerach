@@ -120,7 +120,7 @@ func runWithDependencies(
 		return runSourceClosurePromote(args)
 	}
 	if len(args) != 3 || (args[1] != "validate" && !(args[0] == "source-closure" && args[1] == "requirements")) {
-		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl source-provider test-connection oqmd | spiroctl source-provider lookup pubchem --name <name> [--cache <path> --authorize-cache-write] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl fast-screen <source-dir> [--homo-min <ev>] [--homo-max <ev>] [--lumo-min <ev>] [--lumo-max <ev>] [--band-gap-min <ev>] [--band-gap-max <ev>] [--json] | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
+		return fmt.Errorf("usage: spiroctl source-registry validate <path> | spiroctl source-snapshot validate <path> | spiroctl source-closure validate <source-manifest> | spiroctl source-closure requirements <source-id> | spiroctl source-closure promote <source-manifest> [--authorize-scoring-write --scoring-facts <path>] | spiroctl source-provider test-connection materials_project [--formula <formula>] | spiroctl source-provider test-connection pubchem | spiroctl source-provider test-connection oqmd | spiroctl source-provider lookup pubchem --name <name> [--cache <path> --authorize-cache-write] | spiroctl workflow-task validate <task-json> | spiroctl workflow-task admit <task-json> --ledger <ledger-jsonl> | spiroctl workflow-task execute --task-id <id> --ledger <ledger-jsonl> --authorize-live-provider-calls --target <target-dir> | spiroctl workflow-task restore --ledger <ledger-jsonl> | spiroctl fast-screen <source-dir> [--homo-min <ev>] [--homo-max <ev>] [--lumo-min <ev>] [--lumo-max <ev>] [--band-gap-min <ev>] [--band-gap-max <ev>] [--json] | spiroctl provider-cache validate <path> | spiroctl provider-cache-index validate <path> | spiroctl local-backend validate <path> | spiroctl run-artifacts validate <output-dir> | spiroctl readonly-run validate <output-dir> | spiroctl readonly-run serve <output-dir> [--addr <addr>]")
 	}
 	switch args[0] {
 	case "source-registry":
@@ -593,7 +593,38 @@ func runSourceClosurePromote(args []string) error {
 		}
 		return &sourcesnapshot.ClosureReadinessError{Report: report}
 	}
-	promotion := sourcesnapshot.BuildOperatorTaskPromotionReport(manifestPath, report)
+	authorizeScoringWrite := false
+	scoringFactsPath := ""
+	for index := 3; index < len(args); index++ {
+		switch args[index] {
+		case "--authorize-scoring-write":
+			authorizeScoringWrite = true
+		case "--scoring-facts":
+			if index+1 >= len(args) {
+				return fmt.Errorf("--scoring-facts requires a value")
+			}
+			scoringFactsPath = args[index+1]
+			index++
+		default:
+			return fmt.Errorf("unknown source-closure promote argument: %s", args[index])
+		}
+	}
+	if authorizeScoringWrite != (scoringFactsPath != "") {
+		return fmt.Errorf("--authorize-scoring-write and --scoring-facts <path> must be used together")
+	}
+	var promotion sourcesnapshot.OperatorTaskPromotionReport
+	if authorizeScoringWrite {
+		records, err := sourcesnapshot.LoadSnapshotRecords(dir, manifest)
+		if err != nil {
+			return fmt.Errorf("cannot load snapshot records for scoring facts: %w", err)
+		}
+		if err := sourcesnapshot.WriteSnapshotScoringFacts(manifest.SourceID, records, scoringFactsPath); err != nil {
+			return fmt.Errorf("cannot write scoring facts: %w", err)
+		}
+		promotion = sourcesnapshot.BuildOperatorTaskPromotionReportWithScoringWrite(manifestPath, report, scoringFactsPath)
+	} else {
+		promotion = sourcesnapshot.BuildOperatorTaskPromotionReport(manifestPath, report)
+	}
 	if err := sourcesnapshot.ValidateOperatorTaskPromotionReport(promotion); err != nil {
 		return fmt.Errorf("promotion contract invalid: %w", err)
 	}

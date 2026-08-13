@@ -75,12 +75,27 @@ Slice 1 delivered (fast filter):
   windows, real `data/lib/hopv15` fixture end-to-end test.
 - 6 package tests + 5 CLI integration tests; `go test ./...` green.
 
-Slice 2 (pending, module C-2): promotion writer unblock
-- `scoring_written` explicit authorization moves snapshot facts into the
-  scoring path (local backend SQLite + ScoringView-visible), replacing the
-  current `readiness_only` promotion. Go promote command + Python scoring
-  admission bridge; acceptance = local snapshot → fast filter → scoring view
-  end-to-end test.
+Slice 2 delivered (promotion writer, C-2) 2026-08-12:
+- `spiroctl source-closure promote <manifest> --authorize-scoring-write
+  --scoring-facts <path>`: on a closure-ready snapshot, extracts homo/lumo/
+  band_gap facts into `snapshot-scoring-facts.json`
+  (`v37.snapshot_scoring_facts.v1`) and emits a `scoring_write_authorized`
+  promotion report (only scoring_written claimed; other writers stay false).
+- Schema: `operator-task-promotion.schema.json` promotion_scope enum
+  (readiness_only | scoring_write_authorized) with conditional writer
+  constraints; Go drift test updated.
+- Python `src/spirosearch/snapshot_scoring_admission.py`:
+  `admit_snapshot_facts()` converts promoted facts to canonical
+  `EnergyEvidence` and admits them through `EvidenceQualityPolicy` into a
+  `ScoringView` (machine-extracted computed facts, reference scale "vacuum",
+  source trust level mapping; blocking review items exclude facts).
+- Acceptance verified end-to-end: closure-ready snapshot → promote writes
+  facts (Go) → Python admission → ScoringView with 3 energy facts;
+  fast-screen works on the 180-record local HOPV15 snapshot
+  (records=180 hits=1, gap audits visible).
+- Note: the local V36.1 HOPV15 snapshot still carries
+  `hopv15-normalizer-v1` while the closure gate expects v2 — re-import the
+  snapshot with the current importer before promoting it (fail-closed by design).
 
 ### D. Model Interface Layer Completion (Medium)
 

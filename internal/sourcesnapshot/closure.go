@@ -960,10 +960,15 @@ func isFixtureVersion(version string) bool {
 }
 
 // OperatorTaskPromotionReport is the machine-readable promotion record emitted
-// by `spiroctl source-closure promote`. The promotion_scope is readiness_only:
-// the command validates closure readiness and declares that no downstream
-// writer (provider cache, local backend/SQLite, scoring, or experiments) has
-// been touched. Downstream writes require a separate explicit writer gate.
+// by `spiroctl source-closure promote`.
+//
+// readiness_only (default): the command validates closure readiness and
+// declares that no downstream writer (provider cache, local backend/SQLite,
+// scoring, or experiments) has been touched.
+//
+// scoring_write_authorized (--authorize-scoring-write): snapshot energy facts
+// are extracted to a scoring-facts file for downstream admission; only
+// scoring_written may be claimed, other writers stay false.
 type OperatorTaskPromotionReport struct {
 	SchemaVersion        string `json:"schema_version"`
 	SourceID             string `json:"source_id"`
@@ -976,6 +981,7 @@ type OperatorTaskPromotionReport struct {
 	LocalBackendWritten  bool   `json:"local_backend_written"`
 	ScoringWritten       bool   `json:"scoring_written"`
 	ExperimentWritten    bool   `json:"experiment_written"`
+	ScoringFactsPath     string `json:"scoring_facts_path,omitempty"`
 }
 
 // BuildOperatorTaskPromotionReport constructs a promotion record for a source
@@ -998,9 +1004,23 @@ func BuildOperatorTaskPromotionReport(manifestPath string, report ClosureReadine
 	}
 }
 
+// BuildOperatorTaskPromotionReportWithScoringWrite constructs a promotion
+// record for a scoring-write-authorized promote: snapshot energy facts were
+// extracted to scoringFactsPath and only scoring_written is claimed.
+func BuildOperatorTaskPromotionReportWithScoringWrite(manifestPath string, report ClosureReadinessReport, scoringFactsPath string) OperatorTaskPromotionReport {
+	promotion := BuildOperatorTaskPromotionReport(manifestPath, report)
+	promotion.PromotionScope = "scoring_write_authorized"
+	promotion.ScoringWritten = true
+	promotion.ScoringFactsPath = scoringFactsPath
+	return promotion
+}
+
 // ValidateOperatorTaskPromotionReport enforces the operator-task-promotion
-// contract: readiness_only scope, action=promote, ready=true, and no downstream
-// writer may be claimed.
+// contract:
+//   - readiness_only: no downstream writer may be claimed.
+//   - scoring_write_authorized: scoring_written must be true with a non-empty
+//     scoring_facts_path; provider cache, local backend, and experiment
+//     writers must stay false.
 func ValidateOperatorTaskPromotionReport(report OperatorTaskPromotionReport) error {
 	if report.SchemaVersion != OperatorTaskPromotionSchemaVersion {
 		return fmt.Errorf("promotion schema_version = %q, want %q", report.SchemaVersion, OperatorTaskPromotionSchemaVersion)
@@ -1011,14 +1031,30 @@ func ValidateOperatorTaskPromotionReport(report OperatorTaskPromotionReport) err
 	if !report.Ready {
 		return fmt.Errorf("promotion ready = false")
 	}
-	if report.PromotionScope != "readiness_only" {
-		return fmt.Errorf("promotion_scope = %q, want readiness_only", report.PromotionScope)
-	}
-	if report.ProviderCacheWritten || report.LocalBackendWritten || report.ScoringWritten || report.ExperimentWritten {
-		return fmt.Errorf("readiness-only promotion must not claim downstream writer writes")
-	}
 	if strings.TrimSpace(report.ManifestPath) == "" {
 		return fmt.Errorf("promotion manifest_path is empty")
 	}
-	return nil
+	switch report.PromotionScope {
+	case "readiness_only":
+		if report.ProviderCacheWritten || report.LocalBackendWritten || report.ScoringWritten || report.ExperimentWritten {
+			return fmt.Errorf("readiness-only promotion must not claim downstream writer writes")
+		}
+		if report.ScoringFactsPath != "" {
+			return fmt.Errorf("readiness-only promotion must not carry a scoring_facts_path")
+		}
+		return nil
+	case "scoring_write_authorized":
+		if !report.ScoringWritten {
+			return fmt.Errorf("scoring_write_authorized promotion must claim scoring_written")
+		}
+		if strings.TrimSpace(report.ScoringFactsPath) == "" {
+			return fmt.Errorf("scoring_write_authorized promotion requires scoring_facts_path")
+		}
+		if report.ProviderCacheWritten || report.LocalBackendWritten || report.ExperimentWritten {
+			return fmt.Errorf("scoring_write_authorized promotion must not claim other downstream writer writes")
+		}
+		return nil
+	default:
+		return fmt.Errorf("promotion_scope = %q, want readiness_only or scoring_write_authorized", report.PromotionScope)
+	}
 }

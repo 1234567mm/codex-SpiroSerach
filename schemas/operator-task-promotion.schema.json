@@ -22,12 +22,46 @@
     "source_id": { "type": "string", "minLength": 1 },
     "action": { "const": "promote" },
     "ready": { "const": true },
-    "promotion_scope": { "const": "readiness_only" },
+    "promotion_scope": {
+      "enum": ["readiness_only", "scoring_write_authorized"]
+    },
     "manifest_path": { "type": "string", "minLength": 1 },
     "record_count": { "type": "integer", "minimum": 0 },
-    "provider_cache_written": { "const": false },
-    "local_backend_written": { "const": false },
-    "scoring_written": { "const": false },
-    "experiment_written": { "const": false }
-  }
+    "provider_cache_written": { "type": "boolean" },
+    "local_backend_written": { "type": "boolean" },
+    "scoring_written": { "type": "boolean" },
+    "experiment_written": { "type": "boolean" },
+    "scoring_facts_path": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "promotion_scope": { "const": "readiness_only" } },
+        "required": ["promotion_scope"]
+      },
+      "then": {
+        "properties": {
+          "provider_cache_written": { "const": false },
+          "local_backend_written": { "const": false },
+          "scoring_written": { "const": false },
+          "experiment_written": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "promotion_scope": { "const": "scoring_write_authorized" } },
+        "required": ["promotion_scope"]
+      },
+      "then": {
+        "required": ["scoring_facts_path"],
+        "properties": {
+          "provider_cache_written": { "const": false },
+          "local_backend_written": { "const": false },
+          "scoring_written": { "const": true },
+          "experiment_written": { "const": false }
+        }
+      }
+    }
+  ]
 }
