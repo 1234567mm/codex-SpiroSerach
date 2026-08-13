@@ -82,6 +82,11 @@ export const WORKFLOW_COMMAND_TASK_DEFINITIONS: Record<string, WorkflowCommandTa
     provider_scope: "source",
     declared_effects: ["extracted_claims", "citation_links"],
   },
+  run_htl_screening: {
+    provider: null,
+    provider_scope: "local",
+    declared_effects: ["screening_result"],
+  },
 };
 
 export const WORKFLOW_COMMAND_ACTION_TYPES = new Set(Object.keys(WORKFLOW_COMMAND_TASK_DEFINITIONS));
