@@ -65,7 +65,6 @@ func TestExecuteAdmissionPlanUsesAdmissionSearchBodyAndWritesProviderResponse(t 
 	}
 	var searchBody map[string]any
 	decoder := json.NewDecoder(strings.NewReader(string(transport.calls[0].body)))
-	decoder.UseNumber()
 	if err := decoder.Decode(&searchBody); err != nil {
 		t.Fatal(err)
 	}
@@ -76,8 +75,8 @@ func TestExecuteAdmissionPlanUsesAdmissionSearchBodyAndWritesProviderResponse(t 
 	if searchHash != plan.SearchQueryHash {
 		t.Fatalf("executed search body hash = %s, want admission plan hash %s", searchHash, plan.SearchQueryHash)
 	}
-	if strings.Contains(string(transport.calls[0].body), "spiroometad") {
-		t.Fatalf("execution drifted into synonym-expanded lookup query: %s", transport.calls[0].body)
+	if string(transport.calls[0].body) != string(plan.SearchBody) {
+		t.Fatalf("execution drifted from the admission search body:\nactual:   %s\nadmission: %s", transport.calls[0].body, plan.SearchBody)
 	}
 	if result.ProviderResponse.Provider != ProviderName ||
 		result.ProviderResponse.Query != "admitted_htl_sync:Spiro-OMeTAD" ||

@@ -38,18 +38,20 @@ func TestBuildNomadAdmissionPlanDefaultsToPositiveSpiroNipQuery(t *testing.T) {
 	expectedSearchBody := map[string]any{
 		"owner": "public",
 		"query": map[string]any{
-			"sections:all": []any{"nomad.datamodel.results.SolarCell"},
-			htlQueryPath:   []any{"Spiro-OMeTAD"},
-			architecturePath: []any{
-				"nip",
-			},
+			"sections:all":   []any{"nomad.datamodel.results.SolarCell"},
+			htlQueryPath:     stringSliceAsAny(ExpandHTLSynonyms("Spiro-OMeTAD")),
+			architecturePath: []any{"nip"},
 		},
-		"pagination": map[string]any{"page_size": 25},
+		"pagination": map[string]any{"page_size": float64(25)},
 	}
-	if !reflect.DeepEqual(plan.SearchBody, expectedSearchBody) {
-		t.Fatalf("search body mismatch:\nactual: %#v\nwant: %#v", plan.SearchBody, expectedSearchBody)
+	var actualBody map[string]any
+	if err := json.Unmarshal(plan.SearchBody, &actualBody); err != nil {
+		t.Fatalf("search body is not valid JSON: %v", err)
 	}
-	expectedHash, err := providercache.StableHash(expectedSearchBody)
+	if !reflect.DeepEqual(actualBody, expectedSearchBody) {
+		t.Fatalf("search body mismatch:\nactual: %#v\nwant: %#v", actualBody, expectedSearchBody)
+	}
+	expectedHash, err := providercache.StableHash(actualBody)
 	if err != nil {
 		t.Fatal(err)
 	}

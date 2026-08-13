@@ -2,6 +2,7 @@ package workflowtask
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -121,7 +122,7 @@ func buildAdmissionRecord(task TaskArtifact, now time.Time) (AdmissionRecord, er
 		return AdmissionRecord{}, err
 	}
 	record.NomadQueryPlan = nomadQueryPlan
-	admissionHash, err := providercache.StableHash(admissionHashPayload(record))
+	admissionHash, err := stableHashNumberRoundtrip(admissionHashPayload(record))
 	if err != nil {
 		return AdmissionRecord{}, fmt.Errorf("workflow_task_admission_hash_failed: %w", err)
 	}
@@ -203,7 +204,7 @@ func validateAdmissionRecord(record AdmissionRecord) error {
 	if err := validateNomadQueryPlan(record, definition); err != nil {
 		return err
 	}
-	expectedAdmissionHash, err := providercache.StableHash(admissionHashPayload(record))
+	expectedAdmissionHash, err := stableHashNumberRoundtrip(admissionHashPayload(record))
 	if err != nil || expectedAdmissionHash != record.AdmissionHash {
 		return ErrLedgerInvalid
 	}
@@ -262,15 +263,33 @@ func validateNomadQueryPlan(record AdmissionRecord, definition Definition) error
 	if err != nil || expected == nil || record.NomadQueryPlan == nil {
 		return ErrLedgerInvalid
 	}
-	expectedHash, err := providercache.StableHash(expected)
+	expectedHash, err := stableHashNumberRoundtrip(expected)
 	if err != nil {
 		return ErrLedgerInvalid
 	}
-	actualHash, err := providercache.StableHash(record.NomadQueryPlan)
+	actualHash, err := stableHashNumberRoundtrip(record.NomadQueryPlan)
 	if err != nil || actualHash != expectedHash {
 		return ErrLedgerInvalid
 	}
 	return nil
+}
+
+// stableHashNumberRoundtrip normalizes numeric representation before hashing:
+// ledger reads decode numbers as json.Number while rebuilt plans carry
+// float64/int, so both sides are re-encoded and re-decoded with UseNumber to
+// produce one canonical form.
+func stableHashNumberRoundtrip(value any) (string, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		return "", err
+	}
+	return providercache.StableHash(decoded)
 }
 
 func taskHash(task TaskArtifact) (string, error) {

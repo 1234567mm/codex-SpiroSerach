@@ -183,7 +183,10 @@ func (c *Client) SearchByHTL(ctx context.Context, htlName string, maxResults int
 	}
 
 	searchURL := c.baseURL + "/entries/query"
-	searchBody := buildHTLSearchBodyBytes(queryValue, maxResults, "", defaultDeviceArchitectures)
+	searchBody, err := BuildHTLSearchQuery(queryValue, maxResults, "", defaultDeviceArchitectures).Marshal()
+	if err != nil {
+		return providercache.ProviderResponse{}, err
+	}
 	queryHash := sha256Hex(searchBody)
 	headers := map[string]string{"Content-Type": "application/json"}
 	searchPayload, err := c.fetchWithBackoff(ctx, searchURL, searchBody, headers)
@@ -281,7 +284,10 @@ func (c *Client) lookupHTL(ctx context.Context, htlName string, pageAfterValue s
 		}
 	}
 	searchURL := c.baseURL + "/entries/query"
-	searchBody := buildHTLSearchBodyBytes(queryValue, 25, pageAfterValue, defaultDeviceArchitectures)
+	searchBody, err := BuildHTLSearchQuery(queryValue, 25, pageAfterValue, defaultDeviceArchitectures).Marshal()
+	if err != nil {
+		return providercache.ProviderResponse{}, err
+	}
 	queryHash := sha256Hex(searchBody)
 	headers := map[string]string{"Content-Type": "application/json"}
 	searchPayload, err := c.fetchWithBackoff(ctx, searchURL, searchBody, headers)
@@ -440,32 +446,6 @@ func ExpandHTLSynonyms(htlName string) []string {
 	return terms
 }
 
-func buildHTLSearchBodyBytes(htlName string, pageSize int, pageAfterValue string, deviceArchitectures []string) []byte {
-	terms := ExpandHTLSynonyms(htlName)
-	architectures := normalizedArchitectures(deviceArchitectures)
-	var builder strings.Builder
-	builder.WriteString(`{"owner": "public", "query": {`)
-	builder.WriteString(jsonString("sections:all"))
-	builder.WriteString(`: ["nomad.datamodel.results.SolarCell"], `)
-	builder.WriteString(jsonString(htlQueryPath))
-	builder.WriteString(": ")
-	builder.WriteString(jsonStringArray(terms))
-	if len(architectures) > 0 {
-		builder.WriteString(", ")
-		builder.WriteString(jsonString(architecturePath))
-		builder.WriteString(": ")
-		builder.WriteString(jsonStringArray(architectures))
-	}
-	builder.WriteString(`}, "pagination": {"page_size": `)
-	builder.WriteString(strconv.Itoa(pageSize))
-	if strings.TrimSpace(pageAfterValue) != "" {
-		builder.WriteString(`, "page_after_value": `)
-		builder.WriteString(jsonString(pageAfterValue))
-	}
-	builder.WriteString("}}")
-	return []byte(builder.String())
-}
-
 func normalizedArchitectures(values []string) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
@@ -475,22 +455,6 @@ func normalizedArchitectures(values []string) []string {
 		}
 	}
 	return result
-}
-
-func jsonStringArray(values []string) string {
-	quoted := make([]string, 0, len(values))
-	for _, value := range values {
-		quoted = append(quoted, jsonString(value))
-	}
-	return "[" + strings.Join(quoted, ", ") + "]"
-}
-
-func jsonString(value string) string {
-	body, err := json.Marshal(value)
-	if err != nil {
-		panic(err)
-	}
-	return string(body)
 }
 
 func entryIDsAndFirstEntry(payload map[string]any) ([]string, map[string]any) {

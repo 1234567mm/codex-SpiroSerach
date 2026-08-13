@@ -1,6 +1,7 @@
 package nomadperla
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -24,18 +25,18 @@ type AdmissionTask struct {
 }
 
 type NomadAdmissionPlan struct {
-	SchemaVersion           string         `json:"schema_version"`
-	Provider                string         `json:"provider"`
-	Endpoint                string         `json:"endpoint"`
-	Owner                   string         `json:"owner"`
-	DeviceArchitecture      string         `json:"device_architecture"`
-	HTLAliases              []string       `json:"htl_aliases"`
-	SearchBody              map[string]any `json:"search_body"`
-	SearchQueryHash         string         `json:"search_query_hash"`
-	ArchiveRequiredTreeHash string         `json:"archive_required_tree_hash"`
-	MaxPageSize             int            `json:"max_page_size"`
-	MaxPages                int            `json:"max_pages"`
-	LiveCallsAuthorized     bool           `json:"live_calls_authorized"`
+	SchemaVersion           string          `json:"schema_version"`
+	Provider                string          `json:"provider"`
+	Endpoint                string          `json:"endpoint"`
+	Owner                   string          `json:"owner"`
+	DeviceArchitecture      string          `json:"device_architecture"`
+	HTLAliases              []string        `json:"htl_aliases"`
+	SearchBody              json.RawMessage `json:"search_body"`
+	SearchQueryHash         string          `json:"search_query_hash"`
+	ArchiveRequiredTreeHash string          `json:"archive_required_tree_hash"`
+	MaxPageSize             int             `json:"max_page_size"`
+	MaxPages                int             `json:"max_pages"`
+	LiveCallsAuthorized     bool            `json:"live_calls_authorized"`
 }
 
 func BuildNomadAdmissionPlan(task AdmissionTask) (NomadAdmissionPlan, error) {
@@ -59,16 +60,26 @@ func BuildNomadAdmissionPlan(task AdmissionTask) (NomadAdmissionPlan, error) {
 	if len(aliases) == 0 {
 		aliases = []string{defaultAdmissionHTL}
 	}
-	searchBody := map[string]any{
-		"owner": "public",
-		"query": map[string]any{
-			"sections:all":   []any{"nomad.datamodel.results.SolarCell"},
-			htlQueryPath:     stringSliceAsAny(aliases),
-			architecturePath: []any{architecture},
-		},
-		"pagination": map[string]any{"page_size": defaultAdmissionPageSize},
+	searchQuery := BuildHTLSearchQuery(aliases[0], defaultAdmissionPageSize, "", []string{architecture})
+	if len(aliases) > 1 {
+		htlPath, ok := searchQuery.Query[htlQueryPath].([]any)
+		if !ok {
+			return NomadAdmissionPlan{}, errors.New("nomad_admission_htl_path_invalid")
+		}
+		for _, extra := range aliases[1:] {
+			htlPath = append(htlPath, extra)
+		}
+		searchQuery.Query[htlQueryPath] = htlPath
 	}
-	searchQueryHash, err := providercache.StableHash(searchBody)
+	searchBody, err := searchQuery.Marshal()
+	if err != nil {
+		return NomadAdmissionPlan{}, fmt.Errorf("nomad_admission_query_marshal_failed: %w", err)
+	}
+	var bodyForHash map[string]any
+	if err := json.Unmarshal(searchBody, &bodyForHash); err != nil {
+		return NomadAdmissionPlan{}, fmt.Errorf("nomad_admission_query_decode_failed: %w", err)
+	}
+	searchQueryHash, err := providercache.StableHash(bodyForHash)
 	if err != nil {
 		return NomadAdmissionPlan{}, fmt.Errorf("nomad_admission_query_hash_failed: %w", err)
 	}
@@ -89,6 +100,10 @@ func BuildNomadAdmissionPlan(task AdmissionTask) (NomadAdmissionPlan, error) {
 }
 
 func (p NomadAdmissionPlan) ToMap() map[string]any {
+	var searchBodyMap map[string]any
+	if err := json.Unmarshal(p.SearchBody, &searchBodyMap); err != nil {
+		searchBodyMap = map[string]any{}
+	}
 	return map[string]any{
 		"schema_version":             p.SchemaVersion,
 		"provider":                   p.Provider,
@@ -96,7 +111,7 @@ func (p NomadAdmissionPlan) ToMap() map[string]any {
 		"owner":                      p.Owner,
 		"device_architecture":        p.DeviceArchitecture,
 		"htl_aliases":                stringSliceAsAny(p.HTLAliases),
-		"search_body":                p.SearchBody,
+		"search_body":                searchBodyMap,
 		"search_query_hash":          p.SearchQueryHash,
 		"archive_required_tree_hash": p.ArchiveRequiredTreeHash,
 		"max_page_size":              p.MaxPageSize,

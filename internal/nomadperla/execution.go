@@ -171,7 +171,11 @@ func validateExecutableAdmissionPlan(plan NomadAdmissionPlan) error {
 			return ErrAdmissionExecutionPlanInvalid
 		}
 	}
-	searchQueryHash, err := providercache.StableHash(plan.SearchBody)
+	var bodyForHash map[string]any
+	if err := json.Unmarshal(plan.SearchBody, &bodyForHash); err != nil {
+		return ErrAdmissionExecutionPlanInvalid
+	}
+	searchQueryHash, err := providercache.StableHash(bodyForHash)
 	if err != nil || searchQueryHash != plan.SearchQueryHash {
 		return ErrAdmissionExecutionPlanInvalid
 	}

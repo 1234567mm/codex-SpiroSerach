@@ -26,34 +26,34 @@ Recorded gap list: this section is the T37-05 deliverable (kept in the slice
 plan; a compact copy may be added to `plans/v37-execution-status-and-next-slices.md`
 at slice close).
 
-## 2. T37-06 Spec-Aligned Query Structs (Large)
+## 2. T37-06 Spec-Aligned Query Structs (Large) — DONE 2026-08-12
 
-Replace the string builder with typed structs:
+Delivered:
+- `internal/nomadperla/query.go`: typed `EntryQuery` + `Pagination`
+  (page_size / page_after_value / order_by / order, omitempty cursor)
+  serialized via `json.Marshal` (deterministic map-key order);
+  `BuildHTLSearchQuery` keeps synonym/architecture expansion semantics.
+- `client.go`: both search paths (SearchByHTL, lookupHTL) use the typed
+  query; the string builder and its helpers are deleted.
+- `admission.go`: `SearchBody` is now `json.RawMessage` (exact typed-query
+  bytes); `ToMap` decodes it back to a map so ledger JSON keeps the
+  historical shape; plan hash computed from the decoded body.
+- Parity: byte-level body oracle updated (keys sorted by json.Marshal),
+  query hash `495defcc…`, cursor hash `464e0e64…`; admission/execution
+  tests assert the executed body is byte-identical to the admission body.
+- workflowtask ledger: hash comparison normalized through a
+  `stableHashNumberRoundtrip` (json.Number vs float64 canonicalization) so
+  admit/execute/restore stay consistent after the roundtrip through
+  RawMessage → map.
 
-- `type EntryQuery struct { Owner string; Query map[string]any; Pagination Pagination }`
-  with `json:"owner"/"query"/"pagination"` tags, built via `json.Marshal`.
-- `type Pagination struct { PageSize int; PageAfterValue string; OrderBy string; Order string }`
-  with omitempty; keep `page_after_value` as the iteration path (spec note).
-- Keep `ExpandHTLSynonyms` / `normalizedArchitectures` logic; move `htlQueryPath` /
-  `architecturePath` into typed query maps.
-- `admission.go` `SearchBody` becomes `json.RawMessage` (serialized typed query),
-  keeping ledger JSON shape stable.
-- Parity: existing `client_test.go` fixtures must pass unchanged where they assert
-  request bodies byte-for-byte; update only where the body shape legitimately changes
-  (deterministic key order preserved by `json.Marshal` of a struct).
+## 3. T37-07 Review-Promotion Paths For Edge Cases (Medium) — DONE 2026-08-12
 
-Acceptance: `go test ./internal/nomadperla/ ./internal/readonlyapi/ ./cmd/spiroctl/` pass;
-no ProviderResponse contract change; request body parity test added.
-
-## 3. T37-07 Review-Promotion Paths For Edge Cases (Medium)
-
-- Rate-limited / archive-unavailable / archive-schema-unrecognized already surface as
-  `archive_status` + review markers; move the remaining mixed-in execution branches
-  (client.go fetch paths) into explicit review/blocking results so execution code
-  never guesses.
-- Keep `applyReviewMarkers` semantics; add tests for each edge state asserting
-  `review_required=true` and a matching `review_reasons` entry.
-- No ranking/verdict output from the provider surface (unchanged boundary).
+Verified existing explicit routing and hardened the acceptance assertions:
+rate-limited → `archive_rate_limited`, archive-unavailable → `archive_unavailable`,
+archive-schema-unrecognized → `archive_schema_unrecognized` each now asserted
+with `review_required=true` and a matching `review_reasons` entry (three
+edge-state tests); confidence capped at 0.55 whenever review is required.
+No ranking/verdict output introduced (boundary unchanged).
 
 ## 4. T37-08 CEPDB Local Snapshot Importer (Large)
 

@@ -16,12 +16,15 @@ import (
 const testRetrievedAt = "2026-07-19T00:00:00+00:00"
 
 func TestBuildHTLSearchBodyMatchesPythonOracle(t *testing.T) {
-	expectedBody := `{"owner": "public", "query": {"sections:all": ["nomad.datamodel.results.SolarCell"], "results.properties.optoelectronic.solar_cell.hole_transport_layer:any": ["Spiro-OMeTAD", "Spiro-OMeTAD", "spiro-OMeTAD", "spiroometad", "spiro-omeTAD"], "results.properties.optoelectronic.solar_cell.device_architecture:any": ["nip"]}, "pagination": {"page_size": 25}}`
-	body := buildHTLSearchBodyBytes("Spiro-OMeTAD", 25, "", defaultDeviceArchitectures)
-	if string(body) != expectedBody {
-		t.Fatalf("search body drifted from Python json.dumps oracle\nactual:   %s\nexpected: %s", body, expectedBody)
+	expectedBody := `{"owner":"public","query":{"results.properties.optoelectronic.solar_cell.device_architecture:any":["nip"],"results.properties.optoelectronic.solar_cell.hole_transport_layer:any":["Spiro-OMeTAD","Spiro-OMeTAD","spiro-OMeTAD","spiroometad","spiro-omeTAD"],"sections:all":["nomad.datamodel.results.SolarCell"]},"pagination":{"page_size":25}}`
+	body, err := BuildHTLSearchQuery("Spiro-OMeTAD", 25, "", defaultDeviceArchitectures).Marshal()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := sha256Hex(body); got != "4026d1315e920a210db3f44aa93233c157f3820bf97c5058f532a0dd5ca275a2" {
+	if string(body) != expectedBody {
+		t.Fatalf("search body drifted from typed-query oracle\nactual:   %s\nexpected: %s", body, expectedBody)
+	}
+	if got := sha256Hex(body); got != "495defcc3bc9c8b4a39a72919cb8aeda45c4d008d632701c65172a02185a5c5c" {
 		t.Fatalf("query hash = %s", got)
 	}
 
@@ -39,10 +42,20 @@ func TestBuildHTLSearchBodyMatchesPythonOracle(t *testing.T) {
 	if !reflect.DeepEqual(query[architecturePath], []any{"nip"}) {
 		t.Fatalf("architecture filter = %#v", query[architecturePath])
 	}
+	pagination := parsed["pagination"].(map[string]any)
+	if pagination["page_size"] != float64(25) {
+		t.Fatalf("page_size = %#v", pagination["page_size"])
+	}
 
-	cursorBody := buildHTLSearchBodyBytes("Spiro-OMeTAD", 25, "cursor-token-001", defaultDeviceArchitectures)
-	if got := sha256Hex(cursorBody); got != "56d4e8fbc918662a9f40fe46e22f8135c77bfe15f49757cf342f238e46170bdf" {
+	cursorBody, err := BuildHTLSearchQuery("Spiro-OMeTAD", 25, "cursor-token-001", defaultDeviceArchitectures).Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sha256Hex(cursorBody); got != "464e0e6494e0a510f365f97185e0b9136a198b48ba59125e9d0d8140630d2a93" {
 		t.Fatalf("cursor query hash = %s", got)
+	}
+	if !strings.Contains(string(cursorBody), `"page_after_value":"cursor-token-001"`) {
+		t.Fatalf("cursor body missing page_after_value: %s", cursorBody)
 	}
 }
 
@@ -114,7 +127,7 @@ func TestLookupHTLMatchesPythonOracleFixture(t *testing.T) {
 	assertNormalizedValue(t, result, "perovskite_composition", "MAPbI3")
 	assertNormalizedValue(t, result, "source_doi", "10.1038/s41560-021-00941-3")
 	assertNormalizedValue(t, result, "license", "CC-BY-4.0")
-	assertNormalizedValue(t, result, "query_hash", "4026d1315e920a210db3f44aa93233c157f3820bf97c5058f532a0dd5ca275a2")
+	assertNormalizedValue(t, result, "query_hash", "495defcc3bc9c8b4a39a72919cb8aeda45c4d008d632701c65172a02185a5c5c")
 	assertNormalizedValue(t, result, "archive_required_tree_hash", ArchiveRequiredTreeHash())
 	assertNormalizedValue(t, result, "archive_status", "available")
 	assertNormalizedValue(t, result, "review_required", false)
@@ -166,6 +179,7 @@ func TestLookupHTLArchiveRateLimitFallsBackToSearchFacts(t *testing.T) {
 	assertNormalizedFloat(t, result, "pce_percent", 21.3)
 	assertNormalizedFloat(t, result, "jsc_ma_cm2", 23.5)
 	assertNormalizedValue(t, result, "archive_status", "rate_limited")
+	assertNormalizedValue(t, result, "review_required", true)
 	if !containsAnyString(result["review_reasons"], "archive_rate_limited") {
 		t.Fatalf("review_reasons missing archive_rate_limited: %#v", result["review_reasons"])
 	}
@@ -192,6 +206,7 @@ func TestLookupHTLArchiveUnrecognizedSchemaRoutesReview(t *testing.T) {
 
 	result := response.Normalized
 	assertNormalizedValue(t, result, "archive_status", "schema_unrecognized")
+	assertNormalizedValue(t, result, "review_required", true)
 	if !containsAnyString(result["review_reasons"], "archive_schema_unrecognized") {
 		t.Fatalf("review_reasons missing archive_schema_unrecognized: %#v", result["review_reasons"])
 	}
@@ -232,6 +247,7 @@ func TestLookupHTLArchiveUnavailableFallsBackToSearchFacts(t *testing.T) {
 	result := response.Normalized
 	assertNormalizedFloat(t, result, "pce_percent", 21.3)
 	assertNormalizedValue(t, result, "archive_status", "unavailable")
+	assertNormalizedValue(t, result, "review_required", true)
 	if !containsAnyString(result["review_reasons"], "archive_unavailable") {
 		t.Fatalf("review_reasons missing archive_unavailable: %#v", result["review_reasons"])
 	}
@@ -308,7 +324,7 @@ func TestLookupHTLPageCarriesCursorThroughSearchAndArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertNormalizedValue(t, response.Normalized, "query_hash", "56d4e8fbc918662a9f40fe46e22f8135c77bfe15f49757cf342f238e46170bdf")
+	assertNormalizedValue(t, response.Normalized, "query_hash", "464e0e6494e0a510f365f97185e0b9136a198b48ba59125e9d0d8140630d2a93")
 	assertNormalizedValue(t, response.Normalized, "archive_status", "available")
 	if len(transport.calls) != 2 {
 		t.Fatalf("calls = %d, want search and archive", len(transport.calls))
