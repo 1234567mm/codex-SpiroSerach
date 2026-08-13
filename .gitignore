@@ -34,6 +34,9 @@ data/lib/**/*.xz
 data/lib/**/*.7z
 data/lib/**/*.parquet
 data/lib/**/*.sqlite
+data/lib/**/*.sqlite3
+data/lib/**/*.sqlite3-shm
+data/lib/**/*.sqlite3-wal
 data/lib/**/*.db
 
 # Local agent/session state
