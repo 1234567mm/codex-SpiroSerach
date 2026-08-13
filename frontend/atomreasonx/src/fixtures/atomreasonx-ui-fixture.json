@@ -1798,5 +1798,236 @@
                                             }
                                         ]
                         },
-    "_provisional":  true
+        "source_catalog":     {
+        "schema_version": "v37.source_catalog.v1",
+        "source_count": 13,
+        "family_count": 9,
+        "families": [
+            {
+                "family": "archive_metadata",
+                "entry_count": 1,
+                "acquisition_modes": [
+                    "manual_archive_import"
+                ],
+                "entries": [
+                    {
+                        "provider": "materials_cloud",
+                        "display_name": "Materials Cloud",
+                        "source_family": "archive_metadata",
+                        "acquisition_mode": "manual_archive_import",
+                        "operational_status": "experimental",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "data\\lib\\materials_cloud",
+                        "fixture_status": "pending_import",
+                        "local_snapshot_count": 0
+                    }
+                ]
+            },
+            {
+                "family": "computed_materials",
+                "entry_count": 3,
+                "acquisition_modes": [
+                    "api_lookup"
+                ],
+                "entries": [
+                    {
+                        "provider": "materials_project",
+                        "display_name": "Materials Project",
+                        "source_family": "computed_materials",
+                        "acquisition_mode": "api_lookup",
+                        "operational_status": "active",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "data\\lib\\materials_project",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 0
+                    },
+                    {
+                        "provider": "nomad",
+                        "display_name": "NOMAD Materials",
+                        "source_family": "computed_materials",
+                        "acquisition_mode": "api_lookup",
+                        "operational_status": "experimental",
+                        "go_migration_state": "deferred",
+                        "data_library_path": "",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 0
+                    },
+                    {
+                        "provider": "oqmd",
+                        "display_name": "OQMD",
+                        "source_family": "computed_materials",
+                        "acquisition_mode": "api_lookup",
+                        "operational_status": "active",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 0
+                    }
+                ]
+            },
+            {
+                "family": "computed_molecule",
+                "entry_count": 1,
+                "acquisition_modes": [
+                    "local_snapshot"
+                ],
+                "entries": [
+                    {
+                        "provider": "pubchemqc",
+                        "display_name": "PubChemQC",
+                        "source_family": "computed_molecule",
+                        "acquisition_mode": "local_snapshot",
+                        "operational_status": "quarantined",
+                        "go_migration_state": "python_bridge_retained",
+                        "data_library_path": "data\\lib\\pubchemqc",
+                        "fixture_status": "fixture_only",
+                        "local_snapshot_count": 0
+                    }
+                ]
+            },
+            {
+                "family": "literature_metadata",
+                "entry_count": 2,
+                "acquisition_modes": [
+                    "api_lookup"
+                ],
+                "entries": [
+                    {
+                        "provider": "crossref",
+                        "display_name": "Crossref",
+                        "source_family": "literature_metadata",
+                        "acquisition_mode": "api_lookup",
+                        "operational_status": "active",
+                        "go_migration_state": "deferred",
+                        "data_library_path": "",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 0
+                    },
+                    {
+                        "provider": "openalex",
+                        "display_name": "OpenAlex",
+                        "source_family": "literature_metadata",
+                        "acquisition_mode": "api_lookup",
+                        "operational_status": "experimental",
+                        "go_migration_state": "deferred",
+                        "data_library_path": "",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 0
+                    }
+                ]
+            },
+            {
+                "family": "molecule_identity",
+                "entry_count": 1,
+                "acquisition_modes": [
+                    "api_lookup"
+                ],
+                "entries": [
+                    {
+                        "provider": "pubchem",
+                        "display_name": "PubChem",
+                        "source_family": "molecule_identity",
+                        "acquisition_mode": "api_lookup",
+                        "operational_status": "active",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "data\\lib\\pubchem",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 0
+                    }
+                ]
+            },
+            {
+                "family": "opv_benchmark",
+                "entry_count": 2,
+                "acquisition_modes": [
+                    "local_snapshot"
+                ],
+                "entries": [
+                    {
+                        "provider": "hopv15",
+                        "display_name": "HOPV15",
+                        "source_family": "opv_benchmark",
+                        "acquisition_mode": "local_snapshot",
+                        "operational_status": "experimental",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "data\\lib\\hopv15",
+                        "fixture_status": "fixture_only",
+                        "local_snapshot_count": 2
+                    },
+                    {
+                        "provider": "opv_db",
+                        "display_name": "OPV-DB",
+                        "source_family": "opv_benchmark",
+                        "acquisition_mode": "local_snapshot",
+                        "operational_status": "experimental",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "data\\lib\\opv_db",
+                        "fixture_status": "fixture_only",
+                        "local_snapshot_count": 2
+                    }
+                ]
+            },
+            {
+                "family": "project_generated",
+                "entry_count": 1,
+                "acquisition_modes": [
+                    "local_dataset"
+                ],
+                "entries": [
+                    {
+                        "provider": "custom_htl_dft",
+                        "display_name": "Custom HTL DFT",
+                        "source_family": "project_generated",
+                        "acquisition_mode": "local_dataset",
+                        "operational_status": "experimental",
+                        "go_migration_state": "deferred",
+                        "data_library_path": "",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 0
+                    }
+                ]
+            },
+            {
+                "family": "psc_device_performance",
+                "entry_count": 1,
+                "acquisition_modes": [
+                    "api_sync"
+                ],
+                "entries": [
+                    {
+                        "provider": "nomad_perla_psc",
+                        "display_name": "NOMAD PERLA PSC",
+                        "source_family": "psc_device_performance",
+                        "acquisition_mode": "api_sync",
+                        "operational_status": "experimental",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "data\\lib\\nomad_perla_psc",
+                        "fixture_status": "no_local_library",
+                        "local_snapshot_count": 1
+                    }
+                ]
+            },
+            {
+                "family": "schema_reference",
+                "entry_count": 1,
+                "acquisition_modes": [
+                    "schema_fixture"
+                ],
+                "entries": [
+                    {
+                        "provider": "nomad_perovskite_schema",
+                        "display_name": "NOMAD Perovskite Schema Package",
+                        "source_family": "schema_reference",
+                        "acquisition_mode": "schema_fixture",
+                        "operational_status": "experimental",
+                        "go_migration_state": "go_shadow_ready",
+                        "data_library_path": "data\\lib\\nomad_perovskite_schema",
+                        "fixture_status": "local_only",
+                        "local_snapshot_count": 0
+                    }
+                ]
+            }
+        ]
+    },
+"_provisional":  true
 }

@@ -70,10 +70,23 @@ Slice 1 delivered (classified browse backend):
   snapshots=2, nomad_perla_psc snapshots=1 visible.
 - 3 package tests + 4 CLI integration tests.
 
-Slice 2 (pending, module B-2): AtomReasonX wiring
-- New Source Categories view (or extension of the existing Knowledge Library
-  view) consuming the catalog read state through the AtomReasonX read adapter;
-  contracts + fixtures + component tests. Go backend above is the data source.
+Slice 2 delivered (AtomReasonX wiring) 2026-08-12:
+- `contracts/types.ts`: `SourceCatalogSummary` / `SourceCatalogFamily` /
+  `SourceCatalogEntry` types; `AtomReasonXWorkspaceState.source_catalog?`
+  (optional, backward compatible).
+- `components/SourceCategoriesView.tsx`: family-grouped source catalog view
+  (entry status / acquisition mode / fixture status / local snapshot count)
+  with explicit unavailable state; mounted in `AppShell` next to the
+  Knowledge Library view.
+- Fixture: real catalog snapshot injected into `atomreasonx-ui-fixture.json`
+  (13 sources / 9 families from `spiroctl knowledge-base list --json`,
+  minimal diff, no BOM).
+- Tests: 3 Vitest component tests (57 total frontend tests green),
+  2 Python contract assertions (catalog shape + local reality), TypeScript
+  build green.
+- Runtime data pipe: catalog read state is part of the workspace base state;
+  wiring the live `spiroctl knowledge-base list` output into the runtime
+  read adapter transport remains a follow-up (tracked with E1 schema work).
 
 ### C. Fast Screening Check Backend (Medium) — slice 1 DONE 2026-08-12, slice 2 pending
 

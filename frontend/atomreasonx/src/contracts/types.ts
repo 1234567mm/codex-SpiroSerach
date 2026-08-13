@@ -328,6 +328,32 @@ export interface HtlWorkbenchCommandAction {
   input_fields?: string[];
 }
 
+export interface SourceCatalogEntry {
+  provider: string;
+  display_name: string;
+  source_family: string;
+  acquisition_mode: string;
+  operational_status: string;
+  go_migration_state: string;
+  data_library_path: string;
+  fixture_status: string;
+  local_snapshot_count: number;
+}
+
+export interface SourceCatalogFamily {
+  family: string;
+  entry_count: number;
+  acquisition_modes: string[];
+  entries: SourceCatalogEntry[];
+}
+
+export interface SourceCatalogSummary {
+  schema_version: string;
+  source_count: number;
+  family_count: number;
+  families: SourceCatalogFamily[];
+}
+
 export interface AtomReasonXWorkspaceState {
   brand: string;
   app: string;
@@ -338,6 +364,7 @@ export interface AtomReasonXWorkspaceState {
   telemetry_fields: string[];
   settings_categories: string[];
   knowledge_library: KnowledgeLibrarySummary;
+  source_catalog?: SourceCatalogSummary;
   telemetry: AtomReasonXTelemetryState;
   provider_status: AtomReasonXProviderStatus;
   settings: AtomReasonXSettingsState;

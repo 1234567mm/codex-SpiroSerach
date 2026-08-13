@@ -52,6 +52,36 @@ class TestFixtureStructure(unittest.TestCase):
                       "parse_failures", "index_freshness", "blocked_review_items"]:
             self.assertIn(field, kl)
 
+    def test_source_catalog_matches_go_catalog_contract(self) -> None:
+        catalog = self.fixture["source_catalog"]
+        self.assertEqual(catalog["schema_version"], "v37.source_catalog.v1")
+        self.assertGreaterEqual(catalog["source_count"], 1)
+        self.assertEqual(catalog["family_count"], len(catalog["families"]))
+        for family in catalog["families"]:
+            for field in ["family", "entry_count", "acquisition_modes", "entries"]:
+                self.assertIn(field, family)
+            self.assertEqual(family["entry_count"], len(family["entries"]))
+            for entry in family["entries"]:
+                for field in [
+                    "provider", "display_name", "source_family", "acquisition_mode",
+                    "operational_status", "go_migration_state", "data_library_path",
+                    "fixture_status", "local_snapshot_count",
+                ]:
+                    self.assertIn(field, entry)
+                self.assertEqual(entry["source_family"], family["family"])
+
+    def test_source_catalog_reflects_local_library_reality(self) -> None:
+        catalog = self.fixture["source_catalog"]
+        by_provider = {
+            entry["provider"]: entry
+            for family in catalog["families"]
+            for entry in family["entries"]
+        }
+        # hopv15 keeps its imported local snapshots visible in the catalog.
+        self.assertEqual(by_provider["hopv15"]["fixture_status"], "fixture_only")
+        self.assertGreaterEqual(by_provider["hopv15"]["local_snapshot_count"], 2)
+
+
     def test_v33c_workbench_contracts_are_present(self) -> None:
         self.assertEqual(self.fixture["source_coverage"]["lane"], "htl_only")
         self.assertEqual(
