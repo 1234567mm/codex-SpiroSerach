@@ -98,8 +98,22 @@ sidecar build (spiroctl 10.9MB, sha256 3609307a), sidecar preflight PASS,
 MSVC toolchain auto-detected, frontend build, Rust release compile
 (`Built application at ...\atomreasonx.exe`, 3.1MB). Direct invocation
 exit=0 (npm wrapper exit 1 was a PowerShell stderr artifact).
-T37-14 MSI bundling still needs WiX (external); T37-15 updater integration
-pending (full-auto decision recorded).
+
+T37-15 updater DONE 2026-08-13 (`8481ade`): tauri-plugin-updater
+registered; signing keypair generated (private key in user profile,
+never committed; pubkey in conf); `tauri.conf.json` updater config
+(pubkey, GitHub Releases `latest.json` endpoint, passive install mode,
+`createUpdaterArtifacts`); `release.yml` signs updates via
+`TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)` secrets; cargo check + release
+build verified. Frontend update UI deferred (mechanism layer done).
+
+T37-14 MSI DONE (bundle) 2026-08-13: `tauri build` downloaded WiX,
+`light` produced `AtomReasonX_0.1.0_x64_en-US.msi` (7MB) in
+`src-tauri/target/release/bundle/msi/`; overall bundle step hit a global
+timeout on the subsequent NSIS download, but the MSI artifact is
+complete. Install/uninstall smoke test and NSIS retry deferred to the
+operator (install modifies the system; no signing this phase per user
+decision).
 
 CEPDB status (completed 2026-08-13): dump imported (3.32B rows), analysis
 layer switched to DuckDB+Parquet (measured ~21x faster, ~59x smaller than
