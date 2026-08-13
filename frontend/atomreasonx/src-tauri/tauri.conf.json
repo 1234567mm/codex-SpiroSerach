@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "AtomReasonX — AtomX Materials Discovery Agent",
+        "title": "AtomReasonX \u2014 AtomX Materials Discovery Agent",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,
@@ -43,7 +43,18 @@
     "copyright": "AtomReasonX",
     "category": "DeveloperTool",
     "shortDescription": "Reason at Atomic Scale, Build Beyond Materials.",
-    "longDescription": "AtomReasonX — a configurable perovskite materials screening agent platform with local-first, auditable, contract-driven workflows."
+    "longDescription": "AtomReasonX \u2014 a configurable perovskite materials screening agent platform with local-first, auditable, contract-driven workflows.",
+    "createUpdaterArtifacts": true
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIzRjc4QjVGMjYyNDM1MzAKUldRd05TUW1YNHYzSTJTZUtORTQzcDgwYXpxbjM3eW1pdXJ2dUNoM2dWclMxWkErMlJZZ1NjbFcK",
+      "endpoints": [
+        "https://github.com/1234567mm/codex-SpiroSerach/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }

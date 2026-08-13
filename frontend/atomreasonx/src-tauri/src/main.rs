@@ -268,6 +268,7 @@ fn stop_child(child: Option<Child>) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ReadonlySidecarProcesses::default())
         .manage(WorkflowTaskExecutionState::default())
         .invoke_handler(tauri::generate_handler![
