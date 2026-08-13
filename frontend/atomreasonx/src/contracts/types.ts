@@ -354,6 +354,37 @@ export interface SourceCatalogSummary {
   families: SourceCatalogFamily[];
 }
 
+export interface ScreeningCandidate {
+  rank: number;
+  record_id: string;
+  material_id: string;
+  homo_ev: number;
+  lumo_ev: number;
+  band_gap_ev: number;
+  score: number;
+  source_id: string;
+  record: Record<string, unknown>;
+}
+
+export interface ScreeningResultState {
+  schema_version: "v37.screening_result.v1";
+  module_id: string;
+  layer: string;
+  source_ids: string[];
+  window: {
+    homo_min?: number;
+    homo_max?: number;
+    lumo_min?: number;
+    lumo_max?: number;
+    band_gap_min?: number;
+    band_gap_max?: number;
+  };
+  stats: Record<string, number>;
+  review_required: boolean;
+  review_reasons: string[];
+  candidates: ScreeningCandidate[];
+}
+
 export interface AtomReasonXWorkspaceState {
   brand: string;
   app: string;
@@ -365,6 +396,7 @@ export interface AtomReasonXWorkspaceState {
   settings_categories: string[];
   knowledge_library: KnowledgeLibrarySummary;
   source_catalog?: SourceCatalogSummary;
+  screening_result?: ScreeningResultState;
   telemetry: AtomReasonXTelemetryState;
   provider_status: AtomReasonXProviderStatus;
   settings: AtomReasonXSettingsState;

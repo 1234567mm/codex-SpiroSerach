@@ -2029,5 +2029,47 @@
             }
         ]
     },
+    "screening_result":     {
+        "schema_version": "v37.screening_result.v1",
+        "module_id": "spiro_replacement_conventional_nip_v1",
+        "layer": "htl",
+        "source_ids": [
+            "hopv15"
+        ],
+        "window": {
+            "homo_min": -5.6,
+            "homo_max": -5.0,
+            "lumo_min": -2.6,
+            "lumo_max": -1.8,
+            "band_gap_min": 2.0
+        },
+        "stats": {
+            "source_records": 180,
+            "hits": 1,
+            "homo_missing": 0,
+            "lumo_missing": 0,
+            "gap_missing": 0,
+            "homo_out": 23,
+            "lumo_out": 156,
+            "gap_out": 0
+        },
+        "review_required": false,
+        "review_reasons": [],
+        "candidates": [
+            {
+                "rank": 1,
+                "record_id": "KCTYWEWDJUBVCZ-UHFFFAOYSA-N",
+                "material_id": "hopv15:KCTYWEWDJUBVCZ-UHFFFAOYSA-N",
+                "homo_ev": -5.42,
+                "lumo_ev": -2.48,
+                "band_gap_ev": 2.94,
+                "score": 0.529,
+                "source_id": "hopv15",
+                "record": {
+                    "molecule_id": "KCTYWEWDJUBVCZ-UHFFFAOYSA-N"
+                }
+            }
+        ]
+    },
 "_provisional":  true
 }

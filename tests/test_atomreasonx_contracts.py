@@ -81,6 +81,19 @@ class TestFixtureStructure(unittest.TestCase):
         self.assertEqual(by_provider["hopv15"]["fixture_status"], "fixture_only")
         self.assertGreaterEqual(by_provider["hopv15"]["local_snapshot_count"], 2)
 
+    def test_screening_result_matches_go_artifact_contract(self) -> None:
+        result = self.fixture["screening_result"]
+        self.assertEqual(result["schema_version"], "v37.screening_result.v1")
+        self.assertEqual(result["module_id"], "spiro_replacement_conventional_nip_v1")
+        self.assertEqual(result["layer"], "htl")
+        for candidate in result["candidates"]:
+            for field in [
+                "rank", "record_id", "material_id", "homo_ev", "lumo_ev",
+                "band_gap_ev", "score", "source_id", "record",
+            ]:
+                self.assertIn(field, candidate)
+        self.assertEqual(result["stats"]["hits"], len(result["candidates"]))
+
 
     def test_v33c_workbench_contracts_are_present(self) -> None:
         self.assertEqual(self.fixture["source_coverage"]["lane"], "htl_only")

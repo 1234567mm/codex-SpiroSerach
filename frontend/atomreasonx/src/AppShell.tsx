@@ -5,6 +5,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { DatabaseView } from "./components/DatabaseView";
 import { KnowledgeLibraryView } from "./components/KnowledgeLibraryView";
 import { SourceCategoriesView } from "./components/SourceCategoriesView";
+import { ScreeningView } from "./components/ScreeningView";
 import { WorkflowView } from "./components/WorkflowView";
 import { InspectorPanel } from "./components/InspectorPanel";
 import type { WorkbenchCommandDispatcher } from "./adapters/command-adapter";
@@ -70,6 +71,7 @@ export const AppShell: React.FC<{
             />
             <KnowledgeLibraryView summary={workspace.knowledge_library} />
             <SourceCategoriesView catalog={workspace.source_catalog} />
+            <ScreeningView result={workspace.screening_result} />
             <WorkflowView
               workflow={workspace.workflow}
               commandActions={workspace.command_actions}
