@@ -48,35 +48,52 @@ additional selectable source later without changing the task contract.
   offline Go tests.
 - Write the T37-09 design section (interface + provenance contract).
 
-### Phase 2 — T37-09 ML surrogate bridge (Large)
+### Phase 2 — T37-09 ML surrogate bridge (Large) — DONE 2026-08-13
 
-- Python: surrogate execution entry — sklearn GP fit/predict JSON interface
-  returning predictions with provenance (model version, train-set hash,
-  feature row); keeps `SURROGATE_EXCLUDED_FEATURE_KEYS` governance.
-- Go: bounded bridge caller + `PropertyPredictionReport` contract; fake-bridge
-  tests offline.
-- Acceptance: Go → Python predict returns provenance; Python unit tests, Go
-  bridge tests, cross-process end-to-end test.
+- Python `spirosearch.surrogate_bridge.py`: line-JSON stdio protocol
+  (`v37.surrogate_bridge.v1`); fit/predict/uncertainty/acquisition over the
+  existing `SklearnSurrogate`; provenance per response; fail-closed errors.
+- Go `internal/surrogatebridge`: `ProcessBridge` (child process, env
+  passthrough, large-line scanner, stderr diagnostics) + `FakeBridge` for
+  offline tests; cross-process e2e against the repo venv python.
+- Verified: 5 Go tests + 6 Python tests incl. real sklearn
+  fit→predict→uncertainty→acquisition chain (`--extra ml`).
+- Commits: `05ec941`, `db40ada`.
 
-### Phase 3 — T37-10 / T37-11 screening agent task + artifacts (Large + Medium)
+### Phase 3 — T37-10 / T37-11 screening agent task + artifacts (Large + Medium) — DONE 2026-08-13
 
-- `run_htl_screening` action in the operator task queue: admission gates,
-  explicit `writes_authorized`, data-source selection (default hopv15/opv_db).
-- Execution chain: snapshot records → `fast-screen` HTL windows → surrogate
-  predictions → `ScoringView` ranking → screening result artifacts.
-- T37-11: `v37.screening_result.v1` schema (candidate list + per-candidate
-  provenance back to source records) + validation tests.
-- Acceptance: admitted task executes end-to-end and emits the candidate-list
-  artifact with full provenance.
+- `run_htl_screening` operator task (local scope, `screening_result`
+  effects); `ExecuteHtlScreening`: snapshot records → `fast-screen` HTL
+  window filter → deterministic window-center ranking → `v37.screening_result.v1`
+  artifact (ranked candidates with full provenance, stats, review flags).
+- Explicit writes: `scoring_written` only with `--authorize-scoring-write`;
+  target-exists and wrong-action fail closed.
+- CLI: `spiroctl workflow-task execute --task-id --ledger --source --target
+  [--authorize-scoring-write] [--module-id] [window flags]`.
+- End-to-end on real data: 180-record HOPV15 snapshot → 1 hit
+  (KCTYWEWDJUBVCZ, score 0.529); frontend action allowlist drift test
+  updated (TS `local` scope).
+- Commits: `73f9b63`, `10c924f`.
 
-### Phase 4 — T37-12 / T37-13 screening view + schema generation (2 Medium)
+### Phase 4 — T37-12 / T37-13 screening view + schema generation
 
-- AtomReasonX Screening view: score-ranked candidates, per-fact provenance,
-  review blockers, Spiro-OMeTAD compare mode; fixture + component tests.
-- E1: Go structs → JSON Schema → TypeScript types generation replacing
-  hand-maintained pairs; drift tests stay green.
+T37-12 DONE 2026-08-13: `ScreeningView` component (ranked candidates,
+stats, review flags, unavailable state) mounted in AppShell;
+`ScreeningResultState` contract + real fixture snapshot; 4 Vitest tests
+(64 frontend green), Python contract assertion, TS build green.
+Commits: `5db2ba2`, `1adbc27`, `01948fb`.
 
-### Phase 5 — Packaging (T37-14/15; T37-16 deferred by user)
+T37-13 (Go→JSON Schema→TS generation) pending.
+
+### Phase 5 — Packaging (T37-14/15)
+
+CEPDB status update: user downloaded `cepdb_2013-06-21.sql.tbz` (6.2 GB);
+decompressed to 49.28 GB SQL in `data/lib/cepd/raw/`; streaming importers
+delivered (`cepd_import.py` INSERT parser + manifest builder,
+`cepd_sqlite_import.py` line-based dump→SQLite at 4.3 MB/s); full import
+running in background (SQLite ~18 GB at last check). After import: create
+indexes, identify molecule/property tables, HTL-window SQL query, emit HTL
+subset snapshot, and wire it into fast-screen / screening tasks.
 
 - Run `npm.cmd run tauri:build:app` (sidecar pack + frontend build + Rust
   release, no MSI) to prove the full chain (skill `atomreasonx-tauri-msvc`).
