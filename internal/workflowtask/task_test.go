@@ -60,6 +60,7 @@ func TestValidateTaskDefinitionsMatchExpectedWorkflowActions(t *testing.T) {
 		"refresh_pubchem_identity_cache":        {Provider: strPtr("pubchem"), ProviderScope: "source", DeclaredEffects: []string{"provider_cache"}},
 		"run_parsing_job":                       {Provider: nil, ProviderScope: "source", DeclaredEffects: []string{"knowledge_chunks"}},
 		"run_extraction_job":                    {Provider: nil, ProviderScope: "source", DeclaredEffects: []string{"extracted_claims", "citation_links"}},
+		"run_htl_screening":                     {Provider: nil, ProviderScope: "local", DeclaredEffects: []string{"screening_result"}},
 	}
 
 	if len(Definitions) != len(expected) {
