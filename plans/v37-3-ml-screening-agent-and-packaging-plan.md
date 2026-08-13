@@ -83,17 +83,30 @@ stats, review flags, unavailable state) mounted in AppShell;
 (64 frontend green), Python contract assertion, TS build green.
 Commits: `5db2ba2`, `1adbc27`, `01948fb`.
 
-T37-13 (Go→JSON Schema→TS generation) pending.
+T37-13 (E1) DONE 2026-08-13: `internal/schemagen` reflection-based JSON
+Schema generator (Go struct = single source of truth); `spiroctl
+schema-generate screening-result` emits
+`schemas/v37-screening-result.schema.json` (validated against a real
+payload, 0 errors); dual drift guards — Go test regenerates and compares
+checked-in schema, Python contract test asserts TS interface fields match
+the generated schema exactly. Commit: `305d395`.
 
 ### Phase 5 — Packaging (T37-14/15)
 
-CEPDB status update: user downloaded `cepdb_2013-06-21.sql.tbz` (6.2 GB);
-decompressed to 49.28 GB SQL in `data/lib/cepd/raw/`; streaming importers
-delivered (`cepd_import.py` INSERT parser + manifest builder,
-`cepd_sqlite_import.py` line-based dump→SQLite at 4.3 MB/s); full import
-running in background (SQLite ~18 GB at last check). After import: create
-indexes, identify molecule/property tables, HTL-window SQL query, emit HTL
-subset snapshot, and wire it into fast-screen / screening tasks.
+Packaging app chain VERIFIED 2026-08-13: `tauri:build:app` full chain —
+sidecar build (spiroctl 10.9MB, sha256 3609307a), sidecar preflight PASS,
+MSVC toolchain auto-detected, frontend build, Rust release compile
+(`Built application at ...\atomreasonx.exe`, 3.1MB). Direct invocation
+exit=0 (npm wrapper exit 1 was a PowerShell stderr artifact).
+T37-14 MSI bundling still needs WiX (external); T37-15 updater integration
+pending (full-auto decision recorded).
+
+CEPDB status (completed 2026-08-13): dump imported (3.32B rows), analysis
+layer switched to DuckDB+Parquet (measured ~21x faster, ~59x smaller than
+SQLite intermediate; see `plans/cepd-data-layer-architecture.md`); HTL
+subset extracted (1,711,218 candidates, B3LYP/TZVP window) and verified
+end-to-end through `run_htl_screening` (admitted → executed → artifact
+with scoring-write authorization, 1,711,218 records processed).
 
 - Run `npm.cmd run tauri:build:app` (sidecar pack + frontend build + Rust
   release, no MSI) to prove the full chain (skill `atomreasonx-tauri-msvc`).
