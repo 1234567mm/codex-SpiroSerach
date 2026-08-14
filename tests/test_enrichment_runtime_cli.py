@@ -892,7 +892,10 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
                     "inchi_key": "CACHEDKEY",
                 },
                 source_url="fixture://pubchem/cached",
-                retrieved_at="2026-07-07T00:00:00+00:00",
+                # Fresh relative to now so the provider TTL (720h) never
+                # expires this entry: the test asserts cache-hit behavior,
+                # not time-based expiry.
+                retrieved_at=(datetime.now(UTC) - timedelta(hours=1)).isoformat(),
                 license_hint="fixture",
                 raw_payload={"CID": 123},
                 confidence=0.8,
@@ -944,7 +947,7 @@ class EnrichmentRuntimeCliTests(unittest.TestCase):
             self.assertEqual(records["cached_htl"]["provider_refs"][1]["cache_status"], "hit")
             self.assertEqual(records["cached_htl"]["provider_refs"][1]["cache_key"], JSONLProviderCache.key_for("pubchem", "name:cached htl"))
             self.assertEqual(records["cached_htl"]["provider_refs"][1]["response_id"], cached_response.response_id)
-            self.assertEqual(records["cached_htl"]["provider_refs"][1]["retrieved_at"], "2026-07-07T00:00:00+00:00")
+            self.assertEqual(records["cached_htl"]["provider_refs"][1]["retrieved_at"], cached_response.retrieved_at)
             self.assertEqual(records["cached_htl"]["provider_refs"][1]["contract_version"], "provider-response-v1")
             cache_index = json.loads((output_dir / "provider-cache-index.json").read_text(encoding="utf-8"))
             self.assertEqual(cache_index["hit_count"], 1)
