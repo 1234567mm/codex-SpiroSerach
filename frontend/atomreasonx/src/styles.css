@@ -1,0 +1,327 @@
+/* AtomReasonX global styles — dark workbench theme (Reasonix-inspired).
+
+Component behavior stays in TSX; this stylesheet owns layout, spacing,
+color, and state badges. Inline styles in components still apply where
+present (inline wins); this file fills the gaps and normalizes visuals.
+*/
+
+:root {
+  --ax-bg: #0f1220;
+  --ax-bg-elevated: #161a2e;
+  --ax-bg-card: #1a1f36;
+  --ax-border: #2a3050;
+  --ax-border-strong: #3a4268;
+  --ax-fg: #e8eaf6;
+  --ax-fg-dim: #9aa3c7;
+  --ax-fg-faint: #6b7395;
+  --ax-accent: #4fd1c5;
+  --ax-accent-soft: rgba(79, 209, 197, 0.14);
+  --ax-warn: #fbbf6e;
+  --ax-danger: #f47f7f;
+  --ax-ok: #7fd6a0;
+  --ax-radius: 8px;
+  --ax-font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --ax-mono: "Cascadia Code", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--ax-bg);
+  color: var(--ax-fg);
+  font-family: var(--ax-font);
+  font-size: 14px;
+}
+
+button {
+  font-family: var(--ax-font);
+  font-size: 12px;
+  background: var(--ax-bg-elevated);
+  color: var(--ax-fg);
+  border: 1px solid var(--ax-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--ax-accent);
+  background: var(--ax-accent-soft);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+input,
+select {
+  font-family: var(--ax-font);
+  font-size: 12px;
+  background: var(--ax-bg);
+  color: var(--ax-fg);
+  border: 1px solid var(--ax-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--ax-accent);
+}
+
+/* --- shell layout --- */
+
+.app-shell {
+  height: 100vh;
+}
+
+.left-sidebar {
+  background: var(--ax-bg-elevated);
+  border-right: 1px solid var(--ax-border);
+}
+
+.brand-slot {
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--ax-border);
+}
+
+.nav-group-label {
+  padding: 10px 12px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ax-fg-faint);
+}
+
+.nav-entry {
+  border-radius: 6px;
+  margin: 1px 8px;
+  cursor: default;
+}
+
+.nav-entry:hover {
+  background: var(--ax-accent-soft);
+  color: var(--ax-fg);
+}
+
+.settings-btn {
+  width: 100%;
+}
+
+.session-header {
+  border-bottom: 1px solid var(--ax-border);
+  background: var(--ax-bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+}
+
+.app-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ax-border);
+  color: var(--ax-fg-dim);
+  background: var(--ax-bg);
+}
+
+.mode-badge--fixture {
+  color: var(--ax-warn);
+  border-color: rgba(251, 191, 110, 0.4);
+}
+
+.mode-badge--readonly {
+  color: var(--ax-accent);
+  border-color: rgba(79, 209, 197, 0.4);
+}
+
+.mode-badge--repo {
+  color: var(--ax-ok);
+  border-color: rgba(127, 214, 160, 0.4);
+}
+
+/* --- workbench grid --- */
+
+.workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.view-card {
+  background: var(--ax-bg-card);
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius);
+  padding: 12px;
+  min-width: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--ax-border);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.section-header span {
+  font-size: 11px;
+  color: var(--ax-fg-faint);
+  font-family: var(--ax-mono);
+}
+
+.empty-state {
+  color: var(--ax-fg-dim);
+  font-size: 13px;
+  padding: 12px 0;
+}
+
+/* --- metrics --- */
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.metric-cell {
+  background: var(--ax-bg-elevated);
+  border: 1px solid var(--ax-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-cell span {
+  font-size: 11px;
+  color: var(--ax-fg-dim);
+}
+
+.metric-cell strong {
+  font-size: 16px;
+  font-family: var(--ax-mono);
+}
+
+/* --- tables --- */
+
+table.catalog-table,
+table.screening-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.catalog-table th,
+.screening-table th {
+  text-align: left;
+  color: var(--ax-fg-dim);
+  font-weight: 500;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--ax-border-strong);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.catalog-table td,
+.screening-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--ax-border);
+  font-family: var(--ax-mono);
+  font-size: 11px;
+}
+
+.catalog-family {
+  margin-bottom: 12px;
+}
+
+.catalog-family-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 10px 0 4px;
+}
+
+.catalog-family-header strong {
+  font-size: 12px;
+  color: var(--ax-accent);
+}
+
+.catalog-family-header span {
+  font-size: 11px;
+  color: var(--ax-fg-faint);
+}
+
+/* --- telemetry bar --- */
+
+.telemetry-bar {
+  border-top: 1px solid var(--ax-border);
+  background: var(--ax-bg-elevated);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 4px 14px;
+  font-size: 11px;
+  color: var(--ax-fg-dim);
+}
+
+.telemetry-bar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* --- settings --- */
+
+.settings-modal {
+  border: 1px solid var(--ax-border-strong);
+}
+
+.settings-nav-item.selected {
+  border-left: 3px solid var(--ax-accent);
+}
+
+/* --- states --- */
+
+.app-shell-loading,
+.app-shell-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--ax-fg-dim);
+}

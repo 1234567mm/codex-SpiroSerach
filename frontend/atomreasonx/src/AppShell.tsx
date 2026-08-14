@@ -16,6 +16,18 @@ import type {
 } from "./adapters/readonly-run-operator-config";
 import type { AtomReasonXWorkspaceState, OperatorTaskExecutionReport } from "./contracts/types";
 
+export const workspaceModeBadge = (
+  workspace: AtomReasonXWorkspaceState,
+): { label: string; tone: "fixture" | "readonly" | "repo" } => {
+  if (workspace.active_workspace.startsWith("readonly_run:")) {
+    return { label: `readonly run`, tone: "readonly" };
+  }
+  if (workspace._provisional) {
+    return { label: "demo data", tone: "fixture" };
+  }
+  return { label: "workspace", tone: "repo" };
+};
+
 const RIGHT_INSPECTOR_TABS = ["Overview", "Files"];
 
 const SETTINGS_CATEGORIES = [
@@ -61,26 +73,39 @@ export const AppShell: React.FC<{
         <main className="main-chat-workspace" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <header className="session-header">
             <span className="app-title">{workspace.app}</span>
+            <span className={`mode-badge mode-badge--${workspaceModeBadge(workspace).tone}`}>
+              {workspaceModeBadge(workspace).label}
+            </span>
           </header>
           <div className="workbench-grid" style={{ flex: 1, overflowY: "auto" }}>
-            <DatabaseView
-              sourceCoverage={workspace.source_coverage}
-              sourceProfiles={workspace.source_profiles}
-              sourceSettings={workspace.source_settings}
-              syncJobs={workspace.sync_jobs}
-            />
-            <KnowledgeLibraryView summary={workspace.knowledge_library} />
-            <SourceCategoriesView catalog={workspace.source_catalog} />
-            <ScreeningView result={workspace.screening_result} />
-            <WorkflowView
-              workflow={workspace.workflow}
-              commandActions={workspace.command_actions}
-              operatorTasks={workspace.operator_tasks}
-              commandDispatcher={commandDispatcher}
-              workflowTaskExecutor={workflowTaskExecutor}
-              workflowProjectionKey={workflowProjectionKey}
-              onWorkflowTaskExecuted={onWorkflowTaskExecuted}
-            />
+            <section className="view-card">
+              <DatabaseView
+                sourceCoverage={workspace.source_coverage}
+                sourceProfiles={workspace.source_profiles}
+                sourceSettings={workspace.source_settings}
+                syncJobs={workspace.sync_jobs}
+              />
+            </section>
+            <section className="view-card">
+              <KnowledgeLibraryView summary={workspace.knowledge_library} />
+            </section>
+            <section className="view-card">
+              <SourceCategoriesView catalog={workspace.source_catalog} />
+            </section>
+            <section className="view-card">
+              <ScreeningView result={workspace.screening_result} />
+            </section>
+            <section className="view-card">
+              <WorkflowView
+                workflow={workspace.workflow}
+                commandActions={workspace.command_actions}
+                operatorTasks={workspace.operator_tasks}
+                commandDispatcher={commandDispatcher}
+                workflowTaskExecutor={workflowTaskExecutor}
+                workflowProjectionKey={workflowProjectionKey}
+                onWorkflowTaskExecuted={onWorkflowTaskExecuted}
+              />
+            </section>
           </div>
           <div className="composer" style={{ padding: "8px" }}>
             <input type="text" placeholder="Ask AtomX..." style={{ width: "100%" }} />

@@ -5,14 +5,9 @@ export const BottomTelemetryBar: React.FC<{
   telemetry: AtomReasonXTelemetryState;
 }> = ({ telemetry }) => {
   return (
-    <div className="bottom-telemetry-bar" style={{
+    <div className="telemetry-bar" style={{
       height: "24px",
-      display: "flex",
       alignItems: "center",
-      gap: "12px",
-      padding: "0 8px",
-      fontSize: "11px",
-      borderTop: "1px solid #333",
       overflowX: "hidden",
     }}>
       {telemetry.fields.map(field => (
