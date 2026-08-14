@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import sys
 import unittest
 
 
@@ -67,6 +68,12 @@ class AtomReasonXSidecarPackagingTests(unittest.TestCase):
         ]:
             self.assertIn(token, script)
 
+    @unittest.skipUnless(
+        sys.platform == "win32",
+        "Windows-only: builds the spiroctl sidecar with powershell.exe for the "
+        "Tauri packaging preflight. Linux/macOS CI has no powershell.exe and "
+        "does not build the Windows sidecar.",
+    )
     def test_current_tauri_config_passes_bundled_packaging_preflight(self) -> None:
         self.ensure_release_sidecar_artifact()
         config = json.loads(TAURI_CONFIG_PATH.read_text(encoding="utf-8"))
