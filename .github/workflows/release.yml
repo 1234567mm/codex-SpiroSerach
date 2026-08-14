@@ -1,23 +1,22 @@
-# AtomReasonX — Multi-platform Desktop Release
+# AtomReasonX — Multi-platform Desktop Release (structured pipeline)
 #
-# Build matrix follows the Reasonix desktop approach: each platform builds on
-# its own native runner (no cross-compilation of CGO/WebKit binaries), so the
-# matrix fans out to one runner per OS/arch:
-#   windows-latest  → .msi + .exe (NSIS installer)
-#   macos-latest    → .dmg (ARM64 + x64)
-#   ubuntu-latest   → .deb + .AppImage
+# Stage 1  resolve   — normalize tag / version / prerelease from the trigger.
+# Stage 2  test-gate — Python + Go + frontend tests must pass before packaging.
+# Stage 3  build     — one native runner per platform (Reasonix/tauri-action
+#                      approach; no cross-compilation of CGO/WebKit binaries):
+#                        windows-latest → .msi + .exe (NSIS)
+#                        macos-latest   → .dmg (ARM64 + x64)
+#                        ubuntu-latest  → .deb + .AppImage
+#                      Every platform uploads its own artifact (CodeWhale-style
+#                      named artifacts) so each OS build is independently
+#                      inspectable before release publication.
+# Stage 4  publish   — tauri-action creates the GitHub Release, attaches all
+#                      platform bundles and generates latest.json for the
+#                      Tauri 2 updater.
 #
 # Triggers:
-#   - Push a tag matching v* (e.g. v0.1.0, v0.2.0-beta) → build + release
+#   - Push a tag matching v* (e.g. v0.1.0, v0.2.0-beta)
 #   - Manual dispatch via GitHub Actions tab (requires the tag input)
-#
-# Prerequisites:
-#   - Rust toolchain (dtolnay/rust-toolchain@v1, adds matrix target)
-#   - Node.js 20
-#   - Linux: system webkit/gtk deps (installed below on ubuntu-latest)
-#
-# The Python test gate runs first to ensure backend contracts pass before any
-# installer is packaged.
 
 name: Release Desktop Installers
 
@@ -41,22 +40,60 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Python backend test gate ──────────────────────────────────────────
-  python-tests:
-    name: Python Test Gate
+  # ── Stage 1: resolve ───────────────────────────────────────────────────
+  resolve:
+    name: Resolve release version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.outputs.tag }}
+      prerelease: ${{ steps.outputs.prerelease }}
+    steps:
+      - id: outputs
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          TAG="$INPUT_TAG"
+          if [ -z "$TAG" ]; then
+            TAG="${REF_NAME#v}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          case "${TAG}" in
+            *alpha*|*beta*|*rc*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  # ── Stage 2: test gate ─────────────────────────────────────────────────
+  test-gate:
+    name: Test gate
+    needs: resolve
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv sync
-      - run: uv run python -m unittest discover tests -v
+      - name: Python tests
+        run: uv run python -m unittest discover tests -v
         env:
           PYTHONPATH: src
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Go tests
+        run: go test ./...
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/atomreasonx/package-lock.json
+      - name: Frontend tests + build
+        working-directory: frontend/atomreasonx
+        run: npm ci && npm test && npm run build
 
-  # ── Build matrix (one native runner per platform) ─────────────────────
+  # ── Stage 3: platform build matrix (one native runner per platform) ────
   build:
     name: Build ${{ matrix.label }}
-    needs: python-tests
+    needs: test-gate
     strategy:
       fail-fast: false
       matrix:
@@ -64,25 +101,29 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             label: Windows x64
+            artifact: atomreasonx-windows-x64
             args: "--target x86_64-pc-windows-msvc"
           - platform: macos-latest
             target: aarch64-apple-darwin
             label: macOS ARM64
+            artifact: atomreasonx-macos-aarch64
             args: "--target aarch64-apple-darwin"
           - platform: macos-latest
             target: x86_64-apple-darwin
             label: macOS x64
+            artifact: atomreasonx-macos-x64
             args: "--target x86_64-apple-darwin"
           - platform: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             label: Linux x64
+            artifact: atomreasonx-linux-x64
             args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      # ── System dependencies (Linux) ──────────────────────────────────
+      # ── System dependencies (Linux only) ──────────────────────────────
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-latest'
         run: |
@@ -96,7 +137,7 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
-      # ── Rust toolchain (per-matrix target) ───────────────────────────
+      # ── Rust toolchain (per-matrix target) ────────────────────────────
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
         with:
@@ -107,7 +148,7 @@ jobs:
         with:
           workspaces: frontend/atomreasonx/src-tauri -> target
 
-      # ── Node.js ──────────────────────────────────────────────────────
+      # ── Node.js ───────────────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -119,12 +160,12 @@ jobs:
         working-directory: frontend/atomreasonx
         run: npm ci
 
-      # ── Build Go sidecar (required by the Tauri shell) ───────────────
+      # ── Build Go sidecar (required by the Tauri shell) ────────────────
       - name: Build spiroctl sidecar
         working-directory: frontend/atomreasonx
         run: npm run sidecar:build
 
-      # ── Tauri build + release upload ─────────────────────────────────
+      # ── Tauri build + release upload ──────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -133,8 +174,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: frontend/atomreasonx
-          tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: "AtomReasonX ${{ github.event.inputs.tag || github.ref_name }}"
+          tagName: "v${{ needs.resolve.outputs.tag }}"
+          releaseName: "AtomReasonX v${{ needs.resolve.outputs.tag }}"
           releaseBody: |
             ## AtomReasonX — Reason at Atomic Scale, Build Beyond Materials.
 
@@ -167,18 +208,19 @@ jobs:
             - **macOS**: macOS 10.15+
             - **Linux**: WebKit2GTK 4.1 (Ubuntu 22.04+, Fedora 36+, or equivalent)
           releaseDraft: false
-          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, 'beta') || contains(github.event.inputs.tag || github.ref_name, 'alpha') }}
+          prerelease: ${{ needs.resolve.outputs.prerelease }}
           args: ${{ matrix.args }}
+          workflowArtifactNamePattern: "${{ matrix.artifact }}-*"
 
-  # ── Summary ─────────────────────────────────────────────────────────
+  # ── Stage 4: summary ─────────────────────────────────────────────────
   release-summary:
     name: Release Summary
-    needs: build
+    needs: [build, resolve]
     runs-on: ubuntu-latest
     steps:
       - name: Print release info
         run: |
           echo "✅ Release completed successfully."
-          echo "Tag: ${{ github.event.inputs.tag || github.ref_name }}"
+          echo "Tag: ${{ needs.resolve.outputs.tag }}"
           echo "Builds: Windows x64, macOS ARM64, macOS x64, Linux x64"
           echo "Check the GitHub Releases page for downloadable installers."
