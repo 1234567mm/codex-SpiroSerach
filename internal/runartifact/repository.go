@@ -247,7 +247,7 @@ func (r *Repository) pathUsesLink(relativePath string) (bool, error) {
 			}
 			return false, err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if usesLinkMode(info) {
 			return true, nil
 		}
 	}

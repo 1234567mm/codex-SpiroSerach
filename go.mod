@@ -1,6 +1,6 @@
 module spirosearch
 
-go 1.22
+go 1.24
 
 require modernc.org/sqlite v1.33.1
 

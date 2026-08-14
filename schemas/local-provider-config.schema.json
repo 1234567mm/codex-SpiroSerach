@@ -29,7 +29,12 @@
           "enabled": {"type": "boolean"},
           "base_url": {"type": ["string", "null"]},
           "default_model": {"type": ["string", "null"]},
-          "workspace_id": {"type": ["string", "null"]}
+          "workspace_id": {"type": ["string", "null"]},
+          "models": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Model ids fetched from the provider via model_list_refresh."
+          }
         },
         "additionalProperties": false
       }

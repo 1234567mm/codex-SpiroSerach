@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   python-tests:
     name: Python Tests
@@ -84,6 +88,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The hygiene script requires core.hooksPath == .githooks, which a fresh
+      # CI checkout does not have. Configure it so the check passes in CI the
+      # same way it does on developer machines.
+      - name: Configure repository hooks path
+        run: git config core.hooksPath .githooks
       - name: Run agent hygiene checks
         shell: pwsh
         run: |
