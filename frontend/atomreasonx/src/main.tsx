@@ -154,9 +154,45 @@ const AtomReasonXRoot: React.FC = () => {
   );
 };
 
+class AtomReasonXErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: string | null }
+> {
+  state = { error: null as string | null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
+    console.error("AtomReasonX render error:", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error !== null) {
+      return (
+        <div className="app-shell app-shell-error" style={{ padding: "16px" }}>
+          <div role="alert" style={{ color: "#f77", marginBottom: "8px" }}>
+            The interface hit an unexpected error and was recovered.
+          </div>
+          <div style={{ fontSize: "12px", color: "#cfd3ff", marginBottom: "12px" }}>
+            {this.state.error}
+          </div>
+          <button type="button" onClick={() => this.setState({ error: null })}>
+            Reload interface
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AtomReasonXRoot />
+    <AtomReasonXErrorBoundary>
+      <AtomReasonXRoot />
+    </AtomReasonXErrorBoundary>
   </React.StrictMode>
 );
 

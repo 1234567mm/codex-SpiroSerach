@@ -111,10 +111,21 @@ export const createRuntimeWorkbenchReadAdapter = ({
         if (!workflowTaskRestoreReader) {
           return workspace;
         }
-        return projectWorkflowTaskRestoreReport(
-          workspace,
-          await workflowTaskRestoreReader.restore(),
-        );
+        try {
+          return projectWorkflowTaskRestoreReport(
+            workspace,
+            await workflowTaskRestoreReader.restore(),
+          );
+        } catch (error) {
+          // No repository / installed-app environment: restore is unavailable.
+          // Degrade to the pure fixture workspace so the shell always renders;
+          // real data comes through readonly runs and the command plane.
+          console.warn(
+            "workflow task restore unavailable; using fixture workspace",
+            error,
+          );
+          return workspace;
+        }
       },
     };
     return {
