@@ -1,7 +1,7 @@
 # AtomReasonX — Continuous Integration
 #
 # Runs on every push to main and every PR.
-# Validates Python tests + frontend structure.
+# Validates Python tests, Go tests, frontend tests/build, and agent hygiene.
 # Does NOT build desktop installers (use release.yml for that).
 
 name: CI
@@ -18,10 +18,10 @@ permissions:
 jobs:
   python-tests:
     name: Python Tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run python -m unittest discover tests -v
         env:
@@ -29,7 +29,7 @@ jobs:
 
   frontend-check:
     name: Frontend Structure Check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Check frontend files exist
@@ -44,14 +44,14 @@ jobs:
           test -f frontend/atomreasonx/src-tauri/Cargo.toml
       - name: Verify fixture is valid JSON
         run: |
-          python -c "import json; json.load(open('frontend/atomreasonx/src/fixtures/atomreasonx-ui-fixture.json'))"
+          python3 -c "import json; json.load(open('frontend/atomreasonx/src/fixtures/atomreasonx-ui-fixture.json'))"
       - name: Verify fixture is provisional
         run: |
-          python -c "import json; assert json.load(open('frontend/atomreasonx/src/fixtures/atomreasonx-ui-fixture.json'))['_provisional']"
+          python3 -c "import json; assert json.load(open('frontend/atomreasonx/src/fixtures/atomreasonx-ui-fixture.json'))['_provisional']"
 
   go-tests:
     name: Go Tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -61,7 +61,7 @@ jobs:
 
   frontend-tests:
     name: Frontend Tests And Build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -81,7 +81,7 @@ jobs:
 
   hygiene:
     name: Repository Agent Hygiene
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run agent hygiene checks

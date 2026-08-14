@@ -1,21 +1,23 @@
 # AtomReasonX — Multi-platform Desktop Release
 #
+# Build matrix follows the Reasonix desktop approach: each platform builds on
+# its own native runner (no cross-compilation of CGO/WebKit binaries), so the
+# matrix fans out to one runner per OS/arch:
+#   windows-latest  → .msi + .exe (NSIS installer)
+#   macos-latest    → .dmg (ARM64 + x64)
+#   ubuntu-latest   → .deb + .AppImage
+#
 # Triggers:
 #   - Push a tag matching v* (e.g. v0.1.0, v0.2.0-beta) → build + release
-#   - Manual dispatch via GitHub Actions tab
-#
-# Build matrix:
-#   windows-latest  → .msi + .exe (NSIS installer)
-#   macos-latest    → .dmg
-#   ubuntu-22.04    → .deb + .AppImage
+#   - Manual dispatch via GitHub Actions tab (requires the tag input)
 #
 # Prerequisites:
-#   - Rust toolchain (auto-installed by tauri-action)
+#   - Rust toolchain (dtolnay/rust-toolchain@v1, adds matrix target)
 #   - Node.js 20
-#   - Linux: system webkit/gtk deps (pre-installed on ubuntu-22.04 with libwebkit2gtk)
+#   - Linux: system webkit/gtk deps (installed below on ubuntu-latest)
 #
-# The workflow also runs the Python test gate to ensure backend contracts pass
-# before packaging the desktop installer.
+# The Python test gate runs first to ensure backend contracts pass before any
+# installer is packaged.
 
 name: Release Desktop Installers
 
@@ -37,18 +39,18 @@ jobs:
   # ── Python backend test gate ──────────────────────────────────────────
   python-tests:
     name: Python Test Gate
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run python -m unittest discover tests -v
         env:
           PYTHONPATH: src
 
-  # ── Build matrix ─────────────────────────────────────────────────────
+  # ── Build matrix (one native runner per platform) ─────────────────────
   build:
-    name: Build ${{ matrix.platform }} (${{ matrix.target }})
+    name: Build ${{ matrix.label }}
     needs: python-tests
     strategy:
       fail-fast: false
@@ -66,7 +68,7 @@ jobs:
             target: x86_64-apple-darwin
             label: macOS x64
             args: "--target x86_64-apple-darwin"
-          - platform: ubuntu-22.04
+          - platform: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             label: Linux x64
             args: ""
@@ -77,7 +79,7 @@ jobs:
 
       # ── System dependencies (Linux) ──────────────────────────────────
       - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -89,9 +91,9 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
-      # ── Rust toolchain ───────────────────────────────────────────────
+      # ── Rust toolchain (per-matrix target) ───────────────────────────
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@v1
         with:
           targets: ${{ matrix.target }}
 
@@ -112,7 +114,12 @@ jobs:
         working-directory: frontend/atomreasonx
         run: npm ci
 
-      # ── Tauri build ───────────────────────────────────────────────────
+      # ── Build Go sidecar (required by the Tauri shell) ───────────────
+      - name: Build spiroctl sidecar
+        working-directory: frontend/atomreasonx
+        run: npm run sidecar:build
+
+      # ── Tauri build + release upload ─────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -137,13 +144,17 @@ jobs:
 
             ### What's included
 
-            - AtomReasonX desktop shell (Vite + React + TypeScript + Tauri)
-            - AtomX materials discovery agent workspace
-            - Left sidebar: New Chat, Database, Projects, Plugins, Recent, Automation
-            - Reasonix-style settings modal (21 categories including Telemetry source policy)
-            - Bottom telemetry bar with source-first labels
-            - Read-only artifact viewer integration
-            - V33A backend contracts (provider registry, local config, model adapter, command plane, workflow templates, session telemetry)
+            - AtomReasonX desktop shell (Vite + React + TypeScript + Tauri 2)
+            - Reasonix-style workbench: settings centre (built-in model endpoints,
+              fetch remote model lists, context windows, live connectivity test),
+              session transcript with multi-session history, local search,
+              evidence graph, knowledge imports (.md/.txt), JSON backup export
+            - Live model channel: OpenAI-compatible chat completions through a
+              real HTTP transport (stdlib urllib, zero deps) with per-provider
+              API keys stored in the backend secret store
+            - Data platform: HTL screening workbench, source catalog, workflow
+              operator tasks, telemetry (context ring + status bar)
+            - Tauri 2 updater (auto-update from this repository's releases)
 
             ### Prerequisites
 
@@ -158,7 +169,7 @@ jobs:
   release-summary:
     name: Release Summary
     needs: build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Print release info
         run: |
