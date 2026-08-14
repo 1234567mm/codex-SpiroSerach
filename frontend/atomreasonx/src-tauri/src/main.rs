@@ -306,7 +306,7 @@ fn validate_config_command_request(request: &serde_json::Value) -> Result<(), St
 fn is_config_command_action(action_type: &str) -> bool {
     matches!(
         action_type,
-        "config_write" | "key_rotate" | "key_remove" | "test_connection" | "model_list_refresh"
+        "config_write" | "key_rotate" | "key_remove" | "test_connection" | "model_list_refresh" | "chat_completion"
     )
 }
 

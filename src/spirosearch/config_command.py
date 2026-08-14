@@ -29,7 +29,13 @@ from spirosearch.model_provider_registry import (
     ModelProviderRegistry,
     missing_provider_config_fields,
 )
-from spirosearch.model_providers import ModelAdapter, FakeTransport
+from spirosearch.model_providers import (
+    HttpTransport,
+    ModelAdapter,
+    FakeTransport,
+    ModelTransportHTTPError,
+    ModelTransportTimeout,
+)
 from spirosearch.orchestrator_contracts import stable_hash
 from spirosearch.source_registry import SourceRegistry
 from spirosearch.v23_command import (
@@ -41,6 +47,8 @@ from spirosearch.v23_command import (
 
 CONFIG_COMMAND_SCHEMA_VERSION = "v33.config_command.v1"
 SOURCE_PROVIDER_CONNECTION_PROBE_SCHEMA_VERSION = "v35.source_provider_connection_probe.v1"
+CHAT_COMPLETION_RESULT_SCHEMA_VERSION = "v35.chat_completion_result.v1"
+MODEL_LIST_RESULT_SCHEMA_VERSION = "v35.model_list_result.v1"
 MATERIALS_PROJECT_PROVIDER = "materials_project"
 DEFAULT_MATERIALS_PROJECT_PROBE_FORMULA = "CsPbI3"
 SourceProviderProbeRunner = Callable[[Any, str, str, str], dict[str, Any]]
@@ -61,6 +69,11 @@ class ConfigCommandPlane:
     evaluator: CommandPreconditionEvaluator | None = None
     source_probe_runner: SourceProviderProbeRunner | None = None
     allow_source_env_api_keys: bool = True
+    model_transport: Any | None = None
+
+    def _model_transport(self) -> Any:
+        """Return the injected model transport, or the real HTTP transport."""
+        return self.model_transport if self.model_transport is not None else HttpTransport()
 
     def _ensure_evaluator(self) -> CommandPreconditionEvaluator:
         if self.evaluator is None:
@@ -92,6 +105,7 @@ class ConfigCommandPlane:
         provider_scope: str | None = None,
         validation_mode: str | None = None,
         provider_probe: dict[str, Any] | None = None,
+        extra_artifacts: tuple[Mapping[str, Any], ...] = (),
     ) -> ActionResult:
         if result.status != "accepted":
             return result
@@ -122,7 +136,7 @@ class ConfigCommandPlane:
             actor_id=result.actor_id,
             reason_code=result.reason_code,
             message=result.message,
-            output_artifacts=(effect,),
+            output_artifacts=(effect, *extra_artifacts),
         )
 
     def _get_provider_or_reject(
@@ -214,7 +228,14 @@ class ConfigCommandPlane:
         evaluator: CommandPreconditionEvaluator,
         request: ActionRequest,
     ) -> tuple[ActionResult, dict[str, Any]] | None:
-        if request.action_type not in ("config_write", "key_rotate", "key_remove", "test_connection"):
+        if request.action_type not in (
+            "config_write",
+            "key_rotate",
+            "key_remove",
+            "test_connection",
+            "chat_completion",
+            "model_list_refresh",
+        ):
             return None
         request_hash = stable_hash(request.to_dict(include_request_id=False))
         existing = evaluator.idempotency_records.get(request.idempotency_key)
@@ -250,6 +271,7 @@ class ConfigCommandPlane:
         validation_state = "validated"
         provider_scope: str | None = None
         provider_probe: dict[str, Any] | None = None
+        extra_artifacts: tuple[Mapping[str, Any], ...] = ()
 
         if request.action_type == "config_write":
             provider = str(request.payload.get("provider", ""))
@@ -342,41 +364,192 @@ class ConfigCommandPlane:
                 else:
                     validation_state = "configured"
             else:
-                # Use fake transport - never live network in tests
-                cfg = self.config_store.get_provider_config(provider)
-                missing = missing_provider_config_fields(
-                    provider_entry,
-                    cfg,
-                    has_api_key=bool(self.config_store.get_api_key(provider)),
-                    require_enabled=False,
-                )
-                if missing:
-                    validation_state = "validation_failed"
-                else:
-                    transport = FakeTransport()
-                    adapter = ModelAdapter(
-                        registry=self.registry,
-                        config=self.config_store,
-                        transport=transport,
-                    )
+                if request.payload.get("live_probe") is True:
+                    # Real connectivity probe: send a minimal chat completion over
+                    # the live transport so the Test button reflects actual
+                    # reachability, not just config completeness.
+                    if provider_entry.requires_api_key and not self.config_store.get_api_key(provider):
+                        return self._reject(
+                            request,
+                            "missing_api_key",
+                            f"api key is not configured for {provider}",
+                        )
                     try:
+                        transport = self._model_transport()
+                        adapter = ModelAdapter(
+                            registry=self.registry,
+                            config=self.config_store,
+                            transport=transport,
+                        )
                         adapter.chat_completion(
                             provider=provider,
-                            messages=[{"role": "user", "content": "test"}],
+                            messages=[{"role": "user", "content": "ping"}],
+                            max_tokens=1,
                         )
                         validation_state = "validated"
-                    except Exception:
+                        provider_probe = _model_live_probe_report(provider, "validated", None)
+                    except ModelTransportTimeout as error:
                         validation_state = "validation_failed"
+                        provider_probe = _model_live_probe_report(
+                            provider, "timeout", _truncate_error(error),
+                        )
+                    except ModelTransportHTTPError as error:
+                        status = _live_probe_status(error.status)
+                        validation_state = "validation_failed"
+                        provider_probe = _model_live_probe_report(
+                            provider, status, _model_transport_message(error),
+                        )
+                    except Exception as error:  # noqa: BLE001 - sanitized below
+                        validation_state = "validation_failed"
+                        provider_probe = _model_live_probe_report(
+                            provider, "provider_error", _truncate_error(error),
+                        )
+                else:
+                    # Config-level check with the fake transport — never live
+                    # network (kept for deterministic tests and offline checks).
+                    cfg = self.config_store.get_provider_config(provider)
+                    missing = missing_provider_config_fields(
+                        provider_entry,
+                        cfg,
+                        has_api_key=bool(self.config_store.get_api_key(provider)),
+                        require_enabled=False,
+                    )
+                    if missing:
+                        validation_state = "validation_failed"
+                    else:
+                        transport = FakeTransport()
+                        adapter = ModelAdapter(
+                            registry=self.registry,
+                            config=self.config_store,
+                            transport=transport,
+                        )
+                        try:
+                            adapter.chat_completion(
+                                provider=provider,
+                                messages=[{"role": "user", "content": "test"}],
+                            )
+                            validation_state = "validated"
+                        except Exception:
+                            validation_state = "validation_failed"
             changed_fields = []
 
-        elif request.action_type == "model_list_refresh":
-            # No-op in first version: model list comes from registry
-            provider = request.payload.get("provider")
-            if provider:
-                provider_entry = self._get_provider_or_reject(request, str(provider))
-                if isinstance(provider_entry, tuple):
-                    return provider_entry
+        elif request.action_type == "chat_completion":
+            provider = str(request.payload.get("provider", ""))
+            messages = request.payload.get("messages")
+            if not provider:
+                return self._reject(request, "invalid_payload", "provider is required")
+            if not isinstance(messages, list) or not messages:
+                return self._reject(request, "invalid_payload", "messages is required")
+            if not all(
+                isinstance(item, dict)
+                and isinstance(item.get("role"), str)
+                and item.get("role") in {"user", "assistant", "system"}
+                and isinstance(item.get("content"), str)
+                for item in messages
+            ):
+                return self._reject(
+                    request,
+                    "invalid_payload",
+                    "messages must be {role, content} objects",
+                )
+            provider_entry = self._get_provider_or_reject(request, provider)
+            if isinstance(provider_entry, tuple):
+                return provider_entry
+            if provider_entry.requires_api_key and not self.config_store.get_api_key(provider):
+                return self._reject(request, "missing_api_key", f"api key is not configured for {provider}")
+            model = request.payload.get("model")
+            if model is not None and not isinstance(model, str):
+                return self._reject(request, "invalid_payload", "model must be a string")
+            try:
+                transport = self._model_transport()
+                adapter = ModelAdapter(
+                    registry=self.registry,
+                    config=self.config_store,
+                    transport=transport,
+                )
+                response = adapter.chat_completion(
+                    provider=provider,
+                    messages=[
+                        {"role": str(item["role"]), "content": str(item["content"])}
+                        for item in messages
+                    ],
+                    model=model,
+                )
+            except ModelTransportHTTPError as error:
+                return self._reject(
+                    request,
+                    _model_transport_reason(error.status),
+                    _model_transport_message(error),
+                )
+            except Exception as error:  # noqa: BLE001 - sanitized below
+                return self._reject(request, "model_call_failed", _truncate_error(error))
+            content, response_model, usage = _extract_chat_content(response)
+            if content is None:
+                return self._reject(request, "model_empty_response", "model returned no content")
             changed_fields = []
+            chat_artifact = {
+                "kind": "chat_completion_result",
+                "schema_version": CHAT_COMPLETION_RESULT_SCHEMA_VERSION,
+                "action_type": "chat_completion",
+                "provider": provider,
+                "model": response_model or (model if model else None),
+                "content": content,
+                "usage": usage,
+            }
+            extra_artifacts = (chat_artifact,)
+
+        elif request.action_type == "model_list_refresh":
+            provider = str(request.payload.get("provider", ""))
+            if not provider:
+                return self._reject(request, "invalid_payload", "provider is required")
+            provider_entry = self._get_provider_or_reject(request, provider)
+            if isinstance(provider_entry, tuple):
+                return provider_entry
+            if provider_entry.requires_api_key and not self.config_store.get_api_key(provider):
+                return self._reject(request, "missing_api_key", f"api key is not configured for {provider}")
+            try:
+                transport = self._model_transport()
+                adapter = ModelAdapter(
+                    registry=self.registry,
+                    config=self.config_store,
+                    transport=transport,
+                )
+                base_url = adapter._resolve_base_url(provider)
+                headers = adapter._build_headers(provider)
+                models_url = adapter._models_url(base_url)
+                response = transport.get(models_url, headers=headers)
+            except ModelTransportHTTPError as error:
+                return self._reject(
+                    request,
+                    _model_transport_reason(error.status),
+                    _model_transport_message(error),
+                )
+            except Exception as error:  # noqa: BLE001 - sanitized below
+                return self._reject(request, "model_list_failed", _truncate_error(error))
+            data = response.get("data") if isinstance(response, dict) else None
+            if not isinstance(data, list):
+                return self._reject(
+                    request,
+                    "model_list_unparseable",
+                    "provider response has no data list",
+                )
+            model_ids = [
+                str(item["id"])
+                for item in data
+                if isinstance(item, dict) and isinstance(item.get("id"), str)
+            ]
+            existing = dict(self.config_store.get_provider_config(provider))
+            existing["models"] = model_ids
+            self.config_store.set_provider_config(provider, existing)
+            changed_fields = ["models"]
+            model_list_artifact = {
+                "kind": "model_list_result",
+                "schema_version": MODEL_LIST_RESULT_SCHEMA_VERSION,
+                "action_type": "model_list_refresh",
+                "provider": provider,
+                "models": model_ids,
+            }
+            extra_artifacts = (model_list_artifact,)
 
         else:
             return self._reject(request, "unknown_action", f"unknown action_type: {request.action_type}")
@@ -396,6 +569,7 @@ class ConfigCommandPlane:
                 else None
             ),
             provider_probe=provider_probe,
+            extra_artifacts=extra_artifacts,
         )
         request_hash = stable_hash(request.to_dict(include_request_id=False))
         evaluator.idempotency_records[request.idempotency_key] = IdempotencyRecord(
@@ -426,7 +600,7 @@ class ConfigCommandPlane:
         result: ActionResult,
         audit: dict[str, Any],
     ) -> dict[str, Any]:
-        """Sanitize command result for frontend consumption — no secrets."""
+        """Sanitize command result for frontend consumption 鈥?no secrets."""
         sanitized = result.to_dict()
         sanitized["audit"] = {
             "idempotency_key": audit["idempotency_key"],
@@ -613,3 +787,75 @@ def _redact_secret(text: str, secret: str) -> str:
     if not str(secret).strip():
         return text
     return text.replace(str(secret).strip(), "<redacted>")
+
+def _model_transport_reason(status: int) -> str:
+    """Classify model transport HTTP failures the way cc-switch does."""
+    if status in (401, 403):
+        return "model_auth_failed"
+    if status in (404, 405):
+        return "model_endpoint_not_found"
+    return "model_http_error"
+
+
+def _model_transport_message(error: ModelTransportHTTPError) -> str:
+    if error.status in (401, 403):
+        return f"model endpoint rejected the API key (HTTP {error.status})"
+    if error.status in (404, 405):
+        return f"model endpoint does not expose this API (HTTP {error.status})"
+    return str(error)
+
+
+def _extract_chat_content(response: dict[str, Any]) -> tuple[str | None, str | None, dict[str, Any]]:
+    """Extract assistant content, echoed model id, and usage from a completion.
+
+    Returns ``(content, model, usage)`` where content is ``None`` when the
+    provider returned no usable message text.
+    """
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None, None, {}
+    first = choices[0]
+    message = first.get("message") if isinstance(first, dict) else None
+    if not isinstance(message, dict):
+        return None, None, {}
+    content = message.get("content")
+    if not isinstance(content, str):
+        content = None
+    model = response.get("model") if isinstance(response.get("model"), str) else None
+    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    return content, model, usage
+
+def _truncate_error(error: Exception, limit: int = 300) -> str:
+    """Sanitize and truncate an exception message before it reaches the UI."""
+    message = str(error)
+    if len(message) <= limit:
+        return message
+    return message[:limit] + "...(truncated)"
+
+MODEL_LIVE_PROBE_SCHEMA_VERSION = "v35.model_live_probe.v1"
+
+
+def _live_probe_status(status: int) -> str:
+    if status in (401, 403):
+        return "auth_failed"
+    if status in (404, 405):
+        return "endpoint_not_found"
+    if status in (408, 429):
+        return "rate_limited"
+    return "http_error"
+
+
+def _model_live_probe_report(
+    provider: str,
+    status: str,
+    error_message: str | None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": MODEL_LIVE_PROBE_SCHEMA_VERSION,
+        "provider": provider,
+        "provider_scope": "model",
+        "status": status,
+        "validation_state": "validated" if status == "validated" else "validation_failed",
+        "live_enabled": True,
+        "error_message": error_message,
+    }

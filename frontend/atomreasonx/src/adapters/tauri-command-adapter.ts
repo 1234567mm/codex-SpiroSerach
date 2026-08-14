@@ -22,6 +22,7 @@ const CONFIG_COMMAND_ACTION_TYPES = new Set([
   "key_remove",
   "test_connection",
   "model_list_refresh",
+  "chat_completion",
 ]);
 
 export const createTauriConfigCommandAdapter = ({

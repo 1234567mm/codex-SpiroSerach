@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SettingsModal, buildModelConfigWritePayload, buildModelSettingsCommandPayload } from "../components/SettingsModal";
+import { SettingsModal, buildModelConfigWritePayload, buildModelSettingsCommandPayload, submitModelTestConnectionCommand } from "../components/SettingsModal";
 import type { ProviderConfigStatusEntry } from "../contracts/types";
 import fixture from "../fixtures/atomreasonx-ui-fixture.json";
 
@@ -40,7 +40,7 @@ describe("SettingsModal Models panel", () => {
     expect(markup).toContain("deepseek");
     expect(markup).toContain("tencent_hunyuan");
     expect(markup).toContain("volcengine_ark");
-    expect(markup).toContain("no key");
+    expect(markup).toContain("key missing");
   });
 
   it("disables controls and explains missing backend", () => {
@@ -77,5 +77,18 @@ describe("SettingsModal Models panel", () => {
         default_model: "deepseek-chat",
       },
     });
+  });
+
+  it("submits live connectivity probes with live_probe flag", async () => {
+    const captured: unknown[] = [];
+    await submitModelTestConnectionCommand({
+      submitAction: async (_actionType: string, payload: Record<string, unknown>) => {
+        captured.push(payload);
+        return null;
+      },
+    }, modelEntry, { live_probe: true });
+    expect(captured).toEqual([
+      { provider: "deepseek", provider_scope: "model", live_probe: true },
+    ]);
   });
 });

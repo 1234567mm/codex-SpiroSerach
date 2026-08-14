@@ -27,7 +27,7 @@ SANITIZED_CONFIG_STATUS_SCHEMA_VERSION = "v33.sanitized_config_status.v1"
 SANITIZED_SOURCE_CONFIG_STATUS_SCHEMA_VERSION = "v35.sanitized_source_config_status.v1"
 
 VALIDATION_STATES = ("missing", "configured", "validation_failed", "validated")
-ALLOWED_PROVIDER_CONFIG_FIELDS = ("enabled", "base_url", "default_model", "workspace_id")
+ALLOWED_PROVIDER_CONFIG_FIELDS = ("enabled", "base_url", "default_model", "workspace_id", "models")
 SECRET_CONFIG_FIELD_TOKENS = ("api_key", "secret", "token", "password", "credential")
 SECRET_STORE_FORBIDDEN_PROVIDER_CHARS = ("\r", "\n", "\0", "=")
 SECRET_STORE_FORBIDDEN_VALUE_CHARS = ("\r", "\n", "\0")

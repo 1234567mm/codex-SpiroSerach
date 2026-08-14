@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
+import { applyPersistedTheme } from "./lib/theme";
+import { initializeSessionStore } from "./stores/session-store";
 import { AppShell } from "./AppShell";
 import { SettingsModal } from "./components/SettingsModal";
 import { createWorkbenchCommandDispatcher, type WorkbenchCommandAdapter } from "./adapters/command-adapter";
@@ -126,6 +128,8 @@ const AtomReasonXRoot: React.FC = () => {
           <SettingsModal
             categories={baseWorkspace.settings_categories}
             sourceSettings={baseWorkspace.source_settings}
+            modelSettings={baseWorkspace.settings}
+            providerRegistry={baseWorkspace.provider_status}
             readonlyRunConfig={readonlyRunConfig}
             readonlyRecentOutputDirs={readonlyRecentOutputDirEntries}
             onApplyReadonlyRunOutputDir={applyReadonlyRunOutputDir}
@@ -196,6 +200,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </AtomReasonXErrorBoundary>
   </React.StrictMode>
 );
+
+// Apply persisted theme (data-theme / data-theme-style) before first paint so
+// the workbench never flashes the default dark direction.
+applyPersistedTheme();
+// Restore the persisted session transcript (no-op when already initialized).
+initializeSessionStore();
 
 const isAtomReasonXCommandResult = (value: unknown): value is AtomReasonXCommandResult => (
   typeof value === "object"

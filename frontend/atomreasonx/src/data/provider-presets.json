@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "v1",
+  "providers": [
+    {
+      "id": "private_new_api",
+      "name": "Private Relay",
+      "brand": "RelayX",
+      "kind": "private_relay",
+      "requires_api_key": true,
+      "supports_cache": true,
+      "base_url": null,
+      "endpoint_note": "Private relay (configured by backend)",
+      "default_models": [],
+      "context_window_tokens": null
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "brand": "DeepSeek",
+      "kind": "model_provider",
+      "requires_api_key": true,
+      "supports_cache": true,
+      "base_url": "https://api.deepseek.com/v1",
+      "default_models": ["deepseek-v4-pro", "deepseek-v4-flash"],
+      "context_window_tokens": 128000
+    },
+    {
+      "id": "tencent_hunyuan",
+      "name": "Tencent Hunyuan",
+      "brand": "Tencent Hunyuan",
+      "kind": "model_provider",
+      "requires_api_key": true,
+      "supports_cache": false,
+      "base_url": "https://api.hunyuan.cloud.tencent.com/v1",
+      "default_models": ["hunyuan-turbos-latest"],
+      "context_window_tokens": 256000
+    },
+    {
+      "id": "aliyun_dashscope",
+      "name": "Alibaba DashScope",
+      "brand": "Alibaba DashScope",
+      "kind": "model_provider",
+      "requires_api_key": true,
+      "supports_cache": false,
+      "base_url_template": "https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "requires_workspace_id": true,
+      "default_models": ["qwen-plus"],
+      "context_window_tokens": 131072
+    },
+    {
+      "id": "volcengine_ark",
+      "name": "Volcengine Ark",
+      "brand": "Volcengine Ark",
+      "kind": "model_provider",
+      "requires_api_key": true,
+      "supports_cache": false,
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "default_models": ["doubao-seed-2-0-lite-260215"],
+      "context_window_tokens": 256000
+    }
+  ]
+}

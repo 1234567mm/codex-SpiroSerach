@@ -1,29 +1,43 @@
 import React from "react";
+import type { WorkbenchViewId } from "../lib/views";
 
-const NAV_GROUPS: Array<{ label: string; entries: string[] }> = [
-  { label: "Workspace", entries: ["Session", "Database", "Knowledge Library", "Screening", "Workflow", "Projects"] },
-  { label: "System", entries: ["Settings", "Diagnostics"] },
-];
+export interface SidebarViewEntry {
+  id: WorkbenchViewId;
+  label: string;
+}
+
+export interface SidebarNavGroup {
+  label: string;
+  views: SidebarViewEntry[];
+}
 
 export const LeftSidebar: React.FC<{
   brand: string;
-  entries: string[];
+  groups: SidebarNavGroup[];
+  activeView: WorkbenchViewId;
+  onSelectView: (id: WorkbenchViewId) => void;
   onOpenSettings?: () => void;
-}> = ({ brand, entries, onOpenSettings }) => {
+}> = ({ brand, groups, activeView, onSelectView, onOpenSettings }) => {
   return (
     <nav className="left-sidebar" style={{ width: "220px", display: "flex", flexDirection: "column" }}>
       <div className="brand-slot" style={{ padding: "12px", fontWeight: 600 }}>
         {brand}
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {NAV_GROUPS.map(group => (
+        {groups.map(group => (
           <div key={group.label}>
             <div className="nav-group-label">{group.label}</div>
             <ul className="nav-entries" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {group.entries.map(entry => (
-                <li key={entry} className={`nav-entry ${entries.includes(entry) ? "" : "nav-entry--inactive"}`}
-                  style={{ padding: "6px 12px", fontSize: "14px" }}>
-                  {entry}
+              {group.views.map(view => (
+                <li key={view.id}>
+                  <button
+                    type="button"
+                    className={`nav-entry nav-entry--view${activeView === view.id ? " nav-entry--active" : ""}`}
+                    onClick={() => onSelectView(view.id)}
+                    aria-current={activeView === view.id ? "page" : undefined}
+                  >
+                    {view.label}
+                  </button>
                 </li>
               ))}
             </ul>

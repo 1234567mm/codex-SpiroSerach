@@ -1,9 +1,25 @@
 import React from "react";
+import { MessageSquare } from "lucide-react";
 import type { ScreeningResultState } from "../contracts/types";
+
+export interface ScreeningCandidatePrompt {
+  record_id: string;
+  material_id: string;
+  score: number;
+  band_gap_ev: number;
+  source_id: string;
+}
+
+export const buildCandidatePrompt = (candidate: ScreeningCandidatePrompt): string =>
+  [
+    `Analyze screening candidate ${candidate.material_id || candidate.record_id} (ranked ${candidate.score.toFixed(3)}, band gap ${candidate.band_gap_ev.toFixed(2)} eV, source ${candidate.source_id}).`,
+    "Assess its fit as a Spiro-OMeTAD replacement and list the key evidence to check next.",
+  ].join(" ");
 
 export const ScreeningView: React.FC<{
   result?: ScreeningResultState;
-}> = ({ result }) => {
+  onAskInSession?: (prompt: string) => void;
+}> = ({ result, onAskInSession }) => {
   if (!result) {
     return (
       <section className="screening-view">
@@ -44,6 +60,7 @@ export const ScreeningView: React.FC<{
             <th>Band gap (eV)</th>
             <th>Score</th>
             <th>Source</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -56,6 +73,19 @@ export const ScreeningView: React.FC<{
               <td>{candidate.band_gap_ev}</td>
               <td>{candidate.score}</td>
               <td>{candidate.source_id}</td>
+              <td>
+                {onAskInSession && (
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    title="Ask the model about this candidate in the session"
+                    onClick={() => onAskInSession(buildCandidatePrompt(candidate))}
+                  >
+                    <MessageSquare size={12} aria-hidden="true" />
+                    Ask
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

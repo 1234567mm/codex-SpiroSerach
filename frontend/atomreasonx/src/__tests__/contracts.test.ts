@@ -535,7 +535,7 @@ describe("AtomReasonX contract fixtures", () => {
 
     expect(settingsSource).toContain("readonlyRecentOutputDirs");
     expect(settingsSource).toContain("Recent readonly run output directories");
-    expect(settingsSource).toContain("setReadonlyOutputDirDraft(event.currentTarget.value)");
+    expect(settingsSource).toContain("onReadonlyOutputDirDraftChange(event.currentTarget.value)");
     expect(settingsSource).toContain("onApplyReadonlyRunOutputDir");
     expect(settingsSource).not.toContain("showDirectoryPicker");
     expect(settingsSource).not.toContain("open(");

@@ -19,6 +19,7 @@ ACTION_TYPES = (
     "key_remove",
     "test_connection",
     "model_list_refresh",
+    "chat_completion",
 )
 ACTION_ROLES = ("curator", "reviewer", "operator", "admin")
 ACTION_RESULT_STATUSES = (
@@ -44,6 +45,7 @@ DEFAULT_ACTION_ROLE_POLICY = {
     "key_remove": ("operator", "admin"),
     "test_connection": ("operator", "admin"),
     "model_list_refresh": ("operator", "admin"),
+    "chat_completion": ("operator", "admin"),
 }
 
 

@@ -59,6 +59,87 @@ class FakeTransport:
             "model": payload.get("model", ""),
         }
 
+    def get(self, url: str, *, headers: dict[str, str]) -> dict[str, Any]:
+        """Fake GET — returns an empty model list (mirrors a provider without /models)."""
+        self.call_count += 1
+        self.last_request = TransportRequest(url=url, headers=dict(headers), payload={})
+        if self.fail_next:
+            raise RuntimeError("Fake transport error (key redacted)")
+        return {"data": []}
+
+
+class ModelTransportHTTPError(RuntimeError):
+    """Raised by :class:`HttpTransport` for non-2xx responses with the raw body.
+
+    ``status`` and ``body`` let callers classify failures (401/403 auth,
+    404/405 endpoint missing, timeouts, parse errors) the way cc-switch does.
+    """
+
+    def __init__(self, status: int, url: str, body: str) -> None:
+        super().__init__(f"HTTP {status} from {url}")
+        self.status = status
+        self.url = url
+        self.body = body
+
+
+class ModelTransportTimeout(ModelTransportHTTPError):
+    """Raised when a model endpoint times out."""
+
+
+class HttpTransport:
+    """Real HTTP transport using only the standard library (zero new deps).
+
+    Posts OpenAI-compatible JSON to ``{base_url}/chat/completions`` and GETs
+    ``{base_url}/models``. Mirrors the data-source providers' use of
+    ``urllib.request`` (see ``providers/nomad_perla_psc.py``).
+    """
+
+    def __init__(self, timeout: float = 60.0) -> None:
+        self.timeout = timeout
+
+    def post(self, url: str, *, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+        import json as _json
+
+        data = _json.dumps(payload).encode("utf-8")
+        return self._request(url, headers=headers, data=data, method="POST")
+
+    def get(self, url: str, *, headers: dict[str, str]) -> dict[str, Any]:
+        return self._request(url, headers=headers, data=None, method="GET")
+
+    def _request(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        data: bytes | None,
+        method: str,
+    ) -> dict[str, Any]:
+        import json as _json
+        from urllib.error import HTTPError, URLError
+        from urllib.request import Request, urlopen
+
+        request = Request(url, data=data, headers=dict(headers), method=method)
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+        except HTTPError as error:
+            # Do not echo the provider response body back to the caller: it may
+            # contain unrelated sensitive content.
+            body = error.read().decode("utf-8", errors="replace")
+            raise ModelTransportHTTPError(status=error.code, url=url, body=body[:400]) from error
+        except TimeoutError as error:
+            raise ModelTransportTimeout(status=0, url=url, body="timeout") from error
+        except URLError as error:
+            reason = str(error.reason) if error.reason is not None else "connection error"
+            raise RuntimeError(f"model transport connection error: {reason}") from error
+        try:
+            parsed = _json.loads(raw)
+        except ValueError as error:
+            raise RuntimeError("model transport response was not valid JSON") from error
+        if not isinstance(parsed, dict):
+            raise RuntimeError("model transport response is not a JSON object")
+        return parsed
+
 
 def compose_base_url(
     *,
@@ -124,6 +205,22 @@ class ModelAdapter:
             raise ValueError(f"base_url is not configured for {provider}")
         return local_url.rstrip("/")
 
+    @staticmethod
+    def _completion_url(base_url: str) -> str:
+        """Append the chat completions path, normalizing a single /v1 segment."""
+        normalized = base_url.rstrip("/")
+        if normalized.endswith("/v1"):
+            return f"{normalized}/chat/completions"
+        return f"{normalized}/v1/chat/completions"
+
+    @staticmethod
+    def _models_url(base_url: str) -> str:
+        """Append the models listing path, normalizing a single /v1 segment."""
+        normalized = base_url.rstrip("/")
+        if normalized.endswith("/v1"):
+            return f"{normalized}/models"
+        return f"{normalized}/v1/models"
+
     def _resolve_model(self, provider: str) -> str:
         entry = self.registry.get(provider)
         cfg = self.config.get_provider_config(provider)
@@ -161,15 +258,7 @@ class ModelAdapter:
         not a screening decision or ranking.
         """
         base_url = self._resolve_base_url(provider)
-        url = f"{base_url}/v1/chat/completions" if "/v1" not in base_url else f"{base_url}/chat/completions"
-        # Normalize: ensure exactly one /v1 segment
-        if base_url.endswith("/v1"):
-            url = f"{base_url}/chat/completions"
-        elif "/v1" in base_url and not base_url.endswith("/v1"):
-            # base_url already contains /v1 path (e.g. .../compatible-mode/v1)
-            url = f"{base_url}/chat/completions"
-        else:
-            url = f"{base_url}/v1/chat/completions"
+        url = self._completion_url(base_url)
 
         headers = self._build_headers(provider)
         resolved_model = model or self._resolve_model(provider)
