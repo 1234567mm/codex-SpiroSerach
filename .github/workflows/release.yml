@@ -33,6 +33,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   # One publisher per release tag; never cancel an in-progress release.
