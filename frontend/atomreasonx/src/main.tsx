@@ -1,10 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
+import "./styles-settings-center.css";
 import { applyPersistedTheme } from "./lib/theme";
+import { LocaleProvider, preloadDetectedLocale } from "./lib/i18n";
 import { initializeSessionStore } from "./stores/session-store";
 import { AppShell } from "./AppShell";
-import { SettingsModal } from "./components/SettingsModal";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { createWorkbenchCommandDispatcher, type WorkbenchCommandAdapter } from "./adapters/command-adapter";
 import { createRuntimeWorkbenchCommandAdapter } from "./adapters/tauri-command-adapter";
 import { projectSourceSettingsCommandResult } from "./adapters/source-settings-command-projection";
@@ -125,15 +127,12 @@ const AtomReasonXRoot: React.FC = () => {
           Settings
         </button>
         {showSettings && (
-          <SettingsModal
-            categories={baseWorkspace.settings_categories}
-            sourceSettings={baseWorkspace.source_settings}
-            modelSettings={baseWorkspace.settings}
-            providerRegistry={baseWorkspace.provider_status}
-            readonlyRunConfig={readonlyRunConfig}
-            readonlyRecentOutputDirs={readonlyRecentOutputDirEntries}
-            onApplyReadonlyRunOutputDir={applyReadonlyRunOutputDir}
+          <SettingsPanel
             onClose={() => setShowSettings(false)}
+            onChanged={() => undefined}
+            agentRunning={false}
+            desktopPlatform="windows"
+            onUseSubagent={() => undefined}
           />
         )}
       </div>
@@ -196,7 +195,9 @@ class AtomReasonXErrorBoundary extends React.Component<
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AtomReasonXErrorBoundary>
-      <AtomReasonXRoot />
+      <LocaleProvider>
+        <AtomReasonXRoot />
+      </LocaleProvider>
     </AtomReasonXErrorBoundary>
   </React.StrictMode>
 );
@@ -204,6 +205,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 // Apply persisted theme (data-theme / data-theme-style) before first paint so
 // the workbench never flashes the default dark direction.
 applyPersistedTheme();
+// Preload the detected UI language dictionary in parallel with the first
+// render so a Chinese system starts in Chinese without a visible switch.
+void preloadDetectedLocale();
 // Restore the persisted session transcript (no-op when already initialized).
 initializeSessionStore();
 

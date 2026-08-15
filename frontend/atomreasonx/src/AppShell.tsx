@@ -5,7 +5,8 @@ import { ContextWindowRing } from "./components/ContextWindowRing";
 import { SessionView } from "./components/SessionView";
 import { SearchView } from "./components/SearchView";
 import { EvidenceGraphView } from "./components/EvidenceGraphView";
-import { SettingsModal } from "./components/SettingsModal";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { registerWorkspaceSettingsSlice } from "./lib/bridge";
 import { DatabaseView } from "./components/DatabaseView";
 import { KnowledgeLibraryView } from "./components/KnowledgeLibraryView";
 import { SourceCategoriesView } from "./components/SourceCategoriesView";
@@ -35,13 +36,6 @@ export const workspaceModeBadge = (
 };
 
 const RIGHT_INSPECTOR_TABS = ["Overview", "Files"];
-
-const SETTINGS_CATEGORIES = [
-  "General", "Models", "Agents", "MCP And Tools", "Remote SSH", "Skills",
-  "Subagents", "Plugins", "Memory", "Hooks", "Diagnostics", "Shortcuts",
-  "Permissions", "Sandbox", "Network", "Retrieval", "File Parsing",
-  "Knowledge Library", "Data Sources", "Citation", "Cost Guardrails", "Telemetry source policy",
-];
 
 const VIEW_BY_LABEL: Record<string, WorkbenchViewId> = {
   "Session": "session",
@@ -106,9 +100,9 @@ export const AppShell: React.FC<{
   onOpenSettings,
   showSettings,
   onCloseSettings,
-  readonlyRunConfig,
-  readonlyRecentOutputDirs,
-  onApplyReadonlyRunOutputDir,
+  readonlyRunConfig: _readonlyRunConfig,
+  readonlyRecentOutputDirs: _readonlyRecentOutputDirs,
+  onApplyReadonlyRunOutputDir: _onApplyReadonlyRunOutputDir,
   commandDispatcher,
   workflowTaskExecutor,
   workflowProjectionKey,
@@ -118,6 +112,31 @@ export const AppShell: React.FC<{
     () => buildNavGroups(workspace.sidebar_entries, Boolean(workspace.screening_result)),
     [workspace.sidebar_entries, workspace.screening_result],
   );
+
+  // Feed the settings centre bridge with the live workspace projection so
+  // Settings()/model bindings read the same state the workbench renders.
+  React.useEffect(() => {
+    registerWorkspaceSettingsSlice(commandDispatcher
+      ? {
+          modelSettings: workspace.settings,
+          providerRegistry: workspace.provider_status,
+          sourceSettings: workspace.source_settings,
+          readonlyRunConfig: _readonlyRunConfig,
+          readonlyRecentOutputDirs: _readonlyRecentOutputDirs,
+          onApplyReadonlyRunOutputDir: _onApplyReadonlyRunOutputDir,
+          commandDispatcher,
+        }
+      : null);
+    return () => registerWorkspaceSettingsSlice(null);
+  }, [
+    workspace.settings,
+    workspace.provider_status,
+    workspace.source_settings,
+    _readonlyRunConfig,
+    _readonlyRecentOutputDirs,
+    _onApplyReadonlyRunOutputDir,
+    commandDispatcher,
+  ]);
   const availableViews = React.useMemo(
     () => new Set(navGroups.flatMap((group) => group.views.map((view) => view.id))),
     [navGroups],
@@ -236,16 +255,12 @@ export const AppShell: React.FC<{
         workflow={workspace.workflow}
       />
       {showSettings && (
-        <SettingsModal
-          categories={SETTINGS_CATEGORIES}
-          sourceSettings={workspace.source_settings}
-          modelSettings={workspace.settings}
-          providerRegistry={workspace.provider_status}
-          readonlyRunConfig={readonlyRunConfig}
-          readonlyRecentOutputDirs={readonlyRecentOutputDirs}
-          onApplyReadonlyRunOutputDir={onApplyReadonlyRunOutputDir}
-          commandDispatcher={commandDispatcher}
-          onClose={onCloseSettings}
+        <SettingsPanel
+          onClose={() => onCloseSettings?.()}
+          onChanged={() => undefined}
+          agentRunning={false}
+          desktopPlatform="windows"
+          onUseSubagent={() => undefined}
         />
       )}
     </div>

@@ -102,11 +102,14 @@ export function getResolvedTheme(theme: Theme = getTheme()): ResolvedTheme {
   return "dark";
 }
 
-export function getThemeStyle(): ThemeStyle {
+export function getThemeStyle(_theme?: Theme): ThemeStyle {
   return currentThemeStyle;
 }
 
-export function normalizeThemeStyleForTheme(style: string | undefined): ThemeStyle {
+export function normalizeThemeStyleForTheme(
+  style: string | undefined,
+  _theme?: Theme,
+): ThemeStyle {
   if (typeof style !== "string") return DEFAULT_THEME_STYLE;
   if (isThemeStyle(style)) return style;
   return LEGACY_STYLE_MAP[style] ?? DEFAULT_THEME_STYLE;

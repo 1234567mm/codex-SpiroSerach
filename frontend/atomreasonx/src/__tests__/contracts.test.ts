@@ -76,7 +76,7 @@ import {
   buildSourceSettingsCommandPayload,
   submitSourceProviderTestConnectionCommand,
   submitSourceSettingsCommand,
-} from "../components/SettingsModal";
+} from "../components/DataSourcesSettingsPage";
 import {
   WorkflowView,
   buildWorkflowCommandPayload,
@@ -85,7 +85,7 @@ import {
   workflowTaskPromotionState,
 } from "../components/WorkflowView";
 
-const COMMAND_CONTROL_MODULES = import.meta.glob<string>("../components/{WorkflowView,SettingsModal}.tsx", {
+const COMMAND_CONTROL_MODULES = import.meta.glob<string>("../components/{WorkflowView,DataSourcesSettingsPage}.tsx", {
   eager: true,
   import: "default",
   query: "?raw",
@@ -520,7 +520,7 @@ describe("AtomReasonX contract fixtures", () => {
     expect(mainSource).toContain("readonlyRunConfig");
     expect(mainSource).toContain("onApplyReadonlyRunOutputDir");
     expect(mainSource).toContain("workspaceState.status === \"error\"");
-    expect(mainSource).toContain("<SettingsModal");
+    expect(mainSource).toContain("<SettingsPanel");
     expect(mainSource).toContain("runtimeReadAdapter.readOnly");
     expect(mainSource).toContain("!runtimeReadAdapter.readOnly");
     expect(mainSource).toContain(": undefined");
@@ -529,13 +529,13 @@ describe("AtomReasonX contract fixtures", () => {
     expect(mainSource).not.toContain("readonly_token");
   });
 
-  it("wires SettingsModal recent readonly run selection without command or picker side effects", () => {
+  it("wires DataSourcesSettingsPage recent readonly run selection without command or picker side effects", () => {
     const settingsSource = Object.entries(COMMAND_CONTROL_MODULES)
-      .find(([path]) => path.includes("SettingsModal"))?.[1] ?? "";
+      .find(([path]) => path.includes("DataSourcesSettingsPage"))?.[1] ?? "";
 
     expect(settingsSource).toContain("readonlyRecentOutputDirs");
     expect(settingsSource).toContain("Recent readonly run output directories");
-    expect(settingsSource).toContain("onReadonlyOutputDirDraftChange(event.currentTarget.value)");
+    expect(settingsSource).toContain("setReadonlyOutputDirDraft(event.currentTarget.value)");
     expect(settingsSource).toContain("onApplyReadonlyRunOutputDir");
     expect(settingsSource).not.toContain("showDirectoryPicker");
     expect(settingsSource).not.toContain("open(");
