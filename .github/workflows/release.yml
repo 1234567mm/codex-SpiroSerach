@@ -147,7 +147,7 @@ jobs:
 
       # ── Rust toolchain (per-matrix target) ────────────────────────────
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           targets: ${{ matrix.target }}
 
