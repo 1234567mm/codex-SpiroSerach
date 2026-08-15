@@ -12,6 +12,8 @@ use std::{
 };
 use tauri::Manager;
 
+mod settings_store;
+
 const DEFAULT_READONLY_SIDECAR_ADDR: &str = "127.0.0.1:0";
 const READONLY_SIDECAR_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONFIG_COMMAND_RUNTIME_TIMEOUT: Duration = Duration::from_secs(120);
@@ -30,6 +32,10 @@ const NOMAD_EXECUTION_TARGET_PREFIX: &str = "data/lib/nomad_perla_psc/snapshots/
 struct ReadonlySidecarProcesses {
     children_by_output_dir: Mutex<HashMap<PathBuf, Child>>,
 }
+
+/// Serializes settings read-modify-write cycles across concurrent commands.
+#[derive(Default)]
+struct SettingsWriteLock(Mutex<()>);
 
 #[derive(Default)]
 struct WorkflowTaskExecutionState {
@@ -247,6 +253,34 @@ fn restore_workflow_tasks(app: tauri::AppHandle) -> Result<WorkflowTaskRestoreRe
     run_workflow_task_restore(executable, repo_root)
 }
 
+#[tauri::command]
+fn settings_read(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    let (stored, _recovered) =
+        settings_store::load_settings(&settings_store::settings_file_path(&dir));
+    Ok(serde_json::Value::Object(stored.values))
+}
+
+#[tauri::command]
+fn settings_write(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SettingsWriteLock>,
+    patch: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    let guard = state
+        .0
+        .lock()
+        .map_err(|_| "settings write lock is poisoned".to_string())?;
+    settings_store::apply_settings_patch(&settings_store::settings_file_path(&dir), &patch, &guard)
+}
+
 fn stop_existing_sidecar_for_output_dir(
     state: &tauri::State<'_, ReadonlySidecarProcesses>,
     output_dir: &PathBuf,
@@ -271,12 +305,15 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ReadonlySidecarProcesses::default())
         .manage(WorkflowTaskExecutionState::default())
+        .manage(SettingsWriteLock::default())
         .invoke_handler(tauri::generate_handler![
             start_readonly_sidecar,
             stop_readonly_sidecar,
             submit_config_command,
             execute_workflow_task,
-            restore_workflow_tasks
+            restore_workflow_tasks,
+            settings_read,
+            settings_write
         ])
         .run(tauri::generate_context!())
         .expect("error while running AtomReasonX application");
@@ -306,7 +343,12 @@ fn validate_config_command_request(request: &serde_json::Value) -> Result<(), St
 fn is_config_command_action(action_type: &str) -> bool {
     matches!(
         action_type,
-        "config_write" | "key_rotate" | "key_remove" | "test_connection" | "model_list_refresh" | "chat_completion"
+        "config_write"
+            | "key_rotate"
+            | "key_remove"
+            | "test_connection"
+            | "model_list_refresh"
+            | "chat_completion"
     )
 }
 
@@ -584,10 +626,20 @@ fn validate_restored_workflow_task(task: &RestoredWorkflowTask) -> Result<(), St
         || task.writes_authorized
         || task.execution_started
         || task.created_at.is_some()
-        || task.config.get("transport").and_then(|value| value.as_str())
+        || task
+            .config
+            .get("transport")
+            .and_then(|value| value.as_str())
             != Some("operator_task_queue")
-        || task.config.get("runtime_writes").and_then(|value| value.as_bool()) != Some(false)
-        || task.config.get("config_source").and_then(|value| value.as_str())
+        || task
+            .config
+            .get("runtime_writes")
+            .and_then(|value| value.as_bool())
+            != Some(false)
+        || task
+            .config
+            .get("config_source")
+            .and_then(|value| value.as_str())
             != Some("workflow_command_allowlist")
         || task.admission_status != "admitted"
         || !is_sha256_hex(&task.admission_hash)
@@ -1154,8 +1206,9 @@ mod tests {
 
     #[test]
     fn validates_fixed_workflow_task_restore_report() {
-        let report = validate_workflow_task_restore_report(fixed_workflow_task_restore_report_json())
-            .expect("restore report should validate");
+        let report =
+            validate_workflow_task_restore_report(fixed_workflow_task_restore_report_json())
+                .expect("restore report should validate");
 
         assert_eq!(report.schema_version, "v35.operator_task_restore.v1");
         assert_eq!(
@@ -1189,8 +1242,9 @@ mod tests {
         });
         cases.push({
             let mut value = base.clone();
-            value["restored_tasks"][0]["execution_report"]["admission_hash"] =
-                serde_json::json!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+            value["restored_tasks"][0]["execution_report"]["admission_hash"] = serde_json::json!(
+                "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            );
             value
         });
 
