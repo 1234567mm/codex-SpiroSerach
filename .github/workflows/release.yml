@@ -1,18 +1,19 @@
 # AtomReasonX — Multi-platform Desktop Release (structured pipeline)
 #
-# Stage 1  resolve   — normalize tag / version / prerelease from the trigger.
-# Stage 2  test-gate — Python + Go + frontend tests must pass before packaging.
-# Stage 3  build     — one native runner per platform (Reasonix/tauri-action
+# Stage 1  test-gate — Python + Go + frontend tests must pass before packaging.
+# Stage 2  build     — one native runner per platform (Reasonix/tauri-action
 #                      approach; no cross-compilation of CGO/WebKit binaries):
 #                        windows-latest → .msi + .exe (NSIS)
-#                        macos-latest   → .dmg (ARM64 + x64)
-#                        ubuntu-latest  → .deb + .AppImage
+#                        macos-latest   → .dmg (ARM64)
+#                        macos-13       → .dmg (x64, Intel runner, native)
+#                        ubuntu-latest  → .deb + .AppImage + .rpm
 #                      Every platform uploads its own artifact (CodeWhale-style
 #                      named artifacts) so each OS build is independently
 #                      inspectable before release publication.
-# Stage 4  publish   — tauri-action creates the GitHub Release, attaches all
-#                      platform bundles and generates latest.json for the
-#                      Tauri 2 updater.
+# Stage 3  publish   — tauri-action creates the GitHub Release (tag from
+#                      github.ref_name / workflow_dispatch input), attaches all
+#                      platform bundles, signs them (.sig) and generates
+#                      latest.json for the Tauri 2 updater.
 #
 # Triggers:
 #   - Push a tag matching v* (e.g. v0.1.0, v0.2.0-beta)
@@ -41,33 +42,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Stage 1: resolve ───────────────────────────────────────────────────
-  resolve:
-    name: Resolve release version
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.outputs.tag }}
-      prerelease: ${{ steps.outputs.prerelease }}
-    steps:
-      - id: outputs
-        env:
-          REF_NAME: ${{ github.ref_name }}
-          INPUT_TAG: ${{ github.event.inputs.tag }}
-        run: |
-          TAG="$INPUT_TAG"
-          if [ -z "$TAG" ]; then
-            TAG="${REF_NAME#v}"
-          fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          case "${TAG}" in
-            *alpha*|*beta*|*rc*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
-            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
-          esac
-
-  # ── Stage 2: test gate ─────────────────────────────────────────────────
+  # ── Stage 1: test gate ────────────────────────────────────────────────
+  # (No resolve job: the tag comes straight from github.ref_name for tag
+  # pushes, or the workflow_dispatch input — the previous resolve job's
+  # outputs silently evaluated to empty, producing a release tagged "v".)
   test-gate:
     name: Test gate
-    needs: resolve
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +96,7 @@ jobs:
             label: macOS ARM64
             artifact: atomreasonx-macos-aarch64
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
+          - platform: macos-13
             target: x86_64-apple-darwin
             label: macOS x64
             artifact: atomreasonx-macos-x64
@@ -190,8 +170,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: frontend/atomreasonx
-          tagName: "v${{ needs.resolve.outputs.tag }}"
-          releaseName: "AtomReasonX v${{ needs.resolve.outputs.tag }}"
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "AtomReasonX ${{ github.event.inputs.tag || github.ref_name }}"
           releaseBody: |
             ## AtomReasonX — Reason at Atomic Scale, Build Beyond Materials.
 
@@ -224,18 +204,18 @@ jobs:
             - **macOS**: macOS 10.15+
             - **Linux**: WebKit2GTK 4.1 (Ubuntu 22.04+, Fedora 36+, or equivalent)
           releaseDraft: false
-          prerelease: ${{ needs.resolve.outputs.prerelease == 'true' }}
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, 'beta') || contains(github.event.inputs.tag || github.ref_name, 'alpha') }}
           args: ${{ matrix.args }}
 
   # ── Stage 4: summary ─────────────────────────────────────────────────
   release-summary:
     name: Release Summary
-    needs: [build, resolve]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Print release info
         run: |
           echo "✅ Release completed successfully."
-          echo "Tag: ${{ needs.resolve.outputs.tag }}"
+          echo "Tag: ${{ github.event.inputs.tag || github.ref_name }}"
           echo "Builds: Windows x64, macOS ARM64, macOS x64, Linux x64"
           echo "Check the GitHub Releases page for downloadable installers."
