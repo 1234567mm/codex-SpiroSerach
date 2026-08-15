@@ -48,7 +48,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIzRjc4QjVGMjYyNDM1MzAKUldRd05TUW1YNHYzSTJTZUtORTQzcDgwYXpxbjM3eW1pdXJ2dUNoM2dWclMxWkErMlJZZ1NjbFcK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGNDM5REU4MEE3RjY5Q0YKUldUUGFYOEs2SjFEejhNK08yTzh1QjZwUlFJK3pMazhuOG1aVlpVMkE4NGpNN2FXd2FPbHNxakoK",
       "endpoints": [
         "https://github.com/1234567mm/codex-SpiroSerach/releases/latest/download/latest.json"
       ],
