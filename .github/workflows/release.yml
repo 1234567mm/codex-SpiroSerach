@@ -71,6 +71,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
       - run: uv sync
       - name: Python tests
         run: uv run python -m unittest discover tests -v
@@ -79,6 +81,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
       - name: Go tests
         run: go test ./...
       - uses: actions/setup-node@v4
@@ -159,6 +162,13 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend/atomreasonx
         run: npm ci
+
+      # ── Go toolchain (spiroctl sidecar build) ─────────────────────────
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       # ── Build Go sidecar (required by the Tauri shell) ────────────────
       - name: Build spiroctl sidecar
