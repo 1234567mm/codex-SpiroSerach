@@ -224,9 +224,8 @@ jobs:
             - **macOS**: macOS 10.15+
             - **Linux**: WebKit2GTK 4.1 (Ubuntu 22.04+, Fedora 36+, or equivalent)
           releaseDraft: false
-          prerelease: ${{ needs.resolve.outputs.prerelease }}
+          prerelease: ${{ needs.resolve.outputs.prerelease == 'true' }}
           args: ${{ matrix.args }}
-          workflowArtifactNamePattern: "${{ matrix.artifact }}-*"
 
   # ── Stage 4: summary ─────────────────────────────────────────────────
   release-summary:
