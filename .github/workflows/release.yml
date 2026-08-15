@@ -149,7 +149,7 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          targets: ${{ matrix.target }}
+          target: ${{ matrix.target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -175,10 +175,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # ── Build Go sidecar (required by the Tauri shell) ────────────────
+      # ── Build Go sidecar (per-platform binary, required by the Tauri shell) ─
       - name: Build spiroctl sidecar
-        working-directory: frontend/atomreasonx
-        run: npm run sidecar:build
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-atomreasonx-spiroctl-sidecar.ps1 -RepositoryRoot "${{ github.workspace }}"
 
       # ── Tauri build + release upload ──────────────────────────────────
       - name: Build Tauri app
