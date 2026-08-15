@@ -71,13 +71,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
       - run: uv sync
       - name: Python tests
-        run: uv run python -m unittest discover tests -v
+        run: uv run python -m unittest discover tests -v 2>&1 | tee python-test.log
         env:
           PYTHONPATH: src
+      - name: Upload Python test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-gate-python-log
+          path: python-test.log
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
